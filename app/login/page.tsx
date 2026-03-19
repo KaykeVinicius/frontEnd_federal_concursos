@@ -192,7 +192,7 @@ export default function LoginPage() {
         </Card>
 
         {/* Credenciais de Teste */}
-        <Card className="w-full border-[#333] bg-[#222222]/80">
+        {/*<Card className="w-full border-[#333] bg-[#222222]/80">
           <CardContent className="p-4">
             <div className="mb-3 flex items-center gap-2">
               <Info className="h-4 w-4 text-primary" />
@@ -229,7 +229,7 @@ export default function LoginPage() {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </Card>*/}
 
         {/* Footer */}
         <p className="text-center text-xs text-[#6b7280]">

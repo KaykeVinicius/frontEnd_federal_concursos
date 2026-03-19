@@ -1,0 +1,9 @@
+version: "3.8"
+
+services:
+  frontend:
+    build: .
+    container_name: frontend_federal_concursos
+    ports:
+      - "3000:3000"
+    restart: always
