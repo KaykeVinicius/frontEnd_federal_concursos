@@ -4,38 +4,33 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
-  Users,
   BookOpen,
   Layers,
   GraduationCap,
-  FileText,
   CalendarDays,
-  Settings,
   Menu,
   X,
   ChevronLeft,
+  Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 
 const navItems = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/alunos", label: "Alunos", icon: Users },
-  { href: "/admin/cursos", label: "Cursos", icon: BookOpen },
-  { href: "/admin/turmas", label: "Turmas", icon: Layers },
-  { href: "/admin/materias", label: "Materias", icon: GraduationCap },
-  { href: "/admin/eventos", label: "Eventos", icon: CalendarDays },
-  { href: "/admin/contratos", label: "Contratos", icon: FileText },
-  { href: "/admin/configuracoes", label: "Configurações", icon: Settings },
+  { href: "/pedagogica", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/pedagogica/cursos", label: "Cursos", icon: BookOpen },
+  { href: "/pedagogica/turmas", label: "Turmas", icon: Layers },
+  { href: "/pedagogica/materias", label: "Materias", icon: GraduationCap },
+  { href: "/pedagogica/eventos", label: "Eventos", icon: CalendarDays },
+  { href: "/pedagogica/configuracoes", label: "Configurações", icon: Settings },
 ]
 
-export function AdminSidebar() {
+export function PedagogicaSidebar() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
     <>
-      {/* Mobile toggle */}
       <button
         onClick={() => setMobileOpen(!mobileOpen)}
         className="fixed top-4 left-4 z-50 flex items-center gap-2 rounded-lg bg-sidebar px-3 py-2 text-sidebar-foreground lg:hidden"
@@ -45,7 +40,6 @@ export function AdminSidebar() {
         <span>{mobileOpen ? "Fechar" : "Menu"}</span>
       </button>
 
-      {/* Overlay */}
       {mobileOpen && (
         <div
           className="fixed inset-0 z-30 bg-black/50 lg:hidden"
@@ -53,32 +47,27 @@ export function AdminSidebar() {
         />
       )}
 
-      {/* Sidebar */}
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-sidebar text-sidebar-foreground transition-transform duration-300 lg:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        {/* Logo */}
         <div className="flex h-20 items-center justify-center border-b border-sidebar-border px-4">
           <div className="flex flex-col items-center">
             <span className="text-xl font-bold tracking-tight">
-              <span className="text-primary">FEDERAL</span>
-              <span className="text-sidebar-foreground">CURSOS</span>
+              <span className="text-primary">Pedagógico</span>
+              <span className="text-sidebar-foreground">Equipe</span>
             </span>
-            <span className="text-xs text-sidebar-foreground/60">
-              Concursos Publicos, CFC e OAB
-            </span>
+            <span className="text-xs text-sidebar-foreground/60">Organizar cursos</span>
           </div>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 space-y-1 px-3 py-4">
           {navItems.map((item) => {
             const isActive =
               pathname === item.href ||
-              (item.href !== "/admin" && pathname.startsWith(item.href))
+              (item.href !== "/pedagogica" && pathname.startsWith(item.href))
 
             return (
               <Link
@@ -99,15 +88,14 @@ export function AdminSidebar() {
           })}
         </nav>
 
-        {/* Footer */}
         <div className="border-t border-sidebar-border p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-primary text-sm font-bold text-sidebar-primary-foreground">
-              A
+              P
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-medium">Assistente Comercial</span>
-              <span className="text-xs text-sidebar-foreground/50">assistente@federalcursos.com.br</span>
+              <span className="text-sm font-medium">Equipe Pedagógica</span>
+              <span className="text-xs text-sidebar-foreground/50">pedagogico@federalcursos.com</span>
             </div>
           </div>
         </div>

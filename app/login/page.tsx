@@ -40,11 +40,14 @@ export default function LoginPage() {
 
       // Redireciona baseado no tipo de usuario
       switch (user.role) {
-        case "diretor":
-          router.push("/diretor")
+        case "ceo":
+          router.push("/ceo")
           break
-        case "admin":
-          router.push("/admin")
+        case "assistente_comercial":
+          router.push("/assistente")
+          break
+        case "equipe_pedagogica":
+          router.push("/pedagogica")
           break
         case "professor":
           router.push("/professor")
@@ -52,8 +55,11 @@ export default function LoginPage() {
         case "aluno":
           router.push("/aluno")
           break
+        case "diretor":
+          router.push("/ceo")
+          break
         default:
-          router.push("/admin")
+          router.push("/ceo")
       }
     } else {
       setError("Email ou senha invalidos.")
@@ -201,17 +207,17 @@ export default function LoginPage() {
             <div className="space-y-2 text-xs text-[#9ca3af]">
               <div className="flex items-center justify-between rounded bg-[#2a2a2a] px-3 py-2">
                 <div>
-                  <span className="font-medium text-primary">Diretor:</span>
-                  <span className="ml-2">diretor@federalcursos.com.br</span>
+                  <span className="font-medium text-primary">CEO:</span>
+                  <span className="ml-2">ceo@federalcursos.com.br</span>
                 </div>
-                <span className="text-[#6b7280]">diretor123</span>
+                <span className="text-[#6b7280]">ceo123</span>
               </div>
               <div className="flex items-center justify-between rounded bg-[#2a2a2a] px-3 py-2">
                 <div>
-                  <span className="font-medium text-primary">Admin:</span>
-                  <span className="ml-2">admin@federalcursos.com.br</span>
+                  <span className="font-medium text-primary">Assistente Comercial:</span>
+                  <span className="ml-2">assistente@federalcursos.com.br</span>
                 </div>
-                <span className="text-[#6b7280]">admin123</span>
+                <span className="text-[#6b7280]">assistente123</span>
               </div>
               <div className="flex items-center justify-between rounded bg-[#2a2a2a] px-3 py-2">
                 <div>
@@ -219,6 +225,13 @@ export default function LoginPage() {
                   <span className="ml-2">professor@federalcursos.com.br</span>
                 </div>
                 <span className="text-[#6b7280]">prof123</span>
+              </div>
+              <div className="flex items-center justify-between rounded bg-[#2a2a2a] px-3 py-2">
+                <div>
+                  <span className="font-medium text-primary">Equipe Pedagógica:</span>
+                  <span className="ml-2">pedagogico@federalcursos.com.br</span>
+                </div>
+                <span className="text-[#6b7280]">pedagogico123</span>
               </div>
               <div className="flex items-center justify-between rounded bg-[#2a2a2a] px-3 py-2">
                 <div>

@@ -12,6 +12,8 @@ import {
   LogOut,
   Menu,
   X,
+  ChevronLeft,
+  Settings,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
@@ -21,6 +23,7 @@ const navItems = [
   { href: "/professor/turmas", label: "Minhas Turmas", icon: Users },
   { href: "/professor/cursos", label: "Cursos", icon: BookOpen },
   { href: "/professor/eventos", label: "Eventos", icon: CalendarDays },
+  { href: "/professor/configuracoes", label: "Configurações", icon: Settings },
 ]
 
 export function ProfessorSidebar() {
@@ -105,11 +108,11 @@ export function ProfessorSidebar() {
       <Button
         variant="ghost"
         size="icon"
-        className="fixed left-4 top-4 z-50 lg:hidden"
+        className="fixed left-4 top-4 z-50 flex items-center gap-2 lg:hidden"
         onClick={() => setMobileOpen(!mobileOpen)}
       >
-        {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        <span className="sr-only">Toggle menu</span>
+        {mobileOpen ? <ChevronLeft className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+        <span>{mobileOpen ? "Fechar" : "Menu"}</span>
       </Button>
 
       {/* Mobile overlay */}

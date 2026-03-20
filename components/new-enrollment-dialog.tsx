@@ -24,6 +24,7 @@ import {
   mockStudents,
   getTurmasByCourseId,
   getCourseById,
+  mockCareers,
   type Student,
 } from "@/lib/mock-data"
 import { fakeApiPost } from "@/lib/api"
@@ -45,6 +46,7 @@ export function NewEnrollmentDialog({ open, onOpenChange }: NewEnrollmentDialogP
   const [studentSearch, setStudentSearch] = useState("")
   const [selectedCourseId, setSelectedCourseId] = useState<string>("")
   const [selectedTurmaId, setSelectedTurmaId] = useState<string>("")
+  const [selectedCareerId, setSelectedCareerId] = useState<string>("")
   const [saving, setSaving] = useState(false)
 
   // Form fields for new student

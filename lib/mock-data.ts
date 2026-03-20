@@ -6,7 +6,9 @@ export interface SystemUser {
   name: string
   email: string
   password: string
-  role: "admin" | "professor" | "aluno" | "diretor"
+  cpf: string
+  role: "ceo" | "assistente_comercial" | "equipe_pedagogica" | "professor" | "aluno" | "diretor" // diretor mantido por compatibilidade
+  commission_percent?: number
   student_id?: number // Vincula ao aluno se role === "aluno"
   active: boolean
 }
@@ -14,18 +16,30 @@ export interface SystemUser {
 export const mockSystemUsers: SystemUser[] = [
   {
     id: 1,
-    name: "Diretor Geral",
-    email: "diretor@federalcursos.com.br",
-    password: "diretor123",
-    role: "diretor",
+    name: "CEO",
+    email: "ceo@federalcursos.com.br",
+    password: "ceo123",
+    cpf: "123.456.789-00",
+    role: "ceo",
     active: true,
   },
   {
     id: 2,
-    name: "Administrador",
-    email: "admin@federalcursos.com.br",
-    password: "admin123",
-    role: "admin",
+    name: "Assistente Comercial",
+    email: "assistente@federalcursos.com.br",
+    password: "assistente123",
+    cpf: "987.654.321-00",
+    role: "assistente_comercial",
+    commission_percent: 10,
+    active: true,
+  },
+  {
+    id: 6,
+    name: "Equipe Pedagogica",
+    email: "pedagogico@federalcursos.com.br",
+    password: "pedagogico123",
+    cpf: "456.789.123-00",
+    role: "equipe_pedagogica",
     active: true,
   },
   {
@@ -33,6 +47,7 @@ export const mockSystemUsers: SystemUser[] = [
     name: "Prof. Carlos Mendes",
     email: "professor@federalcursos.com.br",
     password: "prof123",
+    cpf: "321.654.987-00",
     role: "professor",
     active: true,
   },
@@ -41,6 +56,7 @@ export const mockSystemUsers: SystemUser[] = [
     name: "Kayke Vinicius",
     email: "aluno@federalcursos.com.br",
     password: "aluno123",
+    cpf: "111.222.333-44",
     role: "aluno",
     student_id: 1,
     active: true,
@@ -50,6 +66,7 @@ export const mockSystemUsers: SystemUser[] = [
     name: "Maria Silva Santos",
     email: "maria.silva@gmail.com",
     password: "maria123",
+    cpf: "555.666.777-88",
     role: "aluno",
     student_id: 2,
     active: true,
@@ -70,6 +87,8 @@ export interface Course {
   status: "draft" | "published"
   access_type: "interno" | "externo" | "ambos"
   duration_in_days: number
+  start_date?: string // Data de início (obrigatório para presencial e híbrido)
+  end_date?: string // Data de fim (obrigatório para presencial, opcional para híbrido)
   created_at: string
 }
 
@@ -107,11 +126,25 @@ export interface Student {
   created_at: string
 }
 
+export interface Career {
+  id: number
+  name: string
+  description: string
+  created_at: string
+}
+
+export const mockCareers: Career[] = [
+  { id: 1, name: "Carreira de Direito", description: "Reta final para concursos de direito", created_at: "2026-01-01" },
+  { id: 2, name: "Carreira de Contabilidade", description: "Cursos para perícia, contabilidade e CFC", created_at: "2026-01-05" },
+  { id: 3, name: "Carreira Policial", description: "Treinamento para concursos militares e policiais", created_at: "2026-01-10" },
+]
+
 export interface Enrollment {
   id: number
   student_id: number
   course_id: number
   turma_id: number
+  career_id?: number
   status: "active" | "canceled" | "expired"
   started_at: string
   expires_at: string
@@ -144,6 +177,8 @@ export const mockCourses: Course[] = [
     status: "published",
     access_type: "ambos",
     duration_in_days: 33,
+    start_date: "2026-03-01",
+    end_date: "2026-04-03",
     created_at: "2025-12-01",
   },
   {
@@ -154,6 +189,8 @@ export const mockCourses: Course[] = [
     status: "published",
     access_type: "ambos",
     duration_in_days: 90,
+    start_date: "2026-02-01",
+    end_date: "2026-05-01",
     created_at: "2025-11-15",
   },
   {
@@ -164,6 +201,8 @@ export const mockCourses: Course[] = [
     status: "published",
     access_type: "interno",
     duration_in_days: 60,
+    start_date: "2026-04-01",
+    end_date: "2026-06-01",
     created_at: "2025-10-20",
   },
   {
@@ -174,6 +213,8 @@ export const mockCourses: Course[] = [
     status: "draft",
     access_type: "ambos",
     duration_in_days: 120,
+    start_date: "2026-05-01",
+    end_date: "2026-09-01",
     created_at: "2026-01-10",
   },
 ]
@@ -318,6 +359,7 @@ export const mockEnrollments: Enrollment[] = [
     student_id: 1,
     course_id: 1,
     turma_id: 2,
+    career_id: 1,
     status: "active",
     started_at: "2026-01-05",
     expires_at: "2026-02-06",
