@@ -1,5 +1,7 @@
 // ========== MOCK DATA ==========
 
+import { ReactNode } from "react"
+
 // ---------- USERS (Sistema) ----------
 export interface SystemUser {
   id: number
@@ -101,6 +103,8 @@ export interface Subject {
 }
 
 export interface Turma {
+  availableSlots: ReactNode
+  turno: string
   id: number
   course_id: number
   name: string
@@ -249,6 +253,8 @@ export const mockTurmas: Turma[] = [
     max_students: 40,
     enrolled_count: 32,
     status: "em_andamento",
+    availableSlots: undefined,
+    turno: ""
   },
   {
     id: 2,
@@ -261,6 +267,8 @@ export const mockTurmas: Turma[] = [
     max_students: 40,
     enrolled_count: 28,
     status: "em_andamento",
+    availableSlots: undefined,
+    turno: ""
   },
   {
     id: 3,
@@ -273,6 +281,8 @@ export const mockTurmas: Turma[] = [
     max_students: 50,
     enrolled_count: 15,
     status: "aberta",
+    availableSlots: undefined,
+    turno: ""
   },
   {
     id: 4,
@@ -285,6 +295,8 @@ export const mockTurmas: Turma[] = [
     max_students: 35,
     enrolled_count: 20,
     status: "aberta",
+    availableSlots: undefined,
+    turno: ""
   },
 ]
 
