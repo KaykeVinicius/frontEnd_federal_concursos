@@ -3,35 +3,26 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  LayoutDashboard,
+  Home,
   Users,
   BookOpen,
-  Layers,
-  GraduationCap,
-  FileText,
   CalendarDays,
-  Settings,
-  Menu,
-  X,
-  ChevronLeft,
   ShoppingBag,
+  Menu,
+  ChevronLeft,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 
 const navItems = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/alunos", label: "Alunos", icon: Users },
-  { href: "/admin/cursos", label: "Cursos", icon: BookOpen },
-  { href: "/admin/turmas", label: "Turmas", icon: Layers },
-  { href: "/admin/materias", label: "Matérias", icon: GraduationCap },
-  { href: "/admin/eventos", label: "Eventos", icon: CalendarDays },
-  { href: "/admin/vendas-eventos", label: "Vendas de Eventos", icon: ShoppingBag },
-  { href: "/admin/contratos", label: "Contratos", icon: FileText },
-  { href: "/admin/configuracoes", label: "Configurações", icon: Settings },
+  { href: "/assistente", label: "Início", icon: Home },
+  { href: "/assistente/alunos", label: "Alunos", icon: Users },
+  { href: "/assistente/cursos-disponiveis", label: "Cursos Disponíveis", icon: BookOpen },
+  { href: "/assistente/eventos", label: "Eventos", icon: CalendarDays },
+  { href: "/assistente/vendas-eventos", label: "Venda de Eventos", icon: ShoppingBag },
 ]
 
-export function AdminSidebar() {
+export function AssistenteSidebar() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
@@ -51,12 +42,13 @@ export function AdminSidebar() {
               <span className="text-primary">FEDERAL</span>
               <span className="text-sidebar-foreground">CONCURSOS</span>
             </span>
+            <span className="text-xs text-sidebar-foreground/50">Assistente</span>
           </div>
         )}
 
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-sidebar-accent"
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg hover:bg-sidebar-accent transition-colors"
         >
           {collapsed ? <Menu className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>
@@ -67,7 +59,7 @@ export function AdminSidebar() {
         {navItems.map((item) => {
           const isActive =
             pathname === item.href ||
-            (item.href !== "/admin" && pathname.startsWith(item.href))
+            (item.href !== "/assistente" && pathname.startsWith(item.href))
 
           return (
             <Link
@@ -75,7 +67,7 @@ export function AdminSidebar() {
               href={item.href}
               onClick={() => setMobileOpen(false)}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors cursor-pointer",
                 collapsed ? "justify-center px-2" : "",
                 isActive
                   ? "bg-sidebar-primary text-sidebar-primary-foreground"
@@ -114,7 +106,7 @@ export function AdminSidebar() {
       {/* Mobile toggle */}
       <button
         onClick={() => setMobileOpen(!mobileOpen)}
-        className="fixed top-4 left-4 z-50 flex items-center gap-2 rounded-lg bg-sidebar px-3 py-2 text-sidebar-foreground lg:hidden"
+        className="fixed top-4 left-4 z-50 flex cursor-pointer items-center gap-2 rounded-lg bg-sidebar px-3 py-2 text-sidebar-foreground lg:hidden"
       >
         {mobileOpen ? <ChevronLeft className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         <span>{mobileOpen ? "Fechar" : "Menu"}</span>

@@ -26,16 +26,18 @@ export default function CeoTurmasPage() {
     if (!selectedCourse) return
 
     const newTurma: Turma = {
-      id: Math.max(0, ...turmas.map((t) => t.id)) + 1,
-      course_id: selectedCourseId,
-      name,
-      shift,
-      start_date: selectedCourse.start_date || new Date().toISOString().slice(0, 10),
-      end_date: selectedCourse.end_date || new Date(new Date().setMonth(new Date().getMonth() + 2)).toISOString().slice(0, 10),
-      schedule: "Seg - Sex",
-      max_students: 30,
-      enrolled_count: 0,
-      status: "aberta",
+        id: Math.max(0, ...turmas.map((t) => t.id)) + 1,
+        course_id: selectedCourseId,
+        name,
+        shift,
+        start_date: selectedCourse.start_date || new Date().toISOString().slice(0, 10),
+        end_date: selectedCourse.end_date || new Date(new Date().setMonth(new Date().getMonth() + 2)).toISOString().slice(0, 10),
+        schedule: "Seg - Sex",
+        max_students: 30,
+        enrolled_count: 0,
+        status: "aberta",
+        availableSlots: undefined,
+        turno: ""
     }
     setTurmas((prev) => [...prev, newTurma])
     resetForm()

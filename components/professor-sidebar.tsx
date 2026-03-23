@@ -30,6 +30,7 @@ export function ProfessorSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(false) // ✅ ADICIONADO
   const [userName, setUserName] = useState("")
 
   useEffect(() => {
@@ -45,26 +46,44 @@ export function ProfessorSidebar() {
     router.push("/login")
   }
 
-  const SidebarContent = () => (
-    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+  const SidebarContent = ({ collapsed }: { collapsed: boolean }) => (
+    <div
+      className={cn(
+        "flex h-full flex-col bg-sidebar text-sidebar-foreground transition-all duration-300",
+        collapsed ? "w-16" : "w-64"
+      )}
+    >
       {/* Header */}
-      <div className="flex h-16 items-center justify-center border-b border-sidebar-border px-4">
-        <Image
-          src="/images/logo.jpg"
-          alt="Federal Cursos"
-          width={160}
-          height={50}
-          className="rounded"
-          style={{ height: 40, width: "auto" }}
-        />
+      <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
+        {!collapsed && (
+          <Image
+            src="/images/logo.jpg"
+            alt="Federal Cursos"
+            width={160}
+            height={50}
+            className="rounded"
+            style={{ height: 40, width: "auto" }}
+          />
+        )}
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setCollapsed(!collapsed)}
+          className="flex h-8 w-8 items-center justify-center"
+        >
+          {collapsed ? <Menu className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </Button>
       </div>
 
       {/* User Info */}
-      <div className="border-b border-sidebar-border px-4 py-3">
-        <p className="text-xs text-sidebar-foreground/60">Bem-vindo(a),</p>
-        <p className="truncate font-medium text-sidebar-foreground">{userName}</p>
-        <p className="text-xs text-primary">Professor</p>
-      </div>
+      {!collapsed && (
+        <div className="border-b border-sidebar-border px-4 py-3">
+          <p className="text-xs text-sidebar-foreground/60">Bem-vindo(a),</p>
+          <p className="truncate font-medium text-sidebar-foreground">{userName}</p>
+          <p className="text-xs text-primary">Professor</p>
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 px-3 py-4">
@@ -77,13 +96,15 @@ export function ProfessorSidebar() {
               onClick={() => setMobileOpen(false)}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                collapsed ? "justify-center px-2" : "",
                 isActive
                   ? "bg-sidebar-primary text-sidebar-primary-foreground"
                   : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               )}
+              title={collapsed ? item.label : undefined}
             >
-              <item.icon className="h-5 w-5" />
-              {item.label}
+              <item.icon className="h-5 w-5 shrink-0" />
+              {!collapsed && item.label}
             </Link>
           )
         })}
@@ -93,10 +114,14 @@ export function ProfessorSidebar() {
       <div className="border-t border-sidebar-border p-4">
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          className={cn(
+            "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            collapsed ? "justify-center px-2" : ""
+          )}
+          title={collapsed ? "Sair" : undefined}
         >
           <LogOut className="h-5 w-5" />
-          Sair
+          {!collapsed && "Sair"}
         </button>
       </div>
     </div>
@@ -126,18 +151,21 @@ export function ProfessorSidebar() {
       {/* Mobile sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-64 transform transition-transform duration-200 ease-in-out lg:hidden",
+          "fixed inset-y-0 left-0 z-40 transform transition-transform duration-200 ease-in-out lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <SidebarContent />
+        <SidebarContent collapsed={false} />
       </aside>
 
       {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 lg:block">
-        <div className="sticky top-0 h-screen">
-          <SidebarContent />
-        </div>
+      <aside
+        className={cn(
+          "hidden shrink-0 transition-all duration-300 lg:block",
+          collapsed ? "w-16" : "w-64"
+        )}
+      >
+        <SidebarContent collapsed={collapsed} />
       </aside>
     </>
   )

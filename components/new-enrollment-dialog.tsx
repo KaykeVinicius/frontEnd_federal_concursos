@@ -19,6 +19,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Calendar } from "@/components/ui/calendar"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { format, addDays } from "date-fns"
+import { ptBR } from "date-fns/locale"
+
 import {
   mockCourses,
   mockStudents,
@@ -27,45 +36,202 @@ import {
   mockCareers,
   type Student,
 } from "@/lib/mock-data"
-import { fakeApiPost } from "@/lib/api"
-import { Loader2, UserPlus, UserCheck, Search, ArrowLeft, Percent } from "lucide-react"
 
-interface NewEnrollmentDialogProps {
+import { fakeApiPost } from "@/lib/api"
+
+import {
+  Loader2,
+  UserPlus,
+  UserCheck,
+  Search,
+  ArrowLeft,
+  Percent,
+  CheckCircle2,
+  GraduationCap,
+  MapPin,
+  Mail,
+  Phone,
+  Instagram,
+  CreditCard,
+  ChevronRight,
+  Calendar as CalendarIcon,
+  Clock,
+  DollarSign,
+  Briefcase,
+  BookOpen,
+  Users,
+  Monitor,
+  Building2,
+  AlertCircle,
+  FileText,
+  Send,
+  CalendarDays,
+  Bell,
+  CreditCard as CreditCardIcon,
+  Timer,
+} from "lucide-react"
+
+interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-type Step = "choose_type" | "select_existing" | "new_student_form" | "course_payment" | "success"
+type Step =
+  | "choose_type"
+  | "select_existing"
+  | "new_student_form"
+  | "course_payment"
+  | "payment_method"
+  | "success"
 
-const EX_ALUNO_DISCOUNT = 0.15 // 15% de desconto para ex-alunos
+type PaymentMethodType = "credit" | "debit" | "pix" | "boleto" | "prazo"
 
-export function NewEnrollmentDialog({ open, onOpenChange }: NewEnrollmentDialogProps) {
+const EX_ALUNO_DISCOUNT = 0.15
+
+// Mask functions
+const applyCpfMask = (value: string) => {
+  const numbers = value.replace(/\D/g, '')
+  if (numbers.length <= 3) return numbers
+  if (numbers.length <= 6) return numbers.replace(/(\d{3})(\d{1,3})/, '$1.$2')
+  if (numbers.length <= 9) return numbers.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3')
+  return numbers.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4')
+}
+
+const applyPhoneMask = (value: string) => {
+  const numbers = value.replace(/\D/g, '')
+  if (numbers.length <= 2) return numbers
+  if (numbers.length <= 7) return numbers.replace(/(\d{2})(\d{1,5})/, '($1) $2')
+  return numbers.replace(/(\d{2})(\d{5})(\d{1,4})/, '($1) $2-$3')
+}
+
+const applyCepMask = (value: string) => {
+  const numbers = value.replace(/\D/g, '')
+  if (numbers.length <= 5) return numbers
+  return numbers.replace(/(\d{5})(\d{1,3})/, '$1-$2')
+}
+
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  }).format(value)
+}
+
+// Função para simular envio de contrato por email
+const sendContractByEmail = async (studentData: any, enrollmentData: any, paymentDeadline?: Date) => {
+  // Simula o envio do contrato
+  await new Promise(resolve => setTimeout(resolve, 1000))
+  
+  const deadlineText = paymentDeadline 
+    ? format(paymentDeadline, "dd/MM/yyyy", { locale: ptBR })
+    : "Pagamento à vista"
+  
+  console.log('📧 Contrato enviado para:', studentData.email)
+  console.log('📄 Dados do contrato:', {
+    aluno: studentData.name,
+    curso: enrollmentData.course?.title,
+    turma: enrollmentData.turma?.name,
+    modalidade: enrollmentData.modality,
+    valor: formatCurrency(enrollmentData.finalPrice),
+    forma_pagamento: enrollmentData.paymentMethod === 'prazo' ? 'Pagamento a Prazo' : 
+                     enrollmentData.paymentMethod === 'credit' ? 'Cartão de Crédito' :
+                     enrollmentData.paymentMethod === 'debit' ? 'Cartão de Débito' :
+                     enrollmentData.paymentMethod === 'pix' ? 'PIX' : 'Boleto',
+    prazo_pagamento: deadlineText,
+    data_matricula: new Date().toLocaleDateString('pt-BR'),
+    contrato_url: 'https://seusistema.com.br/contratos/12345.pdf'
+  })
+  
+  return true
+}
+
+// Função para criar notificação
+const createNotification = async (studentData: any, enrollmentData: any, paymentDeadline?: Date) => {
+  if (paymentDeadline) {
+    // Notificação para o aluno
+    console.log(`🔔 Notificação agendada para ${format(paymentDeadline, "dd/MM/yyyy HH:mm")}: 
+      Lembrete de pagamento para ${studentData.name} - Curso: ${enrollmentData.course?.title}
+      Valor: ${formatCurrency(enrollmentData.finalPrice)}`)
+    
+    // Notificação para o financeiro
+    console.log(`💰 Notificação para o financeiro: 
+      Pagamento pendente de ${studentData.name} - Vence em ${format(paymentDeadline, "dd/MM/yyyy")}
+      Contato: ${studentData.email} | ${studentData.whatsapp}`)
+  }
+  return true
+}
+
+export function NewEnrollmentDialog({ open, onOpenChange }: Props) {
   const [step, setStep] = useState<Step>("choose_type")
   const [studentType, setStudentType] = useState<"novato" | "ex_aluno" | null>(null)
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
   const [studentSearch, setStudentSearch] = useState("")
-  const [selectedCourseId, setSelectedCourseId] = useState<string>("")
-  const [selectedTurmaId, setSelectedTurmaId] = useState<string>("")
-  const [selectedCareerId, setSelectedCareerId] = useState<string>("")
+
+  const [selectedCareerId, setSelectedCareerId] = useState("")
+  const [selectedCourseId, setSelectedCourseId] = useState("")
+  const [selectedModality, setSelectedModality] = useState("")
+  const [selectedTurmaId, setSelectedTurmaId] = useState("")
+
   const [saving, setSaving] = useState(false)
 
-  // Form fields for new student
   const [newName, setNewName] = useState("")
   const [newCpf, setNewCpf] = useState("")
   const [newEmail, setNewEmail] = useState("")
   const [newWhatsapp, setNewWhatsapp] = useState("")
-  const [newAddress, setNewAddress] = useState("")
+  const [newInstagram, setNewInstagram] = useState("")
 
-  const publishedCourses = mockCourses.filter((c) => c.status === "published")
-  const turmas = selectedCourseId ? getTurmasByCourseId(Number(selectedCourseId)) : []
+  const [rua, setRua] = useState("")
+  const [numero, setNumero] = useState("")
+  const [bairro, setBairro] = useState("")
+  const [cep, setCep] = useState("")
+
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>("pix")
+  const [installments, setInstallments] = useState(1)
+  const [paymentDeadline, setPaymentDeadline] = useState<Date | undefined>(undefined)
+  const [calendarOpen, setCalendarOpen] = useState(false)
+
+  // Filter courses by selected career
+  const coursesByCareer = useMemo(() => {
+    if (!selectedCareerId) return []
+    const filtered = mockCourses.filter((c) => {
+      if ('careerId' in c) {
+        return c.careerId === Number(selectedCareerId) && c.status === "published"
+      }
+      const careerCourseMap: Record<number, number[]> = {
+        1: [1, 2],
+        2: [3, 4],
+        3: [5, 6],
+        4: [7, 8],
+      }
+      const courseIds = careerCourseMap[Number(selectedCareerId)] || []
+      return courseIds.includes(c.id) && c.status === "published"
+    })
+    return filtered
+  }, [selectedCareerId])
+
+  // Filter turmas based on modality and course
+  const filteredTurmas = useMemo(() => {
+    if (!selectedCourseId) return []
+    
+    let allTurmas = getTurmasByCourseId(Number(selectedCourseId))
+    
+    if (selectedModality === "online") {
+      return []
+    }
+    
+    return allTurmas.filter(t => typeof t.availableSlots === 'number' && t.availableSlots > 0)
+  }, [selectedCourseId, selectedModality])
+
   const selectedCourse = selectedCourseId ? getCourseById(Number(selectedCourseId)) : null
+  const selectedTurma = selectedTurmaId ? filteredTurmas.find(t => String(t.id) === selectedTurmaId) : null
 
   const originalPrice = selectedCourse?.price ?? 0
   const discount = studentType === "ex_aluno" ? originalPrice * EX_ALUNO_DISCOUNT : 0
   const finalPrice = originalPrice - discount
 
+  const installmentPrice = finalPrice / installments
+
   const filteredStudents = useMemo(() => {
-    if (!studentSearch.trim()) return mockStudents
     const q = studentSearch.toLowerCase()
     return mockStudents.filter(
       (s) =>
@@ -75,19 +241,46 @@ export function NewEnrollmentDialog({ open, onOpenChange }: NewEnrollmentDialogP
     )
   }, [studentSearch])
 
+  const handleModalityChange = (value: string) => {
+    setSelectedModality(value)
+    setSelectedTurmaId("")
+  }
+
+  const handleCareerChange = (value: string) => {
+    setSelectedCareerId(value)
+    setSelectedCourseId("")
+    setSelectedModality("")
+    setSelectedTurmaId("")
+  }
+
+  const handleCourseChange = (value: string) => {
+    setSelectedCourseId(value)
+    setSelectedModality("")
+    setSelectedTurmaId("")
+  }
+
   function resetAll() {
     setStep("choose_type")
     setStudentType(null)
     setSelectedStudent(null)
     setStudentSearch("")
+    setSelectedCareerId("")
     setSelectedCourseId("")
+    setSelectedModality("")
     setSelectedTurmaId("")
     setNewName("")
     setNewCpf("")
     setNewEmail("")
     setNewWhatsapp("")
-    setNewAddress("")
-    setSaving(false)
+    setNewInstagram("")
+    setRua("")
+    setNumero("")
+    setBairro("")
+    setCep("")
+    setPaymentMethod("pix")
+    setInstallments(1)
+    setPaymentDeadline(undefined)
+    setCalendarOpen(false)
   }
 
   function handleClose(val: boolean) {
@@ -95,435 +288,807 @@ export function NewEnrollmentDialog({ open, onOpenChange }: NewEnrollmentDialogP
     onOpenChange(val)
   }
 
-  function handleChooseType(type: "novato" | "ex_aluno") {
-    setStudentType(type)
-    if (type === "ex_aluno") {
-      setStep("select_existing")
-    } else {
-      setStep("new_student_form")
-    }
-  }
-
-  function handleSelectStudent(student: Student) {
-    setSelectedStudent(student)
-    setStep("course_payment")
-  }
-
-  function handleNewStudentNext(e: React.FormEvent) {
-    e.preventDefault()
-    setStep("course_payment")
-  }
-
   async function handleFinalize(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    await fakeApiPost({}, 1500)
-    setSaving(false)
-    setStep("success")
-    setTimeout(() => {
-      handleClose(false)
-    }, 2000)
+    
+    const studentData = studentType === "novato" ? {
+      name: newName,
+      cpf: newCpf,
+      email: newEmail,
+      whatsapp: newWhatsapp,
+      instagram: newInstagram,
+      address: { rua, numero, bairro, cep }
+    } : selectedStudent
+
+    const enrollmentData = {
+      student: studentData,
+      career: mockCareers.find(c => String(c.id) === selectedCareerId),
+      course: selectedCourse,
+      turma: selectedTurma,
+      modality: selectedModality,
+      originalPrice,
+      discount,
+      finalPrice,
+      paymentMethod,
+      installments: paymentMethod === "credit" ? installments : 1,
+      paymentDeadline: paymentMethod === "prazo" ? paymentDeadline : undefined,
+      enrollmentDate: new Date().toISOString(),
+    }
+
+    try {
+      await fakeApiPost(enrollmentData, 1500)
+      
+      if (studentData?.email) {
+        await sendContractByEmail(studentData, enrollmentData, paymentDeadline)
+        
+        if (paymentMethod === "prazo" && paymentDeadline) {
+          await createNotification(studentData, enrollmentData, paymentDeadline)
+        }
+      }
+      
+      setSaving(false)
+      setStep("success")
+    } catch (error) {
+      console.error("Erro ao finalizar matrícula:", error)
+      setSaving(false)
+      alert("Erro ao processar matrícula. Tente novamente.")
+    }
+  }
+
+  function handleCourseSelection(e: React.FormEvent) {
+    e.preventDefault()
+    if (selectedCareerId && selectedCourseId && selectedModality) {
+      if (selectedModality === "online") {
+        setStep("payment_method")
+      } else if (selectedModality !== "online" && selectedTurmaId) {
+        setStep("payment_method")
+      }
+    }
+  }
+
+  const isCourseSelectionComplete = () => {
+    if (!selectedCareerId || !selectedCourseId || !selectedModality) return false
+    if (selectedModality === "online") return true
+    return !!selectedTurmaId
+  }
+
+  const isPaymentMethodValid = () => {
+    if (paymentMethod === "prazo") {
+      return !!paymentDeadline
+    }
+    return true
   }
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="text-foreground">Nova Matricula</DialogTitle>
-          <DialogDescription>
-            {step === "choose_type" && "Selecione o tipo de aluno para iniciar a matricula."}
-            {step === "select_existing" && "Busque e selecione o aluno ja cadastrado."}
-            {step === "new_student_form" && "Preencha os dados do novo aluno."}
-            {step === "course_payment" && "Selecione o curso, turma e forma de pagamento."}
-            {step === "success" && "Matricula realizada com sucesso!"}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl p-0 gap-0">
+        
+        <div className="bg-gradient-to-r from-[#e8491d] to-[#f97316] p-6 rounded-t-lg sticky top-0 z-10">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-white">
+              Nova Matrícula
+            </DialogTitle>
+            <DialogDescription className="text-orange-100">
+              Complete o processo de matrícula em poucos passos
+            </DialogDescription>
+          </DialogHeader>
+        </div>
 
-        {/* STEP 1: Choose Type */}
-        {step === "choose_type" && (
-          <div className="grid gap-4 py-4 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => handleChooseType("novato")}
-              className="flex flex-col items-center gap-3 rounded-xl border-2 border-border bg-background p-6 transition-all hover:border-primary hover:bg-accent"
-            >
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-                <UserPlus className="h-7 w-7 text-primary" />
-              </div>
-              <span className="text-lg font-semibold text-foreground">Aluno Novato</span>
-              <span className="text-center text-sm text-muted-foreground">
-                Primeiro cadastro no sistema. Preencher todos os dados pessoais.
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleChooseType("ex_aluno")}
-              className="flex flex-col items-center gap-3 rounded-xl border-2 border-border bg-background p-6 transition-all hover:border-primary hover:bg-accent"
-            >
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
-                <UserCheck className="h-7 w-7 text-green-600" />
-              </div>
-              <span className="text-lg font-semibold text-foreground">Ex-Aluno</span>
-              <span className="text-center text-sm text-muted-foreground">
-                Ja possui cadastro. Preco diferenciado com 15% de desconto.
-              </span>
-              <Badge className="bg-green-100 text-green-700">
-                <Percent className="mr-1 h-3 w-3" />
-                15% OFF
-              </Badge>
-            </button>
-          </div>
-        )}
-
-        {/* STEP 2a: Select Existing Student */}
-        {step === "select_existing" && (
-          <div className="space-y-4 py-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => { setStep("choose_type"); setStudentType(null) }}
-              className="mb-2 text-muted-foreground"
-            >
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Voltar
-            </Button>
-
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nome, email ou CPF..."
-                className="pl-10"
-                value={studentSearch}
-                onChange={(e) => setStudentSearch(e.target.value)}
-                autoFocus
-              />
-            </div>
-
-            <div className="max-h-60 space-y-1 overflow-y-auto rounded-lg border p-1">
-              {filteredStudents.length > 0 ? (
-                filteredStudents.map((student) => (
-                  <button
-                    key={student.id}
-                    type="button"
-                    onClick={() => handleSelectStudent(student)}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-accent"
-                  >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                      {student.name.charAt(0)}
+        <div className="p-6">
+          {/* STEP 1 - Choose Type */}
+          {step === "choose_type" && (
+            <div className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <button
+                  onClick={() => {
+                    setStudentType("novato")
+                    setStep("new_student_form")
+                  }}
+                  className="group relative overflow-hidden rounded-xl border-2 border-gray-200 bg-white p-6 transition-all duration-300 hover:border-[#e8491d] hover:shadow-xl hover:-translate-y-1 cursor-pointer"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#e8491d] to-[#f97316] opacity-0 transition-opacity duration-300 group-hover:opacity-5" />
+                  <div className="relative flex flex-col items-center gap-3">
+                    <div className="rounded-full bg-orange-100 p-3 text-[#e8491d] transition-all duration-300 group-hover:bg-[#e8491d] group-hover:text-white group-hover:scale-110">
+                      <UserPlus className="h-8 w-8" />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-foreground">{student.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {student.cpf} - {student.email}
-                      </p>
+                    <span className="text-lg font-semibold text-gray-900">Aluno Novo</span>
+                    <p className="text-sm text-gray-500">Cadastre um novo aluno</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setStudentType("ex_aluno")
+                    setStep("select_existing")
+                  }}
+                  className="group relative overflow-hidden rounded-xl border-2 border-gray-200 bg-white p-6 transition-all duration-300 hover:border-[#e8491d] hover:shadow-xl hover:-translate-y-1 cursor-pointer"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#e8491d] to-[#f97316] opacity-0 transition-opacity duration-300 group-hover:opacity-5" />
+                  <div className="relative flex flex-col items-center gap-3">
+                    <div className="rounded-full bg-orange-100 p-3 text-[#e8491d] transition-all duration-300 group-hover:bg-[#e8491d] group-hover:text-white group-hover:scale-110">
+                      <UserCheck className="h-8 w-8" />
                     </div>
-                    <Badge
-                      className={student.active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}
-                      variant="secondary"
-                    >
-                      {student.active ? "Ativo" : "Inativo"}
+                    <span className="text-lg font-semibold text-gray-900">Ex-Aluno</span>
+                    <Badge className="bg-orange-100 text-[#e8491d] border-orange-200">
+                      <Percent className="h-3 w-3 mr-1" />
+                      15% OFF
                     </Badge>
-                  </button>
-                ))
-              ) : (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  Nenhum aluno encontrado com essa busca.
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* STEP 2b: New Student Form */}
-        {step === "new_student_form" && (
-          <form onSubmit={handleNewStudentNext} className="space-y-4 py-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => { setStep("choose_type"); setStudentType(null) }}
-              className="mb-2 text-muted-foreground"
-            >
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Voltar
-            </Button>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="new-name">Nome Completo</Label>
-                <Input
-                  id="new-name"
-                  placeholder="Nome do aluno"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="new-cpf">CPF</Label>
-                <Input
-                  id="new-cpf"
-                  placeholder="000.000.000-00"
-                  value={newCpf}
-                  onChange={(e) => setNewCpf(e.target.value)}
-                  required
-                />
+                  </div>
+                </button>
               </div>
             </div>
+          )}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="new-email">E-mail</Label>
+          {/* STEP 2 - Select Existing Student */}
+          {step === "select_existing" && (
+            <div className="space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <Input
-                  id="new-email"
-                  type="email"
-                  placeholder="email@exemplo.com"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  required
+                  className="pl-10 border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                  placeholder="Buscar por nome, email ou CPF..."
+                  value={studentSearch}
+                  onChange={(e) => setStudentSearch(e.target.value)}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="new-whatsapp">WhatsApp</Label>
-                <Input
-                  id="new-whatsapp"
-                  placeholder="(00) 00000-0000"
-                  value={newWhatsapp}
-                  onChange={(e) => setNewWhatsapp(e.target.value)}
-                  required
-                />
+
+              <div className="max-h-96 overflow-y-auto space-y-2">
+                {filteredStudents.length > 0 ? (
+                  filteredStudents.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        setSelectedStudent(s)
+                        setStep("course_payment")
+                      }}
+                      className="w-full flex items-center gap-3 p-4 rounded-lg border border-gray-200 transition-all duration-300 hover:border-[#e8491d] hover:bg-orange-50 hover:shadow-md hover:-translate-y-0.5 text-left cursor-pointer group"
+                    >
+                      <div className="h-12 w-12 rounded-full bg-gradient-to-r from-[#e8491d] to-[#f97316] flex items-center justify-center font-bold text-white">
+                        {s.name.charAt(0)}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-900">{s.name}</p>
+                        <p className="text-sm text-gray-500">{s.email}</p>
+                        <p className="text-xs text-gray-400">{s.cpf}</p>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-[#e8491d] transition-all duration-300" />
+                    </button>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    Nenhum aluno encontrado
+                  </div>
+                )}
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="new-address">Endereco</Label>
-              <Input
-                id="new-address"
-                placeholder="Rua, numero, bairro, CEP"
-                value={newAddress}
-                onChange={(e) => setNewAddress(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90">
-                Proximo: Selecionar Curso
+              <Button 
+                variant="ghost" 
+                onClick={() => setStep("choose_type")} 
+                className="hover:bg-orange-50 hover:text-[#e8491d] transition-all duration-300 cursor-pointer"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Voltar
               </Button>
             </div>
-          </form>
-        )}
+          )}
 
-        {/* STEP 3: Course & Payment */}
-        {step === "course_payment" && (
-          <form onSubmit={handleFinalize} className="space-y-4 py-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSelectedCourseId("")
-                setSelectedTurmaId("")
-                if (studentType === "ex_aluno") {
-                  setStep("select_existing")
-                  setSelectedStudent(null)
-                } else {
-                  setStep("new_student_form")
-                }
-              }}
-              className="mb-2 text-muted-foreground"
-            >
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Voltar
-            </Button>
+          {/* STEP 3 - New Student Form */}
+          {step === "new_student_form" && (
+            <form onSubmit={(e) => { e.preventDefault(); setStep("course_payment") }} className="space-y-6">
+              <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-4 transition-all duration-300 hover:shadow-lg">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-8 w-1 bg-gradient-to-b from-[#e8491d] to-[#f97316] rounded-full" />
+                  <h3 className="text-lg font-semibold text-gray-900">Dados Pessoais</h3>
+                </div>
 
-            {/* Selected Student Summary */}
-            {studentType === "ex_aluno" && selectedStudent && (
-              <div className="flex items-center gap-3 rounded-lg border bg-accent/50 p-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary">
-                  {selectedStudent.name.charAt(0)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-foreground">{selectedStudent.name}</p>
-                  <p className="text-xs text-muted-foreground">{selectedStudent.cpf} - {selectedStudent.email}</p>
-                </div>
-                <Badge className="bg-green-100 text-green-700">
-                  <Percent className="mr-1 h-3 w-3" />
-                  Ex-Aluno
-                </Badge>
-              </div>
-            )}
-
-            {studentType === "novato" && (
-              <div className="flex items-center gap-3 rounded-lg border bg-accent/50 p-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary">
-                  {newName.charAt(0) || "?"}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-foreground">{newName || "Novo Aluno"}</p>
-                  <p className="text-xs text-muted-foreground">{newCpf} - {newEmail}</p>
-                </div>
-                <Badge className="bg-blue-100 text-blue-700">Novato</Badge>
-              </div>
-            )}
-
-            {/* Course Selection */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Curso</Label>
-                <Select
-                  value={selectedCourseId}
-                  onValueChange={(val) => {
-                    setSelectedCourseId(val)
-                    setSelectedTurmaId("")
-                  }}
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o curso" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {publishedCourses.map((course) => (
-                      <SelectItem key={course.id} value={String(course.id)}>
-                        {course.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Turma</Label>
-                <Select
-                  value={selectedTurmaId}
-                  onValueChange={setSelectedTurmaId}
-                  required
-                  disabled={!selectedCourseId}
-                >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={
-                        selectedCourseId
-                          ? "Selecione a turma"
-                          : "Selecione um curso primeiro"
-                      }
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">Nome completo</Label>
+                    <Input 
+                      placeholder="Digite o nome completo" 
+                      value={newName} 
+                      onChange={(e) => setNewName(e.target.value)}
+                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                      required
                     />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {turmas.map((turma) => (
-                      <SelectItem key={turma.id} value={String(turma.id)}>
-                        {turma.name} ({turma.shift})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">CPF</Label>
+                    <Input 
+                      placeholder="000.000.000-00" 
+                      value={newCpf} 
+                      onChange={(e) => setNewCpf(applyCpfMask(e.target.value))}
+                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">Email</Label>
+                    <Input 
+                      placeholder="email@exemplo.com" 
+                      value={newEmail} 
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                      required
+                      type="email"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">WhatsApp</Label>
+                    <Input 
+                      placeholder="(00) 00000-0000" 
+                      value={newWhatsapp} 
+                      onChange={(e) => setNewWhatsapp(applyPhoneMask(e.target.value))}
+                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">Instagram</Label>
+                    <Input 
+                      placeholder="@usuario" 
+                      value={newInstagram} 
+                      onChange={(e) => setNewInstagram(e.target.value)}
+                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
 
-            {/* Price Display */}
-            {selectedCourse && (
-              <div className="rounded-lg border bg-background p-4">
-                <p className="mb-2 text-sm font-medium text-muted-foreground">Valor do Curso</p>
-                <div className="flex items-center gap-3">
-                  {studentType === "ex_aluno" ? (
-                    <>
-                      <span className="text-lg text-muted-foreground line-through">
-                        R$ {originalPrice.toFixed(2)}
-                      </span>
-                      <span className="text-2xl font-bold text-primary">
-                        R$ {finalPrice.toFixed(2)}
-                      </span>
-                      <Badge className="bg-green-100 text-green-700">-15%</Badge>
-                    </>
-                  ) : (
-                    <span className="text-2xl font-bold text-foreground">
-                      R$ {originalPrice.toFixed(2)}
-                    </span>
+              <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-4 transition-all duration-300 hover:shadow-lg">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-8 w-1 bg-gradient-to-b from-[#e8491d] to-[#f97316] rounded-full" />
+                  <h3 className="text-lg font-semibold text-gray-900">Endereço</h3>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">Rua</Label>
+                    <Input 
+                      placeholder="Nome da rua" 
+                      value={rua} 
+                      onChange={(e) => setRua(e.target.value)}
+                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">Número</Label>
+                    <Input 
+                      placeholder="Número" 
+                      value={numero} 
+                      onChange={(e) => setNumero(e.target.value)}
+                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">Bairro</Label>
+                    <Input 
+                      placeholder="Bairro" 
+                      value={bairro} 
+                      onChange={(e) => setBairro(e.target.value)}
+                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">CEP</Label>
+                    <Input 
+                      placeholder="00000-000" 
+                      value={cep} 
+                      onChange={(e) => setCep(applyCepMask(e.target.value))}
+                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setStep("choose_type")} 
+                  className="hover:bg-orange-50 hover:text-[#e8491d] transition-all duration-300 cursor-pointer"
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Voltar
+                </Button>
+                <Button 
+                  type="submit" 
+                  className="bg-gradient-to-r from-[#e8491d] to-[#f97316] hover:from-[#d43d15] hover:to-[#e86a0f] text-white transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer"
+                >
+                  Continuar
+                  <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {/* STEP 4 - Course Selection */}
+          {step === "course_payment" && (
+            <form onSubmit={handleCourseSelection} className="space-y-6">
+              <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-6 transition-all duration-300 hover:shadow-lg">
+                <div className="flex items-center gap-2 mb-4">
+                  <GraduationCap className="h-5 w-5 text-[#e8491d]" />
+                  <h3 className="text-lg font-semibold text-gray-900">Seleção de Curso</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                      <Briefcase className="h-4 w-4 text-[#e8491d]" />
+                      Carreira
+                    </Label>
+                    <Select value={selectedCareerId} onValueChange={handleCareerChange}>
+                      <SelectTrigger className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300 cursor-pointer">
+                        <SelectValue placeholder="Selecione uma carreira" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {mockCareers.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)} className="cursor-pointer">
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 text-[#e8491d]" />
+                      Curso
+                    </Label>
+                    <Select 
+                      value={selectedCourseId} 
+                      onValueChange={handleCourseChange}
+                      disabled={!selectedCareerId}
+                    >
+                      <SelectTrigger className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300 cursor-pointer disabled:opacity-50">
+                        <SelectValue placeholder={selectedCareerId ? "Selecione um curso" : "Selecione uma carreira primeiro"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {coursesByCareer.length > 0 ? (
+                          coursesByCareer.map((c) => (
+                            <SelectItem key={c.id} value={String(c.id)} className="cursor-pointer">
+                              {c.title}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className="p-2 text-center text-gray-500 text-sm">
+                            Nenhum curso disponível
+                          </div>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                      <Monitor className="h-4 w-4 text-[#e8491d]" />
+                      Modalidade
+                    </Label>
+                    <Select 
+                      value={selectedModality} 
+                      onValueChange={handleModalityChange}
+                      disabled={!selectedCourseId}
+                    >
+                      <SelectTrigger className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300 cursor-pointer disabled:opacity-50">
+                        <SelectValue placeholder={selectedCourseId ? "Selecione a modalidade" : "Selecione um curso primeiro"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="presencial" className="cursor-pointer">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4" />
+                            Presencial
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="hibrido" className="cursor-pointer">
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4" />
+                            Híbrido
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="online" className="cursor-pointer">
+                          <div className="flex items-center gap-2">
+                            <Monitor className="h-4 w-4" />
+                            Online
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {selectedModality === "online" && (
+                      <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Cursos online não possuem turmas específicas
+                      </p>
+                    )}
+                  </div>
+
+                  {selectedModality && selectedModality !== "online" && (
+                    <div>
+                      <Label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                        <Users className="h-4 w-4 text-[#e8491d]" />
+                        Turma
+                      </Label>
+                      <Select 
+                        value={selectedTurmaId} 
+                        onValueChange={setSelectedTurmaId}
+                        disabled={!selectedCourseId || !selectedModality}
+                      >
+                        <SelectTrigger className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300 cursor-pointer disabled:opacity-50">
+                          <SelectValue placeholder={selectedCourseId ? "Selecione uma turma" : "Selecione um curso primeiro"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {filteredTurmas.length > 0 ? (
+                            filteredTurmas.map((t) => (
+                              <SelectItem key={t.id} value={String(t.id)} className="cursor-pointer">
+                                <div className="flex justify-between items-center w-full">
+                                  <span>{t.name}</span>
+                                  <Badge variant="outline" className="ml-2 text-xs">
+                                    {t.availableSlots} vagas
+                                  </Badge>
+                                </div>
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <div className="p-2 text-center text-gray-500 text-sm">
+                              Nenhuma turma disponível
+                            </div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   )}
                 </div>
-                {studentType === "ex_aluno" && (
-                  <p className="mt-1 text-xs text-green-600">
-                    Economia de R$ {discount.toFixed(2)} por ser ex-aluno
+              </div>
+
+              {selectedCourse && isCourseSelectionComplete() && (
+                <div className="rounded-xl bg-gradient-to-r from-orange-50 to-orange-100 p-6 border border-orange-200 transition-all duration-300 hover:shadow-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-5 w-5 text-[#e8491d]" />
+                      <p className="text-sm font-medium text-gray-700">Resumo da Matrícula</p>
+                    </div>
+                    {studentType === "ex_aluno" && (
+                      <Badge className="bg-orange-200 text-[#e8491d] border-orange-300">
+                        <Percent className="h-3 w-3 mr-1" />
+                        15% OFF Ex-Aluno
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-3xl font-bold text-gray-900">
+                      {formatCurrency(finalPrice)}
+                    </p>
+                    {discount > 0 && (
+                      <p className="text-sm text-gray-500 line-through">
+                        De {formatCurrency(originalPrice)}
+                      </p>
+                    )}
+                    <div className="text-sm text-gray-600 mt-2 pt-2 border-t border-orange-200 space-y-1">
+                      <p className="flex items-center gap-2">
+                        <Briefcase className="h-3 w-3" />
+                        Carreira: {mockCareers.find(c => String(c.id) === selectedCareerId)?.name}
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <BookOpen className="h-3 w-3" />
+                        Curso: {selectedCourse.title}
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <Monitor className="h-3 w-3" />
+                        Modalidade: {selectedModality === 'presencial' ? 'Presencial' : selectedModality === 'online' ? 'Online' : 'Híbrido'}
+                      </p>
+                      {selectedModality !== "online" && selectedTurma && (
+                        <p className="flex items-center gap-2">
+                          <Users className="h-3 w-3" />
+                          Turma: {selectedTurma.name}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setStep(studentType === "novato" ? "new_student_form" : "select_existing")} 
+                  className="hover:bg-orange-50 hover:text-[#e8491d] transition-all duration-300 cursor-pointer"
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Voltar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={!isCourseSelectionComplete()}
+                  className="bg-gradient-to-r from-[#e8491d] to-[#f97316] hover:from-[#d43d15] hover:to-[#e86a0f] text-white px-8 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer disabled:opacity-50"
+                >
+                  Avançar para Pagamento
+                  <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {/* STEP 5 - Payment Method */}
+          {step === "payment_method" && (
+            <form onSubmit={handleFinalize} className="space-y-6">
+              <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-6 transition-all duration-300 hover:shadow-lg">
+                <div className="flex items-center gap-2 mb-4">
+                  <CreditCard className="h-5 w-5 text-[#e8491d]" />
+                  <h3 className="text-lg font-semibold text-gray-900">Forma de Pagamento</h3>
+                </div>
+
+                <div className="grid gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod("pix")
+                      setPaymentDeadline(undefined)
+                    }}
+                    className={`flex items-center gap-4 p-4 rounded-lg border-2 transition-all duration-300 cursor-pointer ${
+                      paymentMethod === "pix" 
+                        ? "border-[#e8491d] bg-orange-50" 
+                        : "border-gray-200 hover:border-[#e8491d] hover:bg-orange-50"
+                    }`}
+                  >
+                    <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                      <div className="text-2xl">💰</div>
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="font-semibold text-gray-900">PIX</p>
+                      <p className="text-sm text-gray-500">Pagamento instantâneo com desconto</p>
+                    </div>
+                    {paymentMethod === "pix" && (
+                      <div className="h-5 w-5 rounded-full bg-[#e8491d] animate-pulse" />
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod("credit")
+                      setPaymentDeadline(undefined)
+                    }}
+                    className={`flex items-center gap-4 p-4 rounded-lg border-2 transition-all duration-300 cursor-pointer ${
+                      paymentMethod === "credit" 
+                        ? "border-[#e8491d] bg-orange-50" 
+                        : "border-gray-200 hover:border-[#e8491d] hover:bg-orange-50"
+                    }`}
+                  >
+                    <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                      <CreditCardIcon className="h-6 w-6 text-[#e8491d]" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="font-semibold text-gray-900">Cartão de Crédito</p>
+                      <p className="text-sm text-gray-500">Parcele em até 12x</p>
+                    </div>
+                    {paymentMethod === "credit" && (
+                      <div className="h-5 w-5 rounded-full bg-[#e8491d] animate-pulse" />
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod("debit")
+                      setPaymentDeadline(undefined)
+                    }}
+                    className={`flex items-center gap-4 p-4 rounded-lg border-2 transition-all duration-300 cursor-pointer ${
+                      paymentMethod === "debit" 
+                        ? "border-[#e8491d] bg-orange-50" 
+                        : "border-gray-200 hover:border-[#e8491d] hover:bg-orange-50"
+                    }`}
+                  >
+                    <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                      <CreditCardIcon className="h-6 w-6 text-[#e8491d]" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="font-semibold text-gray-900">Cartão de Débito</p>
+                      <p className="text-sm text-gray-500">Pagamento à vista</p>
+                    </div>
+                    {paymentMethod === "debit" && (
+                      <div className="h-5 w-5 rounded-full bg-[#e8491d] animate-pulse" />
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod("boleto")
+                      setPaymentDeadline(undefined)
+                    }}
+                    className={`flex items-center gap-4 p-4 rounded-lg border-2 transition-all duration-300 cursor-pointer ${
+                      paymentMethod === "boleto" 
+                        ? "border-[#e8491d] bg-orange-50" 
+                        : "border-gray-200 hover:border-[#e8491d] hover:bg-orange-50"
+                    }`}
+                  >
+                    <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                      <div className="text-2xl">📄</div>
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="font-semibold text-gray-900">Boleto Bancário</p>
+                      <p className="text-sm text-gray-500">Vencimento em 3 dias úteis</p>
+                    </div>
+                    {paymentMethod === "boleto" && (
+                      <div className="h-5 w-5 rounded-full bg-[#e8491d] animate-pulse" />
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod("prazo")
+                      if (!paymentDeadline) {
+                        setPaymentDeadline(addDays(new Date(), 30))
+                      }
+                    }}
+                    className={`flex items-center gap-4 p-4 rounded-lg border-2 transition-all duration-300 cursor-pointer ${
+                      paymentMethod === "prazo" 
+                        ? "border-[#e8491d] bg-orange-50" 
+                        : "border-gray-200 hover:border-[#e8491d] hover:bg-orange-50"
+                    }`}
+                  >
+                    <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                      <Timer className="h-6 w-6 text-[#e8491d]" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="font-semibold text-gray-900">Pagamento a Prazo</p>
+                      <p className="text-sm text-gray-500">Selecione a data de vencimento</p>
+                    </div>
+                    {paymentMethod === "prazo" && (
+                      <div className="h-5 w-5 rounded-full bg-[#e8491d] animate-pulse" />
+                    )}
+                  </button>
+                </div>
+
+                {paymentMethod === "credit" && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <Label className="text-sm font-medium mb-2 block">Número de Parcelas</Label>
+                    <Select value={String(installments)} onValueChange={(v) => setInstallments(Number(v))}>
+                      <SelectTrigger className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300 cursor-pointer">
+                        <SelectValue placeholder="Selecione as parcelas" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((num) => (
+                          <SelectItem key={num} value={String(num)} className="cursor-pointer">
+                            {num}x de {formatCurrency(installmentPrice)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {paymentMethod === "prazo" && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <Label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                      <CalendarDays className="h-4 w-4 text-[#e8491d]" />
+                      Data de Vencimento
+                    </Label>
+                    <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start text-left font-normal border-gray-200 hover:border-[#e8491d] transition-all duration-300 cursor-pointer"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {paymentDeadline ? (
+                            format(paymentDeadline, "dd/MM/yyyy", { locale: ptBR })
+                          ) : (
+                            <span>Selecione a data de vencimento</span>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={paymentDeadline}
+                          onSelect={(date) => {
+                            setPaymentDeadline(date)
+                            setCalendarOpen(false)
+                          }}
+                          disabled={(date) => date < new Date()}
+                          locale={ptBR}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    {paymentDeadline && (
+                      <div className="mt-2 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                        <div className="flex items-center gap-2 text-sm text-gray-700">
+                          <Bell className="h-4 w-4 text-[#e8491d]" />
+                          <span>
+                            Notificações serão enviadas para o aluno e financeiro 
+                            {paymentDeadline && ` em ${format(paymentDeadline, "dd/MM/yyyy", { locale: ptBR })}`}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-gray-600">Valor total:</span>
+                    <span className="text-2xl font-bold text-[#e8491d]">{formatCurrency(finalPrice)}</span>
+                  </div>
+                  {paymentMethod === "credit" && installments > 1 && (
+                    <div className="flex justify-between items-center text-sm text-gray-500">
+                      <span>{installments}x de {formatCurrency(installmentPrice)}</span>
+                      <span>sem juros</span>
+                    </div>
+                  )}
+                  {paymentMethod === "prazo" && paymentDeadline && (
+                    <div className="flex justify-between items-center text-sm text-gray-500 mt-2 pt-2 border-t border-orange-200">
+                      <span>Vencimento:</span>
+                      <span className="font-medium text-[#e8491d]">
+                        {format(paymentDeadline, "dd/MM/yyyy", { locale: ptBR })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setStep("course_payment")} 
+                  className="hover:bg-orange-50 hover:text-[#e8491d] transition-all duration-300 cursor-pointer"
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Voltar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={saving || !isPaymentMethodValid()}
+                  className="bg-gradient-to-r from-[#e8491d] to-[#f97316] hover:from-[#d43d15] hover:to-[#e86a0f] text-white px-8 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="animate-spin mr-2" /> : <Send className="mr-2 h-4 w-4" />}
+                  {saving ? "Processando..." : "Confirmar e Enviar Contrato"}
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {/* STEP 6 - Success */}
+          {step === "success" && (
+            <div className="text-center py-12">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-orange-100 mb-6 animate-bounce">
+                <CheckCircle2 className="h-10 w-10 text-[#e8491d]" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Matrícula realizada com sucesso!
+              </h2>
+              <div className="bg-orange-50 rounded-lg p-4 mb-6 text-left space-y-2">
+                <p className="flex items-center gap-2 text-sm text-gray-700">
+                  <Send className="h-4 w-4 text-[#e8491d]" />
+                  Contrato enviado por e-mail
+                </p>
+                {paymentMethod === "prazo" && paymentDeadline && (
+                  <p className="flex items-center gap-2 text-sm text-gray-700">
+                    <Bell className="h-4 w-4 text-[#e8491d]" />
+                    Notificação agendada para {format(paymentDeadline, "dd/MM/yyyy", { locale: ptBR })}
                   </p>
                 )}
+                <p className="text-sm text-gray-600">
+                  Um contrato foi enviado para o e-mail do aluno com todos os detalhes da matrícula.
+                  {paymentMethod === "prazo" && " O sistema enviará lembretes automáticos na data de vencimento."}
+                  Por favor, verifique a caixa de entrada e o spam.
+                </p>
               </div>
-            )}
-
-            {/* Payment & Type */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Tipo de Matricula</Label>
-                <Select required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="interno">Interno</SelectItem>
-                    <SelectItem value="externo">Externo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Forma de Pagamento</Label>
-                <Select required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pix">PIX</SelectItem>
-                    <SelectItem value="credito_vista">Credito a Vista</SelectItem>
-                    <SelectItem value="credito_parcelado">Credito Parcelado</SelectItem>
-                    <SelectItem value="boleto">Boleto Bancario</SelectItem>
-                    <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4">
-              <Button
-                type="button"
-                variant="outline"
+              <Button 
                 onClick={() => handleClose(false)}
+                className="bg-gradient-to-r from-[#e8491d] to-[#f97316] hover:from-[#d43d15] hover:to-[#e86a0f] text-white transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer"
               >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                {saving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Salvando...
-                  </>
-                ) : (
-                  "Realizar Matricula"
-                )}
+                Fechar
               </Button>
             </div>
-          </form>
-        )}
-
-        {/* SUCCESS */}
-        {step === "success" && (
-          <div className="flex flex-col items-center gap-4 py-8">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-              <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <p className="text-lg font-semibold text-foreground">Matricula realizada com sucesso!</p>
-            <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-center">
-              <p className="text-sm font-medium text-green-800">Contrato gerado automaticamente</p>
-              <p className="text-xs text-green-600">
-                O contrato foi criado com os dados da matricula e pode ser visualizado na secao de Contratos.
-              </p>
-            </div>
-            {studentType === "ex_aluno" && selectedStudent && (
-              <p className="text-sm text-muted-foreground">
-                {selectedStudent.name} - com desconto de ex-aluno aplicado.
-              </p>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   )
