@@ -4,47 +4,62 @@ import { useMemo, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
 import { mockCourses, Course } from "@/lib/mock-data"
+import { Plus, BookOpen, Users, Monitor, Building2, Calendar, DollarSign, Edit3, Search } from "lucide-react"
 
 export default function CeoCursosPage() {
   const [courses, setCourses] = useState<Course[]>(mockCourses)
-  const [title, setTitle] = useState("")
-  const [price, setPrice] = useState(0)
-  const [accessType, setAccessType] = useState<"interno" | "externo" | "ambos">("ambos")
-  const [startDate, setStartDate] = useState("")
-  const [endDate, setEndDate] = useState("")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterModality, setFilterModality] = useState<"todos" | "interno" | "externo" | "ambos">("todos")
   const [editingCourse, setEditingCourse] = useState<Course | null>(null)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 
-  const handleAdd = (e: React.FormEvent) => {
+  // Form states for create modal
+  const [createTitle, setCreateTitle] = useState("")
+  const [createPrice, setCreatePrice] = useState(0)
+  const [createAccessType, setCreateAccessType] = useState<"interno" | "externo" | "ambos">("ambos")
+  const [createStartDate, setCreateStartDate] = useState("")
+  const [createEndDate, setCreateEndDate] = useState("")
+
+  // Form states for edit modal
+  const [editTitle, setEditTitle] = useState("")
+  const [editPrice, setEditPrice] = useState(0)
+  const [editAccessType, setEditAccessType] = useState<"interno" | "externo" | "ambos">("ambos")
+  const [editStartDate, setEditStartDate] = useState("")
+  const [editEndDate, setEditEndDate] = useState("")
+
+  const handleCreateCourse = (e: React.FormEvent) => {
     e.preventDefault()
     const newCourse: Course = {
       id: Math.max(0, ...courses.map((c) => c.id)) + 1,
-      title,
+      title: createTitle,
       description: "Criado pelo CEO",
-      price,
+      price: createPrice,
       status: "published",
-      access_type: accessType,
+      access_type: createAccessType,
       duration_in_days: 30,
-      start_date: startDate || undefined,
-      end_date: endDate || undefined,
+      start_date: createStartDate || undefined,
+      end_date: createEndDate || undefined,
       created_at: new Date().toISOString().slice(0, 10),
     }
     setCourses((prev) => [...prev, newCourse])
-    resetForm()
+    resetCreateForm()
+    setIsCreateModalOpen(false)
   }
 
-  const handleEdit = (course: Course) => {
+  const handleEditCourse = (course: Course) => {
     setEditingCourse(course)
-    setTitle(course.title)
-    setPrice(course.price)
-    setAccessType(course.access_type)
-    setStartDate(course.start_date || "")
-    setEndDate(course.end_date || "")
-    setIsDialogOpen(true)
+    setEditTitle(course.title)
+    setEditPrice(course.price)
+    setEditAccessType(course.access_type)
+    setEditStartDate(course.start_date || "")
+    setEditEndDate(course.end_date || "")
+    setIsEditModalOpen(true)
   }
 
   const handleSaveEdit = (e: React.FormEvent) => {
@@ -52,24 +67,32 @@ export default function CeoCursosPage() {
     if (!editingCourse) return
     const updatedCourse: Course = {
       ...editingCourse,
-      title,
-      price,
-      access_type: accessType,
-      start_date: startDate || undefined,
-      end_date: endDate || undefined,
+      title: editTitle,
+      price: editPrice,
+      access_type: editAccessType,
+      start_date: editStartDate || undefined,
+      end_date: editEndDate || undefined,
     }
     setCourses((prev) => prev.map((c) => (c.id === editingCourse.id ? updatedCourse : c)))
-    setIsDialogOpen(false)
+    setIsEditModalOpen(false)
     setEditingCourse(null)
-    resetForm()
+    resetEditForm()
   }
 
-  const resetForm = () => {
-    setTitle("")
-    setPrice(0)
-    setAccessType("ambos")
-    setStartDate("")
-    setEndDate("")
+  const resetCreateForm = () => {
+    setCreateTitle("")
+    setCreatePrice(0)
+    setCreateAccessType("ambos")
+    setCreateStartDate("")
+    setCreateEndDate("")
+  }
+
+  const resetEditForm = () => {
+    setEditTitle("")
+    setEditPrice(0)
+    setEditAccessType("ambos")
+    setEditStartDate("")
+    setEditEndDate("")
   }
 
   const stats = useMemo(() => ({
@@ -79,11 +102,20 @@ export default function CeoCursosPage() {
     hibrido: courses.filter((c) => c.access_type === "ambos").length,
   }), [courses])
 
+  // Filter courses based on search and modality
+  const filteredCourses = useMemo(() => {
+    return courses.filter((course) => {
+      const matchesSearch = course.title.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesModality = filterModality === "todos" || course.access_type === filterModality
+      return matchesSearch && matchesModality
+    })
+  }, [courses, searchTerm, filterModality])
+
   return (
     <div className="p-4 lg:p-8">
       <div className="mx-auto max-w-7xl space-y-6">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Cursos (CEO)</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Cursos</h1>
           <p className="text-sm text-muted-foreground">Gestão ágil e visual das ofertas de curso. Adicione, localize e monitore performance em poucos cliques.</p>
         </div>
 
@@ -106,208 +138,469 @@ export default function CeoCursosPage() {
           </Card>
         </div>
 
+        {/* Header with Create Button */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-foreground">Gerenciar Cursos</h2>
+            <p className="text-sm text-muted-foreground">Visualize e gerencie todos os cursos disponíveis</p>
+          </div>
+          <Button onClick={() => setIsCreateModalOpen(true)} className="bg-[#e8491d] hover:bg-[#d13a0f] text-white">
+            <Plus className="h-4 w-4 mr-2" />
+            Criar Curso
+          </Button>
+        </div>
+
+        {/* Filters */}
         <Card className="p-6">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
             <div className="flex-1">
-              <p className="text-sm font-medium text-muted-foreground">Buscar Curso</p>
-              <Input
-                placeholder="Digite nome do curso"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="mt-1"
-              />
+              <Label className="text-sm font-medium text-muted-foreground mb-2 block">Buscar Cursos</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Digite o nome do curso..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
             </div>
-            <div className="max-w-xs">
-              <label className="text-sm font-medium text-muted-foreground">Modalidade</label>
-              <select
-                className="mt-1 w-full rounded border border-slate-300 bg-transparent px-3 py-2 text-sm"
-                value={accessType}
-                onChange={(e) => setAccessType(e.target.value as "interno" | "externo" | "ambos")}
-              >
-                <option value="ambos">Todas</option>
-                <option value="interno">Presencial</option>
-                <option value="externo">Online</option>
-                <option value="ambos">Híbrido</option>
-              </select>
+            <div className="w-full sm:w-48">
+              <Label className="text-sm font-medium text-muted-foreground mb-2 block">Modalidade</Label>
+              <Select value={filterModality} onValueChange={(value) => setFilterModality(value as "todos" | "interno" | "externo" | "ambos")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todas</SelectItem>
+                  <SelectItem value="interno">Presencial</SelectItem>
+                  <SelectItem value="externo">Online</SelectItem>
+                  <SelectItem value="ambos">Híbrido</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <Button type="button" variant="secondary" onClick={() => setCourses(mockCourses)}>
-              Resetar Lista
+            <Button variant="outline" onClick={() => { setCourses(mockCourses); setSearchTerm(""); setFilterModality("todos") }}>
+              Resetar Filtros
             </Button>
           </div>
-
-          <form onSubmit={handleAdd} className="grid gap-3 lg:grid-cols-4">
-            <Input
-              placeholder="Título do curso"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              className="col-span-2"
-            />
-            <Input
-              placeholder="Preço (R$)"
-              type="number"
-              value={price}
-              onChange={(e) => setPrice(Number(e.target.value))}
-              required
-            />
-            <Select value={accessType} onValueChange={(value) => setAccessType(value as "interno" | "externo" | "ambos")}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="interno">Presencial</SelectItem>
-                <SelectItem value="externo">Online</SelectItem>
-                <SelectItem value="ambos">Híbrido</SelectItem>
-              </SelectContent>
-            </Select>
-            {(accessType === "interno" || accessType === "ambos") && (
-              <>
-                <Input
-                  type="date"
-                  placeholder="Data Início Presencial"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  required
-                />
-                <Input
-                  type="date"
-                  placeholder="Data Fim Presencial"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  required
-                />
-              </>
-            )}
-            {accessType === "externo" && (
-              <Input
-                type="date"
-                placeholder="Data Início Acesso Online"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                required
-              />
-            )}
-            <Button type="submit" className="w-full">
-              + Criar Curso
-            </Button>
-          </form>
         </Card>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {courses.map((course) => (
-            <Card key={course.id} className="border border-slate-700 p-5 hover:shadow-xl hover:border-primary transition">
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-foreground">{course.title}</h3>
-                <span className="rounded-full bg-slate-800 px-2 py-1 text-xs uppercase text-slate-200">
-                  {course.status}
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground mb-4">{course.description || "Sem descrição"}</p>
-              <div className="flex items-center justify-between text-sm font-medium mb-3">
-                <span className="rounded-lg bg-slate-800 px-2 py-1 text-sky-300">R$ {course.price.toFixed(2)}</span>
-                <span className={`rounded-lg px-3 py-1 text-xs font-semibold uppercase ${
-                  course.access_type === "interno" 
-                    ? "bg-blue-600 text-white" 
-                    : course.access_type === "externo" 
-                    ? "bg-green-600 text-white" 
-                    : "bg-purple-600 text-white"
-                }`}>
-                  {course.access_type === "interno" ? "Presencial" : course.access_type === "externo" ? "Online" : "Híbrido"}
-                </span>
-              </div>
-              <div className="text-xs text-muted-foreground mb-3">
-                {course.access_type === "interno" && "Aulas presenciais em sala de aula"}
-                {course.access_type === "externo" && "Acesso 100% online, sem necessidade de presença"}
-                {course.access_type === "ambos" && "Aulas presenciais + acesso online simultâneo"}
-              </div>
-              {(course.start_date || course.end_date) && (
-                <div className="text-xs text-muted-foreground mb-2">
-                  {course.start_date && <span>Início: {new Date(course.start_date).toLocaleDateString("pt-BR")}</span>}
-                  {course.end_date && <span> | Fim: {new Date(course.end_date).toLocaleDateString("pt-BR")}</span>}
+        {/* Course Cards */}
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {filteredCourses.map((course) => (
+            <Card key={course.id} className="group relative overflow-hidden border border-slate-200 hover:border-[#e8491d]/30 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+              <div className="absolute inset-0 bg-gradient-to-br from-[#e8491d]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              
+              <div className="p-6">
+                {/* Header */}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-foreground mb-1 line-clamp-2">{course.title}</h3>
+                    <Badge variant="secondary" className="text-xs">
+                      {course.status === "published" ? "Publicado" : "Rascunho"}
+                    </Badge>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleEditCourse(course)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-[#e8491d]/10 hover:text-[#e8491d]"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                  </Button>
                 </div>
-              )}
-              <Button variant="outline" size="sm" onClick={() => handleEdit(course)}>
-                Editar
-              </Button>
+
+                {/* Description */}
+                <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+                  {course.description || "Sem descrição disponível"}
+                </p>
+
+                {/* Modality Badge */}
+                <div className="flex items-center gap-2 mb-4">
+                  {course.access_type === "interno" && (
+                    <>
+                      <Building2 className="h-4 w-4 text-blue-600" />
+                      <Badge className="bg-blue-100 text-blue-800 border-blue-200">Presencial</Badge>
+                    </>
+                  )}
+                  {course.access_type === "externo" && (
+                    <>
+                      <Monitor className="h-4 w-4 text-green-600" />
+                      <Badge className="bg-green-100 text-green-800 border-green-200">Online</Badge>
+                    </>
+                  )}
+                  {course.access_type === "ambos" && (
+                    <>
+                      <Users className="h-4 w-4 text-purple-600" />
+                      <Badge className="bg-purple-100 text-purple-800 border-purple-200">Híbrido</Badge>
+                    </>
+                  )}
+                </div>
+
+                {/* Price */}
+                <div className="flex items-center gap-2 mb-4">
+                  <DollarSign className="h-4 w-4 text-green-600" />
+                  <span className="text-xl font-bold text-green-600">
+                    R$ {course.price.toFixed(2)}
+                  </span>
+                </div>
+
+                {/* Dates */}
+                {(course.start_date || course.end_date) && (
+                  <div className="flex items-center gap-2 mb-4">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <div className="text-xs text-muted-foreground">
+                      {course.start_date && <span>Início: {new Date(course.start_date).toLocaleDateString("pt-BR")}</span>}
+                      {course.start_date && course.end_date && <span> • </span>}
+                      {course.end_date && <span>Fim: {new Date(course.end_date).toLocaleDateString("pt-BR")}</span>}
+                    </div>
+                  </div>
+                )}
+
+                {/* Footer */}
+                <div className="pt-4 border-t border-slate-100">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>ID: {course.id}</span>
+                    <span>Criado em {new Date(course.created_at).toLocaleDateString("pt-BR")}</span>
+                  </div>
+                </div>
+              </div>
             </Card>
           ))}
         </div>
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Editar Curso</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSaveEdit} className="space-y-4">
-              <div>
-                <Label htmlFor="edit-title">Título</Label>
-                <Input
-                  id="edit-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-price">Preço (R$)</Label>
-                <Input
-                  id="edit-price"
-                  type="number"
-                  value={price}
-                  onChange={(e) => setPrice(Number(e.target.value))}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-access">Modalidade</Label>
-                <Select value={accessType} onValueChange={(value) => setAccessType(value as "interno" | "externo" | "ambos")}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="interno">Presencial</SelectItem>
-                    <SelectItem value="externo">Online</SelectItem>
-                    <SelectItem value="ambos">Híbrido</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {(accessType === "interno" || accessType === "ambos") && (
-                <>
-                  <div>
-                    <Label htmlFor="edit-start">Data Início Presencial</Label>
-                    <Input
-                      id="edit-start"
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-end">Data Fim Presencial</Label>
-                    <Input
-                      id="edit-end"
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      required
-                    />
-                  </div>
-                </>
-              )}
-              {accessType === "externo" && (
-                <div>
-                  <Label htmlFor="edit-start-online">Data Início Acesso Online</Label>
+        {filteredCourses.length === 0 && (
+          <Card className="p-12 text-center">
+            <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">Nenhum curso encontrado</h3>
+            <p className="text-muted-foreground mb-4">
+              {searchTerm || filterModality !== "todos" 
+                ? "Tente ajustar os filtros de busca" 
+                : "Comece criando seu primeiro curso"}
+            </p>
+            {!searchTerm && filterModality === "todos" && (
+              <Button onClick={() => setIsCreateModalOpen(true)} className="bg-[#e8491d] hover:bg-[#d13a0f] text-white">
+                <Plus className="h-4 w-4 mr-2" />
+                Criar Primeiro Curso
+              </Button>
+            )}
+          </Card>
+        )}
+
+        {/* Create Course Modal */}
+        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+          <DialogContent className="max-w-2xl">
+            <div className="bg-gradient-to-r from-[#e8491d] to-[#f97316] p-6 rounded-t-lg">
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-bold text-white flex items-center gap-2">
+                  <Plus className="h-6 w-6" />
+                  Criar Novo Curso
+                </DialogTitle>
+                <DialogDescription className="text-orange-100">
+                  Preencha as informações do novo curso
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+
+            <form onSubmit={handleCreateCourse} className="p-6 space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Label htmlFor="create-title" className="text-sm font-medium mb-2 block">
+                    Título do Curso *
+                  </Label>
                   <Input
-                    id="edit-start-online"
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    id="create-title"
+                    placeholder="Digite o título completo do curso"
+                    value={createTitle}
+                    onChange={(e) => setCreateTitle(e.target.value)}
                     required
+                    className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
                   />
                 </div>
+
+                <div>
+                  <Label htmlFor="create-price" className="text-sm font-medium mb-2 block">
+                    Preço (R$) *
+                  </Label>
+                  <Input
+                    id="create-price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0,00"
+                    value={createPrice}
+                    onChange={(e) => setCreatePrice(Number(e.target.value))}
+                    required
+                    className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="create-access-type" className="text-sm font-medium mb-2 block">
+                    Modalidade *
+                  </Label>
+                  <Select value={createAccessType} onValueChange={(value) => setCreateAccessType(value as "interno" | "externo" | "ambos")}>
+                    <SelectTrigger className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300">
+                      <SelectValue placeholder="Selecione a modalidade" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="interno">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4 text-blue-600" />
+                          Presencial
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="externo">
+                        <div className="flex items-center gap-2">
+                          <Monitor className="h-4 w-4 text-green-600" />
+                          Online
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="ambos">
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-purple-600" />
+                          Híbrido
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {(createAccessType === "interno" || createAccessType === "ambos") && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Building2 className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm font-medium text-gray-900">Datas das Aulas Presenciais</span>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <Label htmlFor="create-start-date" className="text-sm font-medium mb-2 block">
+                        Data de Início *
+                      </Label>
+                      <Input
+                        id="create-start-date"
+                        type="date"
+                        value={createStartDate}
+                        onChange={(e) => setCreateStartDate(e.target.value)}
+                        required
+                        className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="create-end-date" className="text-sm font-medium mb-2 block">
+                        Data de Fim *
+                      </Label>
+                      <Input
+                        id="create-end-date"
+                        type="date"
+                        value={createEndDate}
+                        onChange={(e) => setCreateEndDate(e.target.value)}
+                        required
+                        className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                      />
+                    </div>
+                  </div>
+                </div>
               )}
-              <Button type="submit">Salvar Alterações</Button>
+
+              {createAccessType === "externo" && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Monitor className="h-4 w-4 text-green-600" />
+                    <span className="text-sm font-medium text-gray-900">Data de Início do Acesso Online</span>
+                  </div>
+                  <div>
+                    <Label htmlFor="create-online-start" className="text-sm font-medium mb-2 block">
+                      Data de Início *
+                    </Label>
+                    <Input
+                      id="create-online-start"
+                      type="date"
+                      value={createStartDate}
+                      onChange={(e) => setCreateStartDate(e.target.value)}
+                      required
+                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsCreateModalOpen(false)}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  className="flex-1 bg-[#e8491d] hover:bg-[#d13a0f] text-white"
+                >
+                  Criar Curso
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Course Modal */}
+        <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+          <DialogContent className="max-w-2xl">
+            <div className="bg-gradient-to-r from-[#e8491d] to-[#f97316] p-6 rounded-t-lg">
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-bold text-white flex items-center gap-2">
+                  <Edit3 className="h-6 w-6" />
+                  Editar Curso
+                </DialogTitle>
+                <DialogDescription className="text-orange-100">
+                  Atualize as informações do curso
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="p-6 space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Label htmlFor="edit-title" className="text-sm font-medium mb-2 block">
+                    Título do Curso *
+                  </Label>
+                  <Input
+                    id="edit-title"
+                    placeholder="Digite o título completo do curso"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    required
+                    className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-price" className="text-sm font-medium mb-2 block">
+                    Preço (R$) *
+                  </Label>
+                  <Input
+                    id="edit-price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0,00"
+                    value={editPrice}
+                    onChange={(e) => setEditPrice(Number(e.target.value))}
+                    required
+                    className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="edit-access-type" className="text-sm font-medium mb-2 block">
+                    Modalidade *
+                  </Label>
+                  <Select value={editAccessType} onValueChange={(value) => setEditAccessType(value as "interno" | "externo" | "ambos")}>
+                    <SelectTrigger className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300">
+                      <SelectValue placeholder="Selecione a modalidade" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="interno">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4 text-blue-600" />
+                          Presencial
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="externo">
+                        <div className="flex items-center gap-2">
+                          <Monitor className="h-4 w-4 text-green-600" />
+                          Online
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="ambos">
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-purple-600" />
+                          Híbrido
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {(editAccessType === "interno" || editAccessType === "ambos") && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Building2 className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm font-medium text-gray-900">Datas das Aulas Presenciais</span>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <Label htmlFor="edit-start-date" className="text-sm font-medium mb-2 block">
+                        Data de Início *
+                      </Label>
+                      <Input
+                        id="edit-start-date"
+                        type="date"
+                        value={editStartDate}
+                        onChange={(e) => setEditStartDate(e.target.value)}
+                        required
+                        className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-end-date" className="text-sm font-medium mb-2 block">
+                        Data de Fim *
+                      </Label>
+                      <Input
+                        id="edit-end-date"
+                        type="date"
+                        value={editEndDate}
+                        onChange={(e) => setEditEndDate(e.target.value)}
+                        required
+                        className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {editAccessType === "externo" && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Monitor className="h-4 w-4 text-green-600" />
+                    <span className="text-sm font-medium text-gray-900">Data de Início do Acesso Online</span>
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-online-start" className="text-sm font-medium mb-2 block">
+                      Data de Início *
+                    </Label>
+                    <Input
+                      id="edit-online-start"
+                      type="date"
+                      value={editStartDate}
+                      onChange={(e) => setEditStartDate(e.target.value)}
+                      required
+                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  className="flex-1 bg-[#e8491d] hover:bg-[#d13a0f] text-white"
+                >
+                  Salvar Alterações
+                </Button>
+              </div>
             </form>
           </DialogContent>
         </Dialog>

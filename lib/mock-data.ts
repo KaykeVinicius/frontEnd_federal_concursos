@@ -46,7 +46,7 @@ export const mockSystemUsers: SystemUser[] = [
   },
   {
     id: 3,
-    name: "Prof. Carlos Mendes",
+    name: "Prof. Pinheiro Neto",
     email: "professor@federalcursos.com.br",
     password: "prof123",
     cpf: "321.654.987-00",
