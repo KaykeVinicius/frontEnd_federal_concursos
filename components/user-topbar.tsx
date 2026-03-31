@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useTheme } from "next-themes"
 import {
   ChevronDown,
   LogOut,
   User,
   Settings,
   Bell,
+  Sun,
+  Moon,
 } from "lucide-react"
 
 import {
@@ -24,7 +27,11 @@ interface UserTopbarProps {
 
 export function UserTopbar({ roleLabel }: UserTopbarProps) {
   const router = useRouter()
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
   const [userName, setUserName] = useState("Usuário")
+
+  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     const stored = localStorage.getItem("currentUser")
@@ -77,6 +84,20 @@ export function UserTopbar({ roleLabel }: UserTopbarProps) {
 
         {/* DIREITA */}
         <div className="flex items-center gap-3">
+
+            {/* 🌙 DARK MODE TOGGLE */}
+          {mounted && (
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="flex items-center justify-center rounded-xl p-2 hover:bg-muted/60 transition-all cursor-pointer"
+              title={theme === "dark" ? "Modo claro" : "Modo escuro"}
+            >
+              {theme === "dark"
+                ? <Sun className="h-5 w-5 text-muted-foreground" />
+                : <Moon className="h-5 w-5 text-muted-foreground" />
+              }
+            </button>
+          )}
 
           {/* 🔔 NOTIFICAÇÕES */}
           <DropdownMenu>

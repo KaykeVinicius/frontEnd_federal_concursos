@@ -5,34 +5,32 @@ import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
-  LayoutDashboard,
-  BookOpen,
-  FileText,
+  Home,
+  GraduationCap,
   CalendarDays,
-  User,
   LogOut,
-  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  SlidersHorizontal,
+  MessageCircle,
   X,
-  ChevronLeft,
-  Settings,
+  Menu,
 } from "lucide-react"
 import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
 
 const navItems = [
-  { href: "/aluno", label: "Inicio", icon: LayoutDashboard },
-  { href: "/aluno/meus-cursos", label: "Meus Cursos", icon: BookOpen },
-  { href: "/aluno/contratos", label: "Meus Contratos", icon: FileText },
-  { href: "/aluno/eventos", label: "Eventos", icon: CalendarDays },
-  { href: "/aluno/configuracoes", label: "Configurações", icon: Settings },
+  { href: "/aluno",             label: "Painel",        icon: Home },
+  { href: "/aluno/meus-cursos", label: "Meus Cursos",   icon: GraduationCap },
+  { href: "/aluno/eventos",     label: "Eventos",        icon: CalendarDays },
+  { href: "/aluno/configuracoes", label: "Configurações", icon: SlidersHorizontal },
 ]
 
 export function AlunoSidebar() {
-  const pathname = usePathname()
-  const router = useRouter()
+  const pathname  = usePathname()
+  const router    = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false) // ✅ ADICIONADO
-  const [userName, setUserName] = useState("")
+  const [collapsed, setCollapsed]   = useState(false)
+  const [userName, setUserName]     = useState("")
 
   useEffect(() => {
     const stored = localStorage.getItem("currentUser")
@@ -51,76 +49,101 @@ export function AlunoSidebar() {
     <div
       className={cn(
         "flex h-full flex-col bg-sidebar text-sidebar-foreground transition-all duration-300",
-        collapsed ? "w-16" : "w-64"
+        collapsed ? "w-16" : "w-60"
       )}
     >
       {/* Header */}
-      <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
+      <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-3">
         {!collapsed && (
           <Image
-            src="/images/logo.jpg"
+            src="/images/tigre_sem_fundo.png"
             alt="Federal Cursos"
-            width={160}
-            height={50}
+            width={140}
+            height={40}
             className="rounded"
-            style={{ height: 40, width: "auto" }}
+            style={{ height: 36, width: "auto" }}
           />
         )}
-
-        <Button
-          variant="ghost"
-          size="sm"
+        <button
           onClick={() => setCollapsed(!collapsed)}
-          className="flex h-8 w-8 items-center justify-center"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
         >
-          {collapsed ? <Menu className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
+          {collapsed
+            ? <PanelLeftOpen  className="h-4 w-4" />
+            : <PanelLeftClose className="h-4 w-4" />
+          }
+        </button>
       </div>
 
-      {/* User Info */}
+      {/* User */}
       {!collapsed && (
-        <div className="border-b border-sidebar-border px-4 py-3">
-          <p className="text-xs text-sidebar-foreground/60">Bem-vindo(a),</p>
-          <p className="truncate font-medium text-sidebar-foreground">{userName}</p>
+        <div className="border-b border-sidebar-border px-4 py-2.5">
+          <p className="text-[11px] text-sidebar-foreground/50 uppercase tracking-wide">Bem-vindo(a)</p>
+          <p className="truncate text-sm font-semibold text-sidebar-foreground">{userName}</p>
         </div>
       )}
 
-      {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-3 py-4">
+      {/* Nav */}
+      <nav className="flex-1 space-y-0.5 px-2 py-3">
         {navItems.map((item) => {
-          const isActive = pathname === item.href
+          const isActive = pathname === item.href ||
+            (item.href !== "/aluno" && pathname.startsWith(item.href))
           return (
             <Link
               key={item.href}
               href={item.href}
               onClick={() => setMobileOpen(false)}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                collapsed ? "justify-center px-2" : "",
-                isActive
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              )}
               title={collapsed ? item.label : undefined}
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                collapsed ? "justify-center" : "",
+                isActive
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              )}
             >
-              <item.icon className="h-5 w-5 shrink-0" />
-              {!collapsed && item.label}
+              <item.icon className="h-4.5 w-4.5 shrink-0" style={{ width: 18, height: 18 }} />
+              {!collapsed && <span>{item.label}</span>}
             </Link>
           )
         })}
+
+        {/* Comunidade WhatsApp */}
+        <a
+          href="https://chat.whatsapp.com/LINK_DO_GRUPO_AQUI"
+          target="_blank"
+          rel="noopener noreferrer"
+          title={collapsed ? "Comunidade" : undefined}
+          className={cn(
+            "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+            "text-[#25d366] hover:bg-[#25d366]/10",
+            collapsed ? "justify-center" : ""
+          )}
+        >
+          <MessageCircle style={{ width: 18, height: 18 }} className="shrink-0" />
+          {!collapsed && (
+            <span className="flex items-center gap-2">
+              Comunidade
+              <span className="rounded-full bg-[#25d366]/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#25d366]">
+                WhatsApp
+              </span>
+            </span>
+          )}
+        </a>
       </nav>
 
       {/* Logout */}
-      <div className="border-t border-sidebar-border p-4">
+      <div className="border-t border-sidebar-border p-2">
         <button
           onClick={handleLogout}
-          className={cn(
-            "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            collapsed ? "justify-center px-2" : ""
-          )}
           title={collapsed ? "Sair" : undefined}
+          className={cn(
+            "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground/60 transition-all hover:bg-sidebar-accent hover:text-sidebar-foreground",
+            collapsed ? "justify-center" : ""
+          )}
         >
-          <LogOut className="h-5 w-5" />
+          <LogOut style={{ width: 18, height: 18 }} className="shrink-0" />
           {!collapsed && "Sair"}
         </button>
       </div>
@@ -129,16 +152,13 @@ export function AlunoSidebar() {
 
   return (
     <>
-      {/* Mobile hamburger */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="fixed left-4 top-4 z-50 flex items-center gap-2 lg:hidden"
+      {/* Mobile toggle */}
+      <button
+        className="fixed left-4 top-3.5 z-50 flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar text-sidebar-foreground shadow-md lg:hidden"
         onClick={() => setMobileOpen(!mobileOpen)}
       >
-        {mobileOpen ? <ChevronLeft className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        <span>{mobileOpen ? "Fechar" : "Menu"}</span>
-      </Button>
+        {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+      </button>
 
       {/* Mobile overlay */}
       {mobileOpen && (
@@ -162,7 +182,7 @@ export function AlunoSidebar() {
       <aside
         className={cn(
           "hidden shrink-0 transition-all duration-300 lg:block",
-          collapsed ? "w-16" : "w-64"
+          collapsed ? "w-16" : "w-60"
         )}
       >
         <SidebarContent collapsed={collapsed} />
