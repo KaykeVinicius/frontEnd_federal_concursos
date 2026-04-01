@@ -86,7 +86,7 @@ export default function CeoUsuariosPage() {
     alunos: users.filter(u => u.role === "aluno").length,
   }), [users])
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = (e: { preventDefault(): void }) => {
     e.preventDefault()
 
     if (!createName || !createEmail || !createCpf || !createPassword) return

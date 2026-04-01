@@ -168,7 +168,7 @@ export default function LandingPage() {
             {/* Logo em destaque */}
             <div className="mb-8 drop-shadow-2xl">
               <Image
-                src="/images/logo-melhor.png"
+                src="/images/logofederalsemfundo.jpeg"
                 alt="Federal Concursos"
                 width={520}
                 height={200}
@@ -368,7 +368,7 @@ export default function LandingPage() {
             <span className="mb-2 block text-xs font-bold uppercase tracking-widest text-[#e84a20]">
               Diferenciais
             </span>
-            <h2 className="text-3xl font-black text-white">Por que a Federal Concursos?</h2>
+            <h2 className="text-3xl font-black text-white">Por que o Federal Concursos?</h2>
           </div>
 
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

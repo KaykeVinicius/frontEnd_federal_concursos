@@ -32,7 +32,7 @@ export default function CeoCarreirasPage() {
     total: careers.length,
   }), [careers])
 
-  const handleAdd = (e: React.FormEvent) => {
+  const handleAdd = (e: { preventDefault(): void }) => {
     e.preventDefault()
     if (!createName || !createDescription) return
 

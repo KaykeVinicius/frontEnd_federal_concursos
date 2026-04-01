@@ -6,23 +6,24 @@ import {
   LayoutDashboard,
   BookOpen,
   Layers,
-  GraduationCap,
   CalendarDays,
   Menu,
   X,
   ChevronLeft,
   Settings,
+  Briefcase,
+  FileText,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 
 const navItems = [
   { href: "/pedagogica", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/pedagogica/cursos", label: "Cursos", icon: BookOpen },
-  { href: "/pedagogica/turmas", label: "Turmas", icon: Layers },
-  { href: "/pedagogica/materias", label: "Materias", icon: GraduationCap },
+  { href: "/pedagogica/carreiras", label: "1. Carreiras", icon: Briefcase },
+  { href: "/pedagogica/materias", label: "2. Matérias", icon: FileText },
+  { href: "/pedagogica/cursos", label: "3. Cursos", icon: BookOpen },
+  { href: "/pedagogica/turmas", label: "4. Turmas", icon: Layers },
   { href: "/pedagogica/eventos", label: "Eventos", icon: CalendarDays },
-  { href: "/pedagogica/carreiras", label: "Carreiras", icon: GraduationCap }, // ✅ ADICIONADO
   { href: "/pedagogica/configuracoes", label: "Configurações", icon: Settings },
 ]
 

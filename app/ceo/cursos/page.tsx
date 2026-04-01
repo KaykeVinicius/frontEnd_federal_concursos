@@ -33,7 +33,7 @@ export default function CeoCursosPage() {
   const [editStartDate, setEditStartDate] = useState("")
   const [editEndDate, setEditEndDate] = useState("")
 
-  const handleCreateCourse = (e: React.FormEvent) => {
+  const handleCreateCourse = (e: { preventDefault(): void }) => {
     e.preventDefault()
     const newCourse: Course = {
       id: Math.max(0, ...courses.map((c) => c.id)) + 1,
@@ -62,7 +62,7 @@ export default function CeoCursosPage() {
     setIsEditModalOpen(true)
   }
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = (e: { preventDefault(): void }) => {
     e.preventDefault()
     if (!editingCourse) return
     const updatedCourse: Course = {

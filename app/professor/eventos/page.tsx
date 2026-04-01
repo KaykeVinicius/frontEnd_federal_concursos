@@ -8,15 +8,13 @@ import {
   CalendarDays,
   Clock,
   MapPin,
-  Users,
   Loader2,
   Mic,
   BookOpenCheck,
   FileQuestion,
   Presentation,
 } from "lucide-react"
-import { fakeApiCall } from "@/lib/api"
-import { mockEvents, getCourseById, type Event } from "@/lib/mock-data"
+import { api, type ApiEvent } from "@/lib/api"
 
 const eventTypeIcons: Record<string, React.ReactNode> = {
   aulao: <BookOpenCheck className="h-5 w-5" />,
@@ -48,14 +46,13 @@ const statusLabels: Record<string, string> = {
 
 export default function ProfessorEventosPage() {
   const [loading, setLoading] = useState(true)
-  const [events, setEvents] = useState<Event[]>([])
+  const [events, setEvents] = useState<ApiEvent[]>([])
   const [filter, setFilter] = useState<string>("all")
 
   useEffect(() => {
     async function loadData() {
       setLoading(true)
-      await fakeApiCall(null)
-      setEvents(mockEvents)
+      await api.events.list().then(setEvents).catch(console.error)
       setLoading(false)
     }
     loadData()
@@ -104,65 +101,38 @@ export default function ProfessorEventosPage() {
 
       {/* Events Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filteredEvents.map((event) => {
-          const course = event.course_id ? getCourseById(event.course_id) : null
-
-          return (
-            <Card
-              key={event.id}
-              className="overflow-hidden transition-shadow hover:shadow-md"
-            >
-              <div className={`h-1 ${eventTypeColors[event.event_type].replace("/10", "")}`} />
+        {filteredEvents.map((event) => (
+            <Card key={event.id} className="overflow-hidden transition-shadow hover:shadow-md">
+              <div className="h-1 bg-primary" />
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">
-                  <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-lg ${eventTypeColors[event.event_type]}`}
-                  >
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${eventTypeColors[event.event_type] ?? "bg-gray-100 text-gray-600"}`}>
                     {eventTypeIcons[event.event_type]}
                   </div>
-                  <Badge className={statusColors[event.status]}>
-                    {statusLabels[event.status]}
+                  <Badge className={statusColors[event.status] ?? "bg-gray-100 text-gray-600"}>
+                    {statusLabels[event.status] ?? event.status}
                   </Badge>
                 </div>
-                <CardTitle className="mt-2 text-base text-foreground">
-                  {event.title}
-                </CardTitle>
-                {course && (
-                  <p className="text-xs text-muted-foreground">
-                    Relacionado: {course.title}
-                  </p>
-                )}
+                <CardTitle className="mt-2 text-base text-foreground">{event.title}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground line-clamp-2">
-                  {event.description}
-                </p>
+                <p className="text-sm text-muted-foreground line-clamp-2">{event.description}</p>
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4 text-primary" />
-                    <span>{event.date}</span>
+                    <CalendarDays className="h-4 w-4 text-primary" /><span>{event.date}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-primary" />
-                    <span>
-                      {event.start_time} as {event.end_time}
-                    </span>
+                    <Clock className="h-4 w-4 text-primary" /><span>{event.start_time} às {event.end_time}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-primary" />
-                    <span className="truncate">{event.location}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-primary" />
-                    <span>
-                      {event.registered_count}/{event.max_participants} inscritos
-                    </span>
-                  </div>
+                  {event.location && (
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-primary" /><span className="truncate">{event.location}</span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
-          )
-        })}
+          ))}
         {filteredEvents.length === 0 && (
           <p className="col-span-full py-8 text-center text-muted-foreground">
             Nenhum evento encontrado.

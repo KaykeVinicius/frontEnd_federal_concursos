@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useTheme } from "next-themes"
 import Image from "next/image"
 import Link from "next/link"
 import {
@@ -13,6 +14,8 @@ import {
   Award,
   ChevronRight,
   Flame,
+  Radio,
+  Zap,
 } from "lucide-react"
 import {
   AreaChart,
@@ -26,19 +29,8 @@ import {
   RadialBar,
   PolarAngleAxis,
 } from "recharts"
-import { fakeApiCall } from "@/lib/api"
-import {
-  mockStudents,
-  mockEvents,
-  getEnrollmentsByStudentId,
-  getCourseById,
-  getTurmaById,
-  type SystemUser,
-  type Student,
-  type Enrollment,
-} from "@/lib/mock-data"
+import { api, type AlunoDashboardResponse } from "@/lib/api"
 
-// Mock weekly progress data (replace with API later)
 const weeklyProgress = [
   { day: "Seg", aulas: 3 },
   { day: "Ter", aulas: 5 },
@@ -58,50 +50,40 @@ const monthlyProgress = [
   { mes: "Mar", horas: 31 },
 ]
 
-const mockProgresso: Record<number, { concluidas: number; total: number }> = {
-  1: { concluidas: 12, total: 48 },
-  2: { concluidas: 3,  total: 36 },
-}
-
 export default function AlunoDashboard() {
-  const [loading, setLoading]       = useState(true)
-  const [student, setStudent]       = useState<Student | null>(null)
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([])
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === "dark"
+
+  const chartColors = {
+    grid:       isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.08)",
+    axis:       isDark ? "#6b7280" : "#9ca3af",
+    card:       isDark ? "#1a1a1a" : "#ffffff",
+    border:     isDark ? "#2a2a2a" : "#e5e7eb",
+    foreground: isDark ? "#f1f1f1" : "#1a1a1a",
+    muted:      isDark ? "#252525" : "#f1f1f1",
+    primary:    "#e8491d",
+    blue:       "#3b82f6",
+  }
+
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [data, setData] = useState<AlunoDashboardResponse | null>(null)
 
   useEffect(() => {
-    async function loadData() {
-      setLoading(true)
-      await fakeApiCall(null)
-      const stored = localStorage.getItem("currentUser")
-      if (stored) {
-        const user: SystemUser = JSON.parse(stored)
-        if (user.student_id) {
-          const st = mockStudents.find((s) => s.id === user.student_id)
-          if (st) {
-            setStudent(st)
-            setEnrollments(getEnrollmentsByStudentId(st.id))
-          }
-        }
-      }
-      setLoading(false)
-    }
-    loadData()
+    api.aluno.dashboard()
+      .then(setData)
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Erro ao carregar dados"))
+      .finally(() => setLoading(false))
   }, [])
 
-  const activeEnrollments = enrollments.filter((e) => e.status === "active")
-  const upcomingEvents = mockEvents.filter((e) => e.status === "agendado").slice(0, 2)
+  const student = data?.student ?? null
+  const enrollments = data?.enrollments ?? []
+  const upcomingEvents = (data?.upcoming_events ?? []).filter((e) => e.status === "agendado").slice(0, 2)
+  const lessonsCompleted = data?.lessons_completed ?? 0
+  const activeEnrollmentsCount = data?.active_enrollments ?? 0
 
-  // Overall progress
-  const totalProgress = enrollments.reduce((acc, e) => {
-    const p = mockProgresso[e.id] ?? { concluidas: 0, total: 0 }
-    return { concluidas: acc.concluidas + p.concluidas, total: acc.total + p.total }
-  }, { concluidas: 0, total: 0 })
-
-  const overallPct = totalProgress.total > 0
-    ? Math.round((totalProgress.concluidas / totalProgress.total) * 100)
-    : 0
-
-  const radialData = [{ name: "Progresso", value: overallPct, fill: "hsl(var(--primary))" }]
+  // Progresso geral: sem dados por matrícula por enquanto
+  const radialData = [{ name: "Progresso", value: 0, fill: "hsl(var(--primary))" }]
 
   if (loading) {
     return (
@@ -111,12 +93,20 @@ export default function AlunoDashboard() {
     )
   }
 
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-sm text-destructive">{error}</p>
+      </div>
+    )
+  }
+
   const firstName = student?.name.split(" ")[0] ?? "Aluno"
 
   return (
     <div className="relative min-h-screen overflow-hidden">
-      {/* Background image — watermark centralizado */}
-      <div className="pointer-events-none fixed inset-0 z-0 flex items-center justify-center opacity-[0.07] select-none">
+      {/* Watermark */}
+      <div className="pointer-events-none fixed inset-0 z-0 flex items-center justify-center opacity-[0.035] select-none">
         <Image
           src="/images/tigre_sem_fundo.png"
           alt=""
@@ -128,43 +118,91 @@ export default function AlunoDashboard() {
         />
       </div>
 
-      {/* Content */}
-      <div className="relative z-10 min-h-screen p-4 pt-16 lg:p-8 lg:pt-8">
+      <div className="relative z-10 min-h-screen p-4 pt-16 lg:p-8 lg:pt-8 space-y-6">
 
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-medium text-primary">Bem-vindo de volta 👋</p>
-            <h1 className="text-3xl font-bold text-foreground">{firstName}</h1>
-            <p className="text-sm text-muted-foreground">
-              Você tem {activeEnrollments.length} curso(s) ativo(s) — continue estudando!
-            </p>
+        {/* ── HERO HEADER ─────────────────────────────────────── */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary/90 to-orange-600 p-6 shadow-xl shadow-primary/20">
+          <div className="pointer-events-none absolute -right-10 -top-10 h-52 w-52 rounded-full bg-white/5" />
+          <div className="pointer-events-none absolute -right-4 top-20 h-32 w-32 rounded-full bg-white/5" />
+          <div className="pointer-events-none absolute right-32 -bottom-8 h-24 w-24 rounded-full bg-white/5" />
+
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-white/70 mb-1">Bem-vindo de volta 👋</p>
+              <h1 className="text-4xl font-extrabold text-white tracking-tight">{firstName}</h1>
+              <p className="mt-1 text-sm text-white/70">
+                {activeEnrollmentsCount} curso(s) ativo(s) — continue estudando!
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:items-end">
+              <Link
+                href="/aluno/ao-vivo"
+                className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-primary transition-all hover:bg-white/90 hover:-translate-y-0.5 shadow-lg"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                </span>
+                Assistir ao Vivo
+              </Link>
+              <Link
+                href="/aluno/meus-cursos/assistir"
+                className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm border border-white/20 transition-all hover:bg-white/25 hover:-translate-y-0.5 shadow-lg"
+              >
+                <PlayCircle className="h-4 w-4" />
+                Continuar estudando
+              </Link>
+            </div>
           </div>
-          <Link
-            href="/aluno/meus-cursos"
-            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:opacity-90 hover:-translate-y-0.5 sm:mt-0"
-          >
-            <PlayCircle className="h-4 w-4" />
-            Continuar estudando
-          </Link>
         </div>
 
-        {/* Stats Row */}
-        <div className="mb-6 grid gap-4 grid-cols-2 lg:grid-cols-4">
+        {/* ── AO VIVO BANNER ──────────────────────────────────── */}
+        <Link
+          href="/aluno/ao-vivo"
+          className="group flex items-center gap-4 rounded-2xl border border-red-500/30 bg-red-500/5 p-4 transition-all hover:border-red-500/50 hover:bg-red-500/10"
+        >
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-red-500/15 ring-2 ring-red-500/20">
+            <Radio className="h-6 w-6 text-red-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="text-sm font-bold text-foreground">Aula Presencial — Ao Vivo</span>
+              <span className="flex items-center gap-1 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
+                </span>
+                Live
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground truncate">
+              Clique para assistir a transmissão ao vivo da aula presencial em tempo real
+            </p>
+          </div>
+          <div className="flex items-center gap-1 text-xs font-semibold text-red-500 group-hover:gap-2 transition-all">
+            Assistir <ChevronRight className="h-4 w-4" />
+          </div>
+        </Link>
+
+        {/* ── STATS ROW ───────────────────────────────────────── */}
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
           {[
             {
               label: "Cursos Ativos",
-              value: activeEnrollments.length,
+              value: activeEnrollmentsCount,
               icon: BookOpen,
               color: "text-primary",
               bg: "bg-primary/10",
+              border: "border-primary/20",
             },
             {
               label: "Aulas Assistidas",
-              value: totalProgress.concluidas,
+              value: lessonsCompleted,
               icon: PlayCircle,
               color: "text-blue-500",
               bg: "bg-blue-500/10",
+              border: "border-blue-500/20",
             },
             {
               label: "Próximos Eventos",
@@ -172,6 +210,7 @@ export default function AlunoDashboard() {
               icon: CalendarDays,
               color: "text-orange-500",
               bg: "bg-orange-500/10",
+              border: "border-orange-500/20",
             },
             {
               label: "Dias Seguidos",
@@ -179,27 +218,28 @@ export default function AlunoDashboard() {
               icon: Flame,
               color: "text-rose-500",
               bg: "bg-rose-500/10",
+              border: "border-rose-500/20",
             },
           ].map((stat) => (
             <div
               key={stat.label}
-              className="flex items-center gap-4 rounded-2xl border border-border bg-card/80 p-4 shadow-sm backdrop-blur-sm"
+              className={`group flex items-center gap-4 rounded-2xl border ${stat.border} bg-card/80 p-4 shadow-sm backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:shadow-md`}
             >
-              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${stat.bg}`}>
-                <stat.icon className={`h-5 w-5 ${stat.color}`} />
+              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${stat.bg}`}>
+                <stat.icon className={`h-6 w-6 ${stat.color}`} />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                <p className="text-2xl font-extrabold text-foreground">{stat.value}</p>
                 <p className="text-xs text-muted-foreground">{stat.label}</p>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Charts row */}
-        <div className="mb-6 grid gap-4 lg:grid-cols-3">
+        {/* ── CHARTS ──────────────────────────────────────────── */}
+        <div className="grid gap-4 lg:grid-cols-3">
 
-          {/* Weekly aulas chart */}
+          {/* Weekly chart */}
           <div className="lg:col-span-2 rounded-2xl border border-border bg-card/80 p-5 shadow-sm backdrop-blur-sm">
             <div className="mb-4 flex items-center justify-between">
               <div>
@@ -215,20 +255,20 @@ export default function AlunoDashboard() {
               <AreaChart data={weeklyProgress} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorAulas" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    <stop offset="5%" stopColor={chartColors.primary} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={chartColors.primary} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="day" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                <XAxis dataKey="day" tick={{ fontSize: 11, fill: chartColors.axis }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: chartColors.axis }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 10, fontSize: 12 }}
-                  labelStyle={{ color: "hsl(var(--foreground))" }}
-                  itemStyle={{ color: "hsl(var(--primary))" }}
+                  contentStyle={{ background: chartColors.card, border: `1px solid ${chartColors.border}`, borderRadius: 10, fontSize: 12 }}
+                  labelStyle={{ color: chartColors.foreground }}
+                  itemStyle={{ color: chartColors.primary }}
                   formatter={(v: number) => [`${v} aulas`, ""]}
                 />
-                <Area type="monotone" dataKey="aulas" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#colorAulas)" dot={{ r: 3, fill: "hsl(var(--primary))" }} />
+                <Area type="monotone" dataKey="aulas" stroke={chartColors.primary} strokeWidth={2} fill="url(#colorAulas)" dot={{ r: 3, fill: chartColors.primary }} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -250,7 +290,7 @@ export default function AlunoDashboard() {
                 >
                   <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
                   <RadialBar
-                    background={{ fill: "hsl(var(--muted))" }}
+                    background={{ fill: chartColors.muted }}
                     dataKey="value"
                     cornerRadius={8}
                     angleAxisId={0}
@@ -258,40 +298,44 @@ export default function AlunoDashboard() {
                 </RadialBarChart>
               </ResponsiveContainer>
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-bold text-foreground">{overallPct}%</span>
-                <span className="text-xs text-muted-foreground">concluído</span>
+                <span className="text-3xl font-extrabold text-foreground">{lessonsCompleted}</span>
+                <span className="text-xs text-muted-foreground">aulas</span>
               </div>
             </div>
             <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
               <Award className="h-3.5 w-3.5 text-primary" />
-              {totalProgress.concluidas} de {totalProgress.total} aulas
+              {lessonsCompleted} aula(s) concluída(s)
             </div>
           </div>
         </div>
 
-        {/* Monthly horas chart */}
-        <div className="mb-6 rounded-2xl border border-border bg-card/80 p-5 shadow-sm backdrop-blur-sm">
+        {/* Monthly chart */}
+        <div className="rounded-2xl border border-border bg-card/80 p-5 shadow-sm backdrop-blur-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-foreground">Evolução Mensal</p>
               <p className="text-xs text-muted-foreground">Horas de estudo nos últimos 6 meses</p>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-lg bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-500">
+              <Zap className="h-3.5 w-3.5" />
+              +10% este mês
             </div>
           </div>
           <ResponsiveContainer width="100%" height={150}>
             <AreaChart data={monthlyProgress} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorHoras" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.25} />
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
                   <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+              <XAxis dataKey="mes" tick={{ fontSize: 11, fill: chartColors.axis }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: chartColors.axis }} axisLine={false} tickLine={false} />
               <Tooltip
-                contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 10, fontSize: 12 }}
-                labelStyle={{ color: "hsl(var(--foreground))" }}
-                itemStyle={{ color: "#3b82f6" }}
+                contentStyle={{ background: chartColors.card, border: `1px solid ${chartColors.border}`, borderRadius: 10, fontSize: 12 }}
+                labelStyle={{ color: chartColors.foreground }}
+                itemStyle={{ color: chartColors.blue }}
                 formatter={(v: number) => [`${v}h`, "Horas"]}
               />
               <Area type="monotone" dataKey="horas" stroke="#3b82f6" strokeWidth={2} fill="url(#colorHoras)" dot={{ r: 3, fill: "#3b82f6" }} />
@@ -299,7 +343,7 @@ export default function AlunoDashboard() {
           </ResponsiveContainer>
         </div>
 
-        {/* Bottom row: Meus cursos + Próximos eventos */}
+        {/* ── BOTTOM ROW ──────────────────────────────────────── */}
         <div className="grid gap-4 lg:grid-cols-2">
 
           {/* Meus Cursos */}
@@ -311,42 +355,30 @@ export default function AlunoDashboard() {
               </Link>
             </div>
             <div className="space-y-3">
-              {activeEnrollments.length === 0 ? (
+              {enrollments.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-8 text-center">
                   <BookOpen className="h-8 w-8 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">Nenhum curso ativo no momento.</p>
                 </div>
               ) : (
-                activeEnrollments.slice(0, 3).map((enrollment) => {
-                  const course   = getCourseById(enrollment.course_id)
-                  const turma    = getTurmaById(enrollment.turma_id)
-                  const prog     = mockProgresso[enrollment.id] ?? { concluidas: 0, total: 0 }
-                  const pct      = prog.total > 0 ? Math.round((prog.concluidas / prog.total) * 100) : 0
-                  return (
-                    <Link
-                      key={enrollment.id}
-                      href="/aluno/meus-cursos/assistir"
-                      className="group flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 transition-all hover:border-primary/40 hover:bg-muted/60"
-                    >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                        <BookOpen className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-                          {course?.title ?? "Curso"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{turma?.name}</p>
-                        <div className="mt-1.5 flex items-center gap-2">
-                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-                          </div>
-                          <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">{pct}%</span>
-                        </div>
-                      </div>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-                    </Link>
-                  )
-                })
+                enrollments.slice(0, 3).map((enrollment) => (
+                  <Link
+                    key={enrollment.id}
+                    href="/aluno/meus-cursos/assistir"
+                    className="group flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 transition-all hover:border-primary/40 hover:bg-muted/60 hover:-translate-y-0.5"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                      <BookOpen className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                        {enrollment.course?.title ?? "Curso"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{enrollment.turma?.name}</p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                  </Link>
+                ))
               )}
             </div>
           </div>
@@ -386,14 +418,14 @@ export default function AlunoDashboard() {
                 ))
               )}
 
-              {/* Streak card */}
+              {/* Streak */}
               <div className="flex items-center gap-3 rounded-xl border border-rose-500/20 bg-rose-500/5 p-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-500/10">
                   <Flame className="h-5 w-5 text-rose-500" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-foreground">5 dias seguidos!</p>
-                  <p className="text-xs text-muted-foreground">Continue assim para manter sua sequência de estudos.</p>
+                  <p className="text-xs text-muted-foreground">Continue assim para manter sua sequência.</p>
                 </div>
               </div>
             </div>

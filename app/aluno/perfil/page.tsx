@@ -5,87 +5,57 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  User,
-  Mail,
-  Phone,
-  MapPin,
-  FileText,
-  Loader2,
-  Save,
-  CheckCircle,
-} from "lucide-react"
-import { fakeApiCall, fakeApiPost } from "@/lib/api"
-import { mockStudents, type SystemUser, type Student } from "@/lib/mock-data"
+import { User, Mail, Phone, FileText, Loader2, Save, CheckCircle } from "lucide-react"
+import { api, type ApiStudent } from "@/lib/api"
 
 export default function AlunoPerfilPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [student, setStudent] = useState<Student | null>(null)
-
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    whatsapp: "",
-    cpf: "",
-    address: "",
-  })
+  const [student, setStudent] = useState<ApiStudent | null>(null)
+  const [form, setForm] = useState({ name: "", email: "", whatsapp: "", cpf: "" })
 
   useEffect(() => {
-    async function loadData() {
-      setLoading(true)
-      await fakeApiCall(null)
-
-      const stored = localStorage.getItem("currentUser")
-      if (stored) {
-        const user: SystemUser = JSON.parse(stored)
-        if (user.student_id) {
-          const st = mockStudents.find((s) => s.id === user.student_id)
-          if (st) {
-            setStudent(st)
-            setForm({
-              name: st.name,
-              email: st.email,
-              whatsapp: st.whatsapp,
-              cpf: st.cpf,
-              address: st.address,
-            })
-          }
-        }
-      }
-      setLoading(false)
-    }
-    loadData()
+    api.aluno.dashboard()
+      .then((data) => {
+        const s = data.student
+        setStudent(s)
+        setForm({ name: s.name, email: s.email, whatsapp: s.whatsapp ?? "", cpf: s.cpf })
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false))
   }, [])
 
   async function handleSave() {
+    if (!student) return
     setSaving(true)
-    await fakeApiPost(form)
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+    try {
+      const updated = await api.students.update(student.id, {
+        name: form.name,
+        whatsapp: form.whatsapp || undefined,
+      })
+      setStudent(updated)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      console.error("Erro ao salvar:", err)
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    )
+    return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
   }
 
   return (
     <div className="p-4 pt-16 lg:p-8 lg:pt-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-foreground">Meu Perfil</h1>
-        <p className="text-muted-foreground">
-          Visualize e atualize suas informacoes pessoais
-        </p>
+        <p className="text-muted-foreground">Visualize e atualize suas informações pessoais</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Info Card */}
         <Card className="lg:col-span-1">
           <CardContent className="flex flex-col items-center p-6">
             <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-primary/10">
@@ -96,23 +66,18 @@ export default function AlunoPerfilPage() {
             <div className="mt-4 w-full space-y-2 text-sm">
               <div className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
                 <span className="text-muted-foreground">Status:</span>
-                <span className="font-medium text-green-600">Ativo</span>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
-                <span className="text-muted-foreground">Tipo:</span>
-                <span className="font-medium text-foreground">
-                  {student?.internal ? "Aluno Interno" : "Aluno Externo"}
+                <span className={`font-medium ${student?.active ? "text-green-600" : "text-red-500"}`}>
+                  {student?.active ? "Ativo" : "Inativo"}
                 </span>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-muted/30 px-3 py-2">
-                <span className="text-muted-foreground">Desde:</span>
-                <span className="font-medium text-foreground">{student?.created_at}</span>
+                <span className="text-muted-foreground">CPF:</span>
+                <span className="font-medium text-foreground">{student?.cpf}</span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Edit Form */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-lg">Dados Pessoais</CardTitle>
@@ -121,91 +86,41 @@ export default function AlunoPerfilPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <Label htmlFor="name" className="mb-2 flex items-center gap-2">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  Nome Completo
+                  <User className="h-4 w-4 text-muted-foreground" /> Nome Completo
                 </Label>
-                <Input
-                  id="name"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                />
+                <Input id="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div>
                 <Label htmlFor="email" className="mb-2 flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  Email
+                  <Mail className="h-4 w-4 text-muted-foreground" /> Email
                 </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                />
+                <Input id="email" type="email" value={form.email} disabled className="bg-muted/50" />
+                <p className="mt-1 text-xs text-muted-foreground">Email não pode ser alterado</p>
               </div>
               <div>
                 <Label htmlFor="whatsapp" className="mb-2 flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  WhatsApp
+                  <Phone className="h-4 w-4 text-muted-foreground" /> WhatsApp
                 </Label>
-                <Input
-                  id="whatsapp"
-                  value={form.whatsapp}
-                  onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
-                />
+                <Input id="whatsapp" value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} />
               </div>
               <div>
                 <Label htmlFor="cpf" className="mb-2 flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  CPF
+                  <FileText className="h-4 w-4 text-muted-foreground" /> CPF
                 </Label>
-                <Input
-                  id="cpf"
-                  value={form.cpf}
-                  onChange={(e) => setForm({ ...form, cpf: e.target.value })}
-                  disabled
-                  className="bg-muted/50"
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  CPF nao pode ser alterado
-                </p>
-              </div>
-              <div className="sm:col-span-2">
-                <Label htmlFor="address" className="mb-2 flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-muted-foreground" />
-                  Endereco Completo
-                </Label>
-                <Input
-                  id="address"
-                  value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
-                />
+                <Input id="cpf" value={form.cpf} disabled className="bg-muted/50" />
+                <p className="mt-1 text-xs text-muted-foreground">CPF não pode ser alterado</p>
               </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-end gap-4">
-              {saved && (
-                <span className="flex items-center gap-2 text-sm text-green-600">
-                  <CheckCircle className="h-4 w-4" />
-                  Alteracoes salvas!
-                </span>
-              )}
-              <Button
-                onClick={handleSave}
-                disabled={saving}
-                className="bg-primary hover:bg-primary/90"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Salvando...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Salvar Alteracoes
-                  </>
-                )}
+            <div className="mt-6 flex items-center gap-3">
+              <Button onClick={handleSave} disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando...</> : <><Save className="mr-2 h-4 w-4" />Salvar Alterações</>}
               </Button>
+              {saved && (
+                <div className="flex items-center gap-2 text-sm text-green-600">
+                  <CheckCircle className="h-4 w-4" /> Salvo com sucesso!
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

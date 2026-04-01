@@ -3,12 +3,12 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { Eye, EyeOff, Loader2, Lock, Mail, Info } from "lucide-react"
+import { Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
-import { authenticateUser } from "@/lib/mock-data"
+import { api, setToken } from "@/lib/api"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -18,7 +18,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: { preventDefault(): void }) {
     e.preventDefault()
     setError("")
 
@@ -29,16 +29,14 @@ export default function LoginPage() {
 
     setLoading(true)
 
-    // Simula chamada API de login
-    await new Promise((r) => setTimeout(r, 1000))
+    try {
+      const { token, user } = await api.auth.login(email, password)
 
-    const user = authenticateUser(email, password)
-
-    if (user) {
-      // Salva usuario no localStorage para demo
+      // Armazena o JWT e os dados do usuário
+      setToken(token)
       localStorage.setItem("currentUser", JSON.stringify(user))
 
-      // Redireciona baseado no tipo de usuario
+      // Redireciona baseado no role
       switch (user.role) {
         case "ceo":
           router.push("/ceo")
@@ -61,8 +59,9 @@ export default function LoginPage() {
         default:
           router.push("/ceo")
       }
-    } else {
-      setError("Email ou senha invalidos.")
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro ao conectar com o servidor."
+      setError(message)
       setLoading(false)
     }
   }
@@ -196,53 +195,6 @@ export default function LoginPage() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Credenciais de Teste */}
-        {/*<Card className="w-full border-[#333] bg-[#222222]/80">
-          <CardContent className="p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Info className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium text-[#f1f1f1]">Credenciais de Teste</span>
-            </div>
-            <div className="space-y-2 text-xs text-[#9ca3af]">
-              <div className="flex items-center justify-between rounded bg-[#2a2a2a] px-3 py-2">
-                <div>
-                  <span className="font-medium text-primary">CEO:</span>
-                  <span className="ml-2">ceo@federalcursos.com.br</span>
-                </div>
-                <span className="text-[#6b7280]">ceo123</span>
-              </div>
-              <div className="flex items-center justify-between rounded bg-[#2a2a2a] px-3 py-2">
-                <div>
-                  <span className="font-medium text-primary">Assistente Comercial:</span>
-                  <span className="ml-2">assistente@federalcursos.com.br</span>
-                </div>
-                <span className="text-[#6b7280]">assistente123</span>
-              </div>
-              <div className="flex items-center justify-between rounded bg-[#2a2a2a] px-3 py-2">
-                <div>
-                  <span className="font-medium text-primary">Professor:</span>
-                  <span className="ml-2">professor@federalcursos.com.br</span>
-                </div>
-                <span className="text-[#6b7280]">prof123</span>
-              </div>
-              <div className="flex items-center justify-between rounded bg-[#2a2a2a] px-3 py-2">
-                <div>
-                  <span className="font-medium text-primary">Equipe Pedagógica:</span>
-                  <span className="ml-2">pedagogico@federalcursos.com.br</span>
-                </div>
-                <span className="text-[#6b7280]">pedagogico123</span>
-              </div>
-              <div className="flex items-center justify-between rounded bg-[#2a2a2a] px-3 py-2">
-                <div>
-                  <span className="font-medium text-primary">Aluno:</span>
-                  <span className="ml-2">aluno@federalcursos.com.br</span>
-                </div>
-                <span className="text-[#6b7280]">aluno123</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>*/}
 
         {/* Footer */}
         <p className="text-center text-xs text-[#6b7280]">

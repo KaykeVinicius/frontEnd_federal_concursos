@@ -15,13 +15,7 @@ import {
   ChevronUp,
   User,
 } from "lucide-react"
-import { fakeApiCall } from "@/lib/api"
-import {
-  mockTurmas,
-  getCourseById,
-  getStudentsByTurmaId,
-  type Turma,
-} from "@/lib/mock-data"
+import { api, type ApiTurma, type ApiEnrollment } from "@/lib/api"
 
 const statusColors: Record<string, string> = {
   aberta: "bg-green-500/10 text-green-600",
@@ -37,25 +31,36 @@ const statusLabels: Record<string, string> = {
 
 export default function ProfessorTurmasPage() {
   const [loading, setLoading] = useState(true)
-  const [turmas, setTurmas] = useState<Turma[]>([])
+  const [turmas, setTurmas] = useState<ApiTurma[]>([])
+  const [enrollments, setEnrollments] = useState<ApiEnrollment[]>([])
   const [search, setSearch] = useState("")
   const [expandedTurma, setExpandedTurma] = useState<number | null>(null)
 
   useEffect(() => {
-    async function loadData() {
-      setLoading(true)
-      await fakeApiCall(null)
-      setTurmas(mockTurmas)
-      setLoading(false)
-    }
-    loadData()
+    Promise.all([
+      api.professor.turmas(),
+      api.enrollments.list(),
+    ])
+      .then(([turmasData, enrollmentsData]) => {
+        setTurmas(turmasData)
+        setEnrollments(enrollmentsData)
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false))
   }, [])
 
   const filtered = turmas.filter(
     (t) =>
       t.name.toLowerCase().includes(search.toLowerCase()) ||
-      getCourseById(t.course_id)?.title.toLowerCase().includes(search.toLowerCase())
+      t.course?.title?.toLowerCase().includes(search.toLowerCase())
   )
+
+  function getStudentsByTurma(turmaId: number) {
+    return enrollments
+      .filter((e) => e.turma?.id === turmaId && e.status === "active")
+      .map((e) => e.student)
+      .filter(Boolean)
+  }
 
   if (loading) {
     return (
@@ -86,12 +91,11 @@ export default function ProfessorTurmasPage() {
       {/* Turmas Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filtered.map((turma) => {
-          const course = getCourseById(turma.course_id)
           const occupancy = Math.round(
             (turma.enrolled_count / turma.max_students) * 100
           )
           const isExpanded = expandedTurma === turma.id
-          const students = isExpanded ? getStudentsByTurmaId(turma.id) : []
+          const students = isExpanded ? getStudentsByTurma(turma.id) : []
 
           return (
             <Card key={turma.id} className="transition-shadow hover:shadow-md">
@@ -101,10 +105,10 @@ export default function ProfessorTurmasPage() {
                     {turma.name}
                   </CardTitle>
                   <Badge className={statusColors[turma.status]} variant="secondary">
-                    {statusLabels[turma.status]}
+                    {statusLabels[turma.status] ?? turma.status}
                   </Badge>
                 </div>
-                <p className="text-sm text-muted-foreground">{course?.title}</p>
+                <p className="text-sm text-muted-foreground">{turma.course?.title}</p>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2 text-sm text-muted-foreground">
@@ -156,7 +160,7 @@ export default function ProfessorTurmasPage() {
                       <ul className="divide-y">
                         {students.map((student, idx) => (
                           <li
-                            key={student.id}
+                            key={student!.id}
                             className="flex items-center gap-3 px-3 py-2"
                           >
                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
@@ -164,10 +168,10 @@ export default function ProfessorTurmasPage() {
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-medium text-foreground">
-                                {student.name}
+                                {student!.name}
                               </p>
                               <p className="truncate text-xs text-muted-foreground">
-                                {student.email}
+                                {student!.email}
                               </p>
                             </div>
                           </li>

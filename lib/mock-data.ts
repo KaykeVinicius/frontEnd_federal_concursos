@@ -54,6 +54,15 @@ export const mockSystemUsers: SystemUser[] = [
     active: true,
   },
   {
+    id: 7,
+    name: "Prof. Ana Rocha",
+    email: "ana.rocha@federalcursos.com.br",
+    password: "ana123",
+    cpf: "741.852.963-00",
+    role: "professor",
+    active: true,
+  },
+  {
     id: 4,
     name: "Kayke Vinicius",
     email: "aluno@federalcursos.com.br",
@@ -100,6 +109,7 @@ export interface Subject {
   name: string
   description: string
   position: number
+  professor_id?: number // ID do professor responsável pela matéria
 }
 
 export interface Turma {
@@ -107,6 +117,7 @@ export interface Turma {
   turno: string
   id: number
   course_id: number
+  professor_id?: number // Professor responsável pela turma
   name: string
   shift: string
   start_date: string
@@ -224,27 +235,30 @@ export const mockCourses: Course[] = [
 ]
 
 // ---------- SUBJECTS ----------
+// professor_id: 3 = Prof. Pinheiro Neto | 7 = Prof. Ana Rocha
 export const mockSubjects: Subject[] = [
-  { id: 1, course_id: 1, name: "Direito Constitucional", description: "Constituicao Federal e Estadual", position: 1 },
-  { id: 2, course_id: 1, name: "Direito Administrativo", description: "Administracao publica e licitacoes", position: 2 },
-  { id: 3, course_id: 1, name: "Portugues", description: "Interpretacao de texto e gramatica", position: 3 },
-  { id: 4, course_id: 1, name: "Regimento Interno ALE/RO", description: "Regimento interno da Assembleia Legislativa", position: 4 },
-  { id: 5, course_id: 2, name: "Direito Civil", description: "Parte Geral, Obrigacoes e Contratos", position: 1 },
-  { id: 6, course_id: 2, name: "Direito Penal", description: "Parte Geral e Especial", position: 2 },
-  { id: 7, course_id: 2, name: "Direito Processual Civil", description: "CPC e procedimentos", position: 3 },
-  { id: 8, course_id: 2, name: "Etica Profissional", description: "Estatuto da OAB e Codigo de Etica", position: 4 },
-  { id: 9, course_id: 3, name: "Contabilidade Geral", description: "Principios e normas contabeis", position: 1 },
-  { id: 10, course_id: 3, name: "Contabilidade de Custos", description: "Custos e formacao de precos", position: 2 },
-  { id: 11, course_id: 3, name: "Auditoria", description: "Normas de auditoria e procedimentos", position: 3 },
-  { id: 12, course_id: 4, name: "Direito Penal Militar", description: "Codigo Penal Militar", position: 1 },
-  { id: 13, course_id: 4, name: "Educacao Fisica", description: "Preparacao para TAF", position: 2 },
+  { id: 1,  course_id: 1, name: "Direito Constitucional",   description: "Constituicao Federal e Estadual",              position: 1, professor_id: 3 },
+  { id: 2,  course_id: 1, name: "Direito Administrativo",   description: "Administracao publica e licitacoes",           position: 2, professor_id: 3 },
+  { id: 3,  course_id: 1, name: "Portugues",                description: "Interpretacao de texto e gramatica",           position: 3, professor_id: 3 },
+  { id: 4,  course_id: 1, name: "Regimento Interno ALE/RO", description: "Regimento interno da Assembleia Legislativa",  position: 4, professor_id: 7 },
+  { id: 5,  course_id: 2, name: "Direito Civil",            description: "Parte Geral, Obrigacoes e Contratos",          position: 1, professor_id: 3 },
+  { id: 6,  course_id: 2, name: "Direito Penal",            description: "Parte Geral e Especial",                       position: 2, professor_id: 3 },
+  { id: 7,  course_id: 2, name: "Direito Processual Civil", description: "CPC e procedimentos",                          position: 3, professor_id: 7 },
+  { id: 8,  course_id: 2, name: "Etica Profissional",       description: "Estatuto da OAB e Codigo de Etica",            position: 4, professor_id: 7 },
+  { id: 9,  course_id: 3, name: "Contabilidade Geral",      description: "Principios e normas contabeis",                position: 1, professor_id: 7 },
+  { id: 10, course_id: 3, name: "Contabilidade de Custos",  description: "Custos e formacao de precos",                  position: 2, professor_id: 7 },
+  { id: 11, course_id: 3, name: "Auditoria",                description: "Normas de auditoria e procedimentos",          position: 3, professor_id: 3 },
+  { id: 12, course_id: 4, name: "Direito Penal Militar",    description: "Codigo Penal Militar",                         position: 1, professor_id: 3 },
+  { id: 13, course_id: 4, name: "Educacao Fisica",          description: "Preparacao para TAF",                          position: 2, professor_id: 7 },
 ]
 
 // ---------- TURMAS ----------
+// professor_id: 3 = Prof. Pinheiro Neto | 7 = Prof. Ana Rocha
 export const mockTurmas: Turma[] = [
   {
     id: 1,
     course_id: 1,
+    professor_id: 3,
     name: "Turma A - Manha",
     shift: "Manha",
     start_date: "2026-01-05",
@@ -259,6 +273,7 @@ export const mockTurmas: Turma[] = [
   {
     id: 2,
     course_id: 1,
+    professor_id: 7,
     name: "Turma B - Tarde",
     shift: "Tarde",
     start_date: "2026-01-05",
@@ -273,6 +288,7 @@ export const mockTurmas: Turma[] = [
   {
     id: 3,
     course_id: 2,
+    professor_id: 3,
     name: "Turma OAB 2026.1",
     shift: "Noite",
     start_date: "2026-02-10",
@@ -287,6 +303,7 @@ export const mockTurmas: Turma[] = [
   {
     id: 4,
     course_id: 3,
+    professor_id: 7,
     name: "Turma CFC Intensivo",
     shift: "Manha",
     start_date: "2026-03-01",
@@ -633,6 +650,31 @@ export function getTurmasByCourseId(courseId: number) {
 
 export function getEnrollmentsByStudentId(studentId: number) {
   return mockEnrollments.filter((e) => e.student_id === studentId)
+}
+
+// ── Helpers de Professor ──────────────────────────────────────
+
+/** Turmas onde o professor é responsável */
+export function getTurmasByProfessor(professorId: number) {
+  return mockTurmas.filter((t) => t.professor_id === professorId)
+}
+
+/** IDs de cursos em que o professor leciona (via turmas + subjects) */
+export function getCourseIdsByProfessor(professorId: number): number[] {
+  const viaTurmas   = mockTurmas.filter((t) => t.professor_id === professorId).map((t) => t.course_id)
+  const viaSubjects = mockSubjects.filter((s) => s.professor_id === professorId).map((s) => s.course_id)
+  return [...new Set([...viaTurmas, ...viaSubjects])]
+}
+
+/** Cursos em que o professor leciona */
+export function getCoursesByProfessor(professorId: number) {
+  const ids = getCourseIdsByProfessor(professorId)
+  return mockCourses.filter((c) => ids.includes(c.id))
+}
+
+/** Matérias (subjects) do professor */
+export function getSubjectsByProfessor(professorId: number) {
+  return mockSubjects.filter((s) => s.professor_id === professorId)
 }
 
 export function getContractByEnrollmentId(enrollmentId: number) {

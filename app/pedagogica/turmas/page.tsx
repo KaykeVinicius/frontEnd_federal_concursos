@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { api, type ApiTurma, type ApiCourse } from "@/lib/api"
 import { Plus, Users, BookOpen, Clock, Calendar, UserCheck, Edit3, Search, GraduationCap, Loader2 } from "lucide-react"
 
-export default function CeoTurmasPage() {
+export default function PedagogicaTurmasPage() {
   const [turmas, setTurmas] = useState<ApiTurma[]>([])
   const [courses, setCourses] = useState<ApiCourse[]>([])
   const [loading, setLoading] = useState(true)

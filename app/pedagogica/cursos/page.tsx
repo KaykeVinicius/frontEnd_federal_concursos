@@ -1,409 +1,305 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
-  PlusCircle,
-  ChevronRight,
-  ChevronDown,
-  BookOpen,
-  Layers,
-  GraduationCap,
-  FileText,
-  PlayCircle,
-  Trash2,
-  Pencil,
-  Check,
-  X,
-  Link2,
-  UploadCloud,
+  PlusCircle, ChevronRight, ChevronDown, BookOpen, GraduationCap,
+  FileText, PlayCircle, Trash2, Check, X, Link2,
+  Loader2, DollarSign, Calendar, Clock, Globe, FilePlus, ExternalLink,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import {
+  api,
+  type ApiCourse, type ApiSubject, type ApiTopic, type ApiLesson, type ApiLessonPdf,
+} from "@/lib/api"
 
-// ─── Types ────────────────────────────────────────────────
-type Aula = {
-  id: number
-  titulo: string
-  youtube_url: string
-  pdf_nome?: string
-}
-
-type Conteudo = {
-  id: number
-  titulo: string
-  aulas: Aula[]
-}
-
-type Materia = {
-  id: number
-  nome: string
-  conteudos: Conteudo[]
-}
-
-type Modulo = {
-  id: number
-  nome: string
-  materias: Materia[]
-}
-
-type Curso = {
-  id: number
-  nome: string
-  descricao: string
-  status: "rascunho" | "publicado"
-  modulos: Modulo[]
-}
-
-// ─── Helpers ──────────────────────────────────────────────
-let _id = 100
-const uid = () => ++_id
-
-function getYouTubeId(url: string): string | null {
-  const regexes = [
-    /youtube\.com\/watch\?v=([^&\s]+)/,
-    /youtu\.be\/([^?\s]+)/,
-    /youtube\.com\/embed\/([^?\s]+)/,
-  ]
-  for (const re of regexes) {
-    const m = url.match(re)
-    if (m) return m[1]
-  }
-  return null
-}
-
-// ─── Mock inicial ─────────────────────────────────────────
-const mockCursos: Curso[] = [
-  {
-    id: 1,
-    nome: "Concurso IPERON 2026",
-    descricao: "Preparatório completo para o IPERON",
-    status: "publicado",
-    modulos: [
-      {
-        id: 2,
-        nome: "Módulo 1 — Direito Constitucional",
-        materias: [
-          {
-            id: 3,
-            nome: "Princípios Fundamentais",
-            conteudos: [
-              {
-                id: 4,
-                titulo: "Introdução à CF/88",
-                aulas: [
-                  {
-                    id: 5,
-                    titulo: "Aula 1 — Apresentação",
-                    youtube_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                    pdf_nome: "cf88_resumo.pdf",
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  },
-]
-
-// ─── Subcomponents ────────────────────────────────────────
-
-function InlineAdd({
-  placeholder,
-  onAdd,
-  onCancel,
-}: {
-  placeholder: string
-  onAdd: (v: string) => void
-  onCancel: () => void
+// ─── Inline add helper ────────────────────────────────────
+function InlineAdd({ placeholder, onAdd, onCancel }: {
+  placeholder: string; onAdd: (v: string) => void; onCancel: () => void
 }) {
   const [val, setVal] = useState("")
   return (
     <div className="flex items-center gap-2 py-1">
-      <Input
-        autoFocus
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        placeholder={placeholder}
+      <Input autoFocus value={val} onChange={(e) => setVal(e.target.value)} placeholder={placeholder}
         className="h-8 text-sm"
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && val.trim()) onAdd(val.trim())
-          if (e.key === "Escape") onCancel()
-        }}
-      />
-      <Button size="sm" className="h-8 px-3" onClick={() => val.trim() && onAdd(val.trim())}>
-        <Check className="h-3.5 w-3.5" />
-      </Button>
-      <Button size="sm" variant="ghost" className="h-8 px-2" onClick={onCancel}>
-        <X className="h-3.5 w-3.5" />
-      </Button>
+        onKeyDown={(e) => { if (e.key === "Enter" && val.trim()) onAdd(val.trim()); if (e.key === "Escape") onCancel() }} />
+      <Button size="sm" className="h-8 px-3" onClick={() => val.trim() && onAdd(val.trim())}><Check className="h-3.5 w-3.5" /></Button>
+      <Button size="sm" variant="ghost" className="h-8 px-2" onClick={onCancel}><X className="h-3.5 w-3.5" /></Button>
     </div>
   )
 }
 
-function AulaRow({
-  aula,
-  onDelete,
-}: {
-  aula: Aula
-  onDelete: () => void
-}) {
+// ─── Lesson Row ───────────────────────────────────────────
+function LessonRow({ lesson, onDelete }: { lesson: ApiLesson; onDelete: () => void }) {
   const [open, setOpen] = useState(false)
-  const embedId = getYouTubeId(aula.youtube_url)
+  const [pdfs, setPdfs] = useState<ApiLessonPdf[]>(lesson.lesson_pdfs ?? [])
+  const [addingPdf, setAddingPdf] = useState(false)
+  const [pdfName, setPdfName] = useState("")
+  const [pdfUrl, setPdfUrl] = useState("")
+  const [pdfSize, setPdfSize] = useState("")
+  const [savingPdf, setSavingPdf] = useState(false)
+  const [pdfError, setPdfError] = useState("")
+
+  async function handleAddPdf() {
+    if (!pdfName.trim()) { setPdfError("Nome é obrigatório."); return }
+    setSavingPdf(true); setPdfError("")
+    try {
+      const created = await api.lesson_pdfs.create({
+        lesson_id: lesson.id,
+        name: pdfName.trim(),
+        file_url: pdfUrl.trim() || undefined,
+        file_size: pdfSize.trim() || undefined,
+      })
+      setPdfs((prev) => [...prev, created])
+      setPdfName(""); setPdfUrl(""); setPdfSize(""); setAddingPdf(false)
+    } catch (e) {
+      setPdfError(e instanceof Error ? e.message : "Erro ao salvar PDF")
+    } finally {
+      setSavingPdf(false)
+    }
+  }
+
+  async function handleDeletePdf(pdfId: number) {
+    await api.lesson_pdfs.delete(pdfId)
+    setPdfs((prev) => prev.filter((p) => p.id !== pdfId))
+  }
 
   return (
     <div className="rounded-lg border border-border bg-background">
-      <button
-        className="flex w-full items-center justify-between px-4 py-2.5 text-left"
-        onClick={() => setOpen(!open)}
-      >
+      <button className="flex w-full items-center justify-between px-4 py-2.5 text-left" onClick={() => setOpen(!open)}>
         <div className="flex items-center gap-2 text-sm">
           <PlayCircle className="h-4 w-4 text-red-500" />
-          <span className="font-medium">{aula.titulo}</span>
-          {aula.pdf_nome && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <FileText className="h-3 w-3" />
-              {aula.pdf_nome}
-            </span>
-          )}
+          <span className="font-medium">{lesson.title}</span>
+          {lesson.duration && <span className="text-xs text-muted-foreground">{lesson.duration}</span>}
+          {pdfs.length > 0 && <span className="text-xs text-muted-foreground">· {pdfs.length} PDF(s)</span>}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete() }}
-            className="text-muted-foreground hover:text-destructive"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
           {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
         </div>
       </button>
-
       {open && (
-        <div className="border-t border-border px-4 py-4 space-y-3">
-          {embedId ? (
+        <div className="border-t border-border px-4 py-4 space-y-4">
+          {lesson.youtube_id && (
             <div className="overflow-hidden rounded-lg border border-border">
               <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-                <iframe
-                  className="absolute inset-0 h-full w-full"
-                  src={`https://www.youtube.com/embed/${embedId}`}
-                  title={aula.titulo}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
+                <iframe className="absolute inset-0 h-full w-full"
+                  src={`https://www.youtube.com/embed/${lesson.youtube_id}`}
+                  title={lesson.title} allowFullScreen />
               </div>
             </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">Link do YouTube inválido.</p>
           )}
-          {aula.pdf_nome && (
-            <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2">
-              <FileText className="h-4 w-4 text-primary" />
-              <span className="text-sm text-foreground">{aula.pdf_nome}</span>
-            </div>
-          )}
+
+          {/* PDFs */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">PDFs da Aula</p>
+            {pdfs.map((pdf) => (
+              <div key={pdf.id} className="flex items-center justify-between rounded-md border border-border bg-muted/20 px-3 py-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <FileText className="h-4 w-4 text-primary" />
+                  <span className="font-medium">{pdf.name}</span>
+                  {pdf.file_size && <span className="text-xs text-muted-foreground">({pdf.file_size})</span>}
+                </div>
+                <div className="flex items-center gap-2">
+                  {pdf.file_url && (
+                    <a href={pdf.file_url} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-primary">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                  <button onClick={() => handleDeletePdf(pdf.id)} className="text-muted-foreground hover:text-destructive">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {addingPdf ? (
+              <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 space-y-2">
+                <Input placeholder="Nome do PDF *" value={pdfName} onChange={(e) => setPdfName(e.target.value)} className="h-8 text-sm" disabled={savingPdf} />
+                <div className="relative">
+                  <Link2 className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input placeholder="URL do arquivo (Google Drive, etc.)" value={pdfUrl} onChange={(e) => setPdfUrl(e.target.value)} className="h-8 pl-8 text-sm" disabled={savingPdf} />
+                </div>
+                <Input placeholder="Tamanho (ex: 2.5 MB)" value={pdfSize} onChange={(e) => setPdfSize(e.target.value)} className="h-8 text-sm" disabled={savingPdf} />
+                {pdfError && <p className="text-xs text-destructive">{pdfError}</p>}
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-7 gap-1 text-xs" onClick={handleAddPdf} disabled={savingPdf}>
+                    {savingPdf && <Loader2 className="h-3 w-3 animate-spin" />} Salvar PDF
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAddingPdf(false); setPdfError("") }} disabled={savingPdf}>Cancelar</Button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setAddingPdf(true)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
+                <FilePlus className="h-3.5 w-3.5" /> Adicionar PDF
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-function NovaAulaForm({ onAdd }: { onAdd: (a: Aula) => void }) {
+// ─── Nova Aula Form ───────────────────────────────────────
+function NovaAulaForm({ topicId, currentLessonsCount, onAdded }: { topicId: number; currentLessonsCount: number; onAdded: (l: ApiLesson) => void }) {
   const [show, setShow] = useState(false)
   const [titulo, setTitulo] = useState("")
   const [url, setUrl] = useState("")
-  const [pdfNome, setPdfNome] = useState<string | undefined>()
+  const [duracao, setDuracao] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
 
-  function handlePdf(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]
-    if (f && f.type === "application/pdf") setPdfNome(f.name)
-    else setPdfNome(undefined)
+  function extractYoutubeId(input: string): string | null {
+    const regexes = [/youtube\.com\/watch\?v=([^&\s]+)/, /youtu\.be\/([^?\s]+)/, /youtube\.com\/embed\/([^?\s]+)/]
+    for (const re of regexes) { const m = input.match(re); if (m) return m[1] }
+    return null
   }
 
-  function submit() {
+  async function submit() {
     if (!titulo.trim() || !url.trim()) return
-    onAdd({ id: uid(), titulo: titulo.trim(), youtube_url: url.trim(), pdf_nome: pdfNome })
-    setTitulo(""); setUrl(""); setPdfNome(undefined); setShow(false)
+    const youtubeId = extractYoutubeId(url.trim())
+    if (!youtubeId) { setError("Link do YouTube inválido."); return }
+    setSaving(true); setError("")
+    try {
+      const lesson = await api.lessons.create({ topic_id: topicId, title: titulo.trim(), youtube_id: youtubeId, duration: duracao.trim() || "00:00:00", position: currentLessonsCount + 1, available: true })
+      onAdded(lesson)
+      setTitulo(""); setUrl(""); setDuracao(""); setShow(false)
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erro ao salvar") }
+    finally { setSaving(false) }
   }
 
-  if (!show) {
-    return (
-      <button
-        onClick={() => setShow(true)}
-        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary"
-      >
-        <PlusCircle className="h-3.5 w-3.5" /> Adicionar aula
-      </button>
-    )
-  }
+  const previewId = extractYoutubeId(url)
+
+  if (!show) return (
+    <button onClick={() => setShow(true)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
+      <PlusCircle className="h-3.5 w-3.5" /> Adicionar aula
+    </button>
+  )
 
   return (
     <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 space-y-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nova Aula</p>
-      <Input
-        placeholder="Título da aula"
-        value={titulo}
-        onChange={(e) => setTitulo(e.target.value)}
-        className="h-8 text-sm"
-      />
+      <Input placeholder="Título da aula" value={titulo} onChange={(e) => setTitulo(e.target.value)} className="h-8 text-sm" disabled={saving} />
       <div className="relative">
         <Link2 className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Link do YouTube (https://youtube.com/watch?v=...)"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          className="h-8 pl-8 text-sm"
-        />
+        <Input placeholder="Link do YouTube (https://youtube.com/watch?v=...)" value={url} onChange={(e) => { setUrl(e.target.value); setError("") }} className="h-8 pl-8 text-sm" disabled={saving} />
       </div>
-
-      {/* Preview embed */}
-      {getYouTubeId(url) && (
+      <Input placeholder="Duração (ex: 00:24:00)" value={duracao} onChange={(e) => setDuracao(e.target.value)} className="h-8 text-sm" disabled={saving} />
+      {previewId && (
         <div className="overflow-hidden rounded-lg border border-border">
           <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-            <iframe
-              className="absolute inset-0 h-full w-full"
-              src={`https://www.youtube.com/embed/${getYouTubeId(url)}`}
-              title="preview"
-              allowFullScreen
-            />
+            <iframe className="absolute inset-0 h-full w-full" src={`https://www.youtube.com/embed/${previewId}`} title="preview" allowFullScreen />
           </div>
         </div>
       )}
-
-      {/* PDF */}
-      <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
-        <UploadCloud className="h-4 w-4" />
-        {pdfNome ? (
-          <span className="text-foreground font-medium">{pdfNome}</span>
-        ) : (
-          "Anexar material PDF (opcional)"
-        )}
-        <input
-          type="file"
-          accept=".pdf"
-          className="hidden"
-          onChange={handlePdf}
-        />
-      </label>
-
+      {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex gap-2">
-        <Button size="sm" className="h-8" onClick={submit}>Adicionar Aula</Button>
-        <Button size="sm" variant="ghost" className="h-8" onClick={() => setShow(false)}>Cancelar</Button>
+        <Button size="sm" className="h-8 gap-1" onClick={submit} disabled={saving}>
+          {saving && <Loader2 className="h-3 w-3 animate-spin" />} Adicionar Aula
+        </Button>
+        <Button size="sm" variant="ghost" className="h-8" onClick={() => setShow(false)} disabled={saving}>Cancelar</Button>
       </div>
     </div>
   )
 }
 
-function ConteudoBlock({
-  conteudo,
-  onDelete,
-  onUpdateAulas,
-}: {
-  conteudo: Conteudo
+// ─── Topic Block ──────────────────────────────────────────
+function TopicBlock({ topic, onDelete, onLessonsChange }: {
+  topic: ApiTopic & { lessons: ApiLesson[] }
   onDelete: () => void
-  onUpdateAulas: (aulas: Aula[]) => void
+  onLessonsChange: (lessons: ApiLesson[]) => void
 }) {
   const [open, setOpen] = useState(false)
+
+  async function deleteLesson(lessonId: number) {
+    await api.lessons.delete(lessonId)
+    onLessonsChange(topic.lessons.filter((l) => l.id !== lessonId))
+  }
 
   return (
     <div className="rounded-lg border border-border bg-muted/20">
-      <button
-        className="flex w-full items-center justify-between px-4 py-2.5 text-left"
-        onClick={() => setOpen(!open)}
-      >
+      <button className="flex w-full items-center justify-between px-4 py-2.5 text-left" onClick={() => setOpen(!open)}>
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-yellow-500" />
-          <span className="text-sm font-medium">{conteudo.titulo}</span>
-          <Badge variant="secondary" className="text-xs">{conteudo.aulas.length} aula(s)</Badge>
+          <span className="text-sm font-medium">{topic.title}</span>
+          <Badge variant="secondary" className="text-xs">{topic.lessons.length} aula(s)</Badge>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-muted-foreground hover:text-destructive">
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </div>
       </button>
-
       {open && (
         <div className="border-t border-border px-4 py-3 space-y-2">
-          {conteudo.aulas.map((aula) => (
-            <AulaRow
-              key={aula.id}
-              aula={aula}
-              onDelete={() => onUpdateAulas(conteudo.aulas.filter((a) => a.id !== aula.id))}
-            />
+          {topic.lessons.map((lesson) => (
+            <LessonRow key={lesson.id} lesson={lesson} onDelete={() => deleteLesson(lesson.id)} />
           ))}
-          <NovaAulaForm onAdd={(a) => onUpdateAulas([...conteudo.aulas, a])} />
+          <NovaAulaForm topicId={topic.id} currentLessonsCount={topic.lessons.length} onAdded={(l) => onLessonsChange([...topic.lessons, l])} />
         </div>
       )}
     </div>
   )
 }
 
-function MateriaBlock({
-  materia,
-  onDelete,
-  onUpdate,
-}: {
-  materia: Materia
-  onDelete: () => void
-  onUpdate: (m: Materia) => void
+// ─── Subject Block ────────────────────────────────────────
+type TopicWithLessons = ApiTopic & { lessons: ApiLesson[] }
+type SubjectWithTopics = ApiSubject & { topics: TopicWithLessons[] }
+
+function SubjectBlock({ subject, onDelete, onUpdate }: {
+  subject: SubjectWithTopics; onDelete: () => void; onUpdate: (s: SubjectWithTopics) => void
 }) {
   const [open, setOpen] = useState(false)
-  const [addingConteudo, setAddingConteudo] = useState(false)
+  const [addingTopic, setAddingTopic] = useState(false)
+
+  async function addTopic(title: string) {
+    try {
+      const topic = await api.topics.create({ subject_id: subject.id, title, position: subject.topics.length + 1 })
+      onUpdate({ ...subject, topics: [...subject.topics, { ...topic, lessons: [] }] })
+      setAddingTopic(false)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao criar tópico")
+    }
+  }
+
+  async function deleteTopic(topicId: number) {
+    await api.topics.delete(topicId)
+    onUpdate({ ...subject, topics: subject.topics.filter((t) => t.id !== topicId) })
+  }
 
   return (
     <div className="rounded-lg border border-border bg-background">
-      <button
-        className="flex w-full items-center justify-between px-4 py-2.5 text-left"
-        onClick={() => setOpen(!open)}
-      >
+      <button className="flex w-full items-center justify-between px-4 py-2.5 text-left" onClick={() => setOpen(!open)}>
         <div className="flex items-center gap-2">
           <GraduationCap className="h-4 w-4 text-blue-500" />
-          <span className="text-sm font-medium">{materia.nome}</span>
-          <Badge variant="secondary" className="text-xs">{materia.conteudos.length} conteúdo(s)</Badge>
+          <span className="text-sm font-medium">{subject.name}</span>
+          <Badge variant="secondary" className="text-xs">{subject.topics.length} tópico(s)</Badge>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-muted-foreground hover:text-destructive">
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </div>
       </button>
-
       {open && (
         <div className="border-t border-border px-4 py-3 space-y-2">
-          {materia.conteudos.map((c) => (
-            <ConteudoBlock
-              key={c.id}
-              conteudo={c}
-              onDelete={() => onUpdate({ ...materia, conteudos: materia.conteudos.filter((x) => x.id !== c.id) })}
-              onUpdateAulas={(aulas) =>
-                onUpdate({
-                  ...materia,
-                  conteudos: materia.conteudos.map((x) => x.id === c.id ? { ...x, aulas } : x),
-                })
+          {subject.topics.map((topic) => (
+            <TopicBlock
+              key={topic.id}
+              topic={topic}
+              onDelete={() => deleteTopic(topic.id)}
+              onLessonsChange={(lessons) =>
+                onUpdate({ ...subject, topics: subject.topics.map((t) => t.id === topic.id ? { ...t, lessons } : t) })
               }
             />
           ))}
-
-          {addingConteudo ? (
-            <InlineAdd
-              placeholder="Nome do conteúdo"
-              onAdd={(v) => {
-                onUpdate({ ...materia, conteudos: [...materia.conteudos, { id: uid(), titulo: v, aulas: [] }] })
-                setAddingConteudo(false)
-              }}
-              onCancel={() => setAddingConteudo(false)}
-            />
+          {addingTopic ? (
+            <InlineAdd placeholder="Nome do tópico" onAdd={addTopic} onCancel={() => setAddingTopic(false)} />
           ) : (
-            <button
-              onClick={() => setAddingConteudo(true)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary"
-            >
-              <PlusCircle className="h-3.5 w-3.5" /> Adicionar conteúdo
+            <button onClick={() => setAddingTopic(true)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
+              <PlusCircle className="h-3.5 w-3.5" /> Adicionar tópico
             </button>
           )}
         </div>
@@ -412,95 +308,96 @@ function MateriaBlock({
   )
 }
 
-function ModuloBlock({
-  modulo,
-  onDelete,
-  onUpdate,
-}: {
-  modulo: Modulo
-  onDelete: () => void
-  onUpdate: (m: Modulo) => void
+// ─── Course Card ──────────────────────────────────────────
+type CourseWithSubjects = ApiCourse & { subjects: SubjectWithTopics[] }
+
+function CursoCard({ course, onDelete, onUpdate }: {
+  course: CourseWithSubjects; onDelete: () => void; onUpdate: (c: CourseWithSubjects) => void
 }) {
   const [open, setOpen] = useState(false)
-  const [addingMateria, setAddingMateria] = useState(false)
+  const [addingSubject, setAddingSubject] = useState(false)
+  const [availableSubjects, setAvailableSubjects] = useState<ApiSubject[]>([])
+  const [selectedSubjectId, setSelectedSubjectId] = useState("")
+  const [linkingSubject, setLinkingSubject] = useState(false)
+  const [toggling, setToggling] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [loadingSubjects, setLoadingSubjects] = useState(false)
 
-  return (
-    <div className="rounded-xl border border-border bg-muted/30">
-      <button
-        className="flex w-full items-center justify-between px-5 py-3 text-left"
-        onClick={() => setOpen(!open)}
-      >
-        <div className="flex items-center gap-2">
-          <Layers className="h-4 w-4 text-purple-500" />
-          <span className="font-semibold text-foreground">{modulo.nome}</span>
-          <Badge variant="outline" className="text-xs">
-            {modulo.materias.length} matéria(s)
-          </Badge>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-muted-foreground hover:text-destructive">
-            <Trash2 className="h-4 w-4" />
-          </button>
-          {open ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-        </div>
-      </button>
+  async function loadSubjects() {
+    if (loadingSubjects) return
+    setLoadingSubjects(true)
+    try {
+      const subjects = await api.subjects.list(course.id)
+      const withTopics = await Promise.all(subjects.map(async (s) => {
+        const topics = await api.topics.list(s.id)
+        const withLessons = await Promise.all(topics.map(async (t) => {
+          const lessons = await api.lessons.list(t.id)
+          return { ...t, lessons }
+        }))
+        return { ...s, topics: withLessons }
+      }))
+      onUpdate({ ...course, subjects: withTopics })
+    } catch (e) { console.error(e) }
+    finally { setLoadingSubjects(false) }
+  }
 
-      {open && (
-        <div className="border-t border-border px-5 py-3 space-y-2">
-          {modulo.materias.map((mat) => (
-            <MateriaBlock
-              key={mat.id}
-              materia={mat}
-              onDelete={() => onUpdate({ ...modulo, materias: modulo.materias.filter((x) => x.id !== mat.id) })}
-              onUpdate={(updated) =>
-                onUpdate({ ...modulo, materias: modulo.materias.map((x) => x.id === mat.id ? updated : x) })
-              }
-            />
-          ))}
+  function handleToggle() {
+    setOpen((prev) => {
+      if (!prev) loadSubjects()
+      return !prev
+    })
+  }
 
-          {addingMateria ? (
-            <InlineAdd
-              placeholder="Nome da matéria"
-              onAdd={(v) => {
-                onUpdate({ ...modulo, materias: [...modulo.materias, { id: uid(), nome: v, conteudos: [] }] })
-                setAddingMateria(false)
-              }}
-              onCancel={() => setAddingMateria(false)}
-            />
-          ) : (
-            <button
-              onClick={() => setAddingMateria(true)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary"
-            >
-              <PlusCircle className="h-3.5 w-3.5" /> Adicionar matéria
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
+  async function openAddSubject() {
+    setSelectedSubjectId("")
+    const all = await api.subjects.list().catch(() => [])
+    const linkedIds = course.subjects.map((s) => s.id)
+    // mostra matérias sem curso vinculado (disponíveis) que ainda não estão neste curso
+    setAvailableSubjects(all.filter((s) => !linkedIds.includes(s.id) && !s.course_id))
+    setAddingSubject(true)
+  }
 
-function CursoCard({
-  curso,
-  onDelete,
-  onUpdate,
-}: {
-  curso: Curso
-  onDelete: () => void
-  onUpdate: (c: Curso) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const [addingModulo, setAddingModulo] = useState(false)
+  async function linkSubject() {
+    if (!selectedSubjectId) return
+    setLinkingSubject(true)
+    try {
+      const updated = await api.subjects.update(parseInt(selectedSubjectId), { course_id: course.id })
+      onUpdate({ ...course, subjects: [...course.subjects, { ...updated, topics: [] }] })
+      setAddingSubject(false)
+      setSelectedSubjectId("")
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao vincular matéria")
+    } finally {
+      setLinkingSubject(false)
+    }
+  }
 
-  const totalAulas = curso.modulos
-    .flatMap((m) => m.materias)
-    .flatMap((mat) => mat.conteudos)
-    .flatMap((c) => c.aulas).length
+  async function toggleStatus() {
+    setToggling(true)
+    try {
+      const updated = await api.courses.update(course.id, { status: course.status === "published" ? "draft" : "published" })
+      onUpdate({ ...course, ...updated })
+    } catch (e) { console.error(e) }
+    finally { setToggling(false) }
+  }
+
+  async function handleDelete() {
+    if (!confirm(`Excluir o curso "${course.title}"?`)) return
+    setDeleting(true)
+    try { await api.courses.delete(course.id); onDelete() }
+    catch (e) { console.error(e) }
+    finally { setDeleting(false) }
+  }
+
+  async function unlinkSubject(subjectId: number) {
+    await api.subjects.update(subjectId, { course_id: null as unknown as number })
+    onUpdate({ ...course, subjects: course.subjects.filter((s) => s.id !== subjectId) })
+  }
+
+  const totalAulas = course.subjects.flatMap((s) => s.topics).flatMap((t) => t.lessons).length
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm">
-      {/* Course header */}
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
@@ -508,76 +405,77 @@ function CursoCard({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-foreground">{curso.nome}</h3>
-              <Badge
-                className={cn(
-                  "text-xs",
-                  curso.status === "publicado"
-                    ? "bg-green-500/10 text-green-600 border-green-500/20"
-                    : "bg-yellow-500/10 text-yellow-600 border-yellow-500/20"
-                )}
-                variant="outline"
-              >
-                {curso.status}
+              <h3 className="font-semibold text-foreground">{course.title}</h3>
+              <Badge className={cn("text-xs", course.status === "published" ? "bg-green-500/10 text-green-600 border-green-500/20" : "bg-yellow-500/10 text-yellow-600 border-yellow-500/20")} variant="outline">
+                {course.status === "published" ? "publicado" : "rascunho"}
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground">
-              {curso.modulos.length} módulo(s) · {totalAulas} videoaula(s)
+              R$ {Number(course.price).toFixed(2)} · {course.subjects.length} matéria(s) · {totalAulas} aula(s)
             </p>
           </div>
         </div>
-
         <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 gap-1.5"
-            onClick={() =>
-              onUpdate({ ...curso, status: curso.status === "publicado" ? "rascunho" : "publicado" })
-            }
-          >
-            <Pencil className="h-3 w-3" />
-            {curso.status === "publicado" ? "Despublicar" : "Publicar"}
+          <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={toggleStatus} disabled={toggling}>
+            {toggling ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+            {course.status === "published" ? "Despublicar" : "Publicar"}
           </Button>
-          <Button size="sm" variant="ghost" className="h-8 text-muted-foreground hover:text-destructive" onClick={onDelete}>
-            <Trash2 className="h-4 w-4" />
+          <Button size="sm" variant="ghost" className="h-8 text-muted-foreground hover:text-destructive" onClick={handleDelete} disabled={deleting}>
+            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
           </Button>
-          <button onClick={() => setOpen(!open)}>
+          <button onClick={handleToggle}>
             {open ? <ChevronDown className="h-5 w-5 text-muted-foreground" /> : <ChevronRight className="h-5 w-5 text-muted-foreground" />}
           </button>
         </div>
       </div>
 
-      {/* Modules */}
       {open && (
         <div className="px-5 py-4 space-y-3">
-          {curso.modulos.map((mod) => (
-            <ModuloBlock
-              key={mod.id}
-              modulo={mod}
-              onDelete={() => onUpdate({ ...curso, modulos: curso.modulos.filter((x) => x.id !== mod.id) })}
-              onUpdate={(updated) =>
-                onUpdate({ ...curso, modulos: curso.modulos.map((x) => x.id === mod.id ? updated : x) })
-              }
-            />
-          ))}
-
-          {addingModulo ? (
-            <InlineAdd
-              placeholder="Nome do módulo"
-              onAdd={(v) => {
-                onUpdate({ ...curso, modulos: [...curso.modulos, { id: uid(), nome: v, materias: [] }] })
-                setAddingModulo(false)
-              }}
-              onCancel={() => setAddingModulo(false)}
-            />
+          {loadingSubjects ? (
+            <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
           ) : (
-            <button
-              onClick={() => setAddingModulo(true)}
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary"
-            >
-              <PlusCircle className="h-4 w-4" /> Adicionar módulo
-            </button>
+            <>
+              {course.subjects.map((subject) => (
+                <SubjectBlock
+                  key={subject.id}
+                  subject={subject}
+                  onDelete={() => unlinkSubject(subject.id)}
+                  onUpdate={(updated) =>
+                    onUpdate({ ...course, subjects: course.subjects.map((s) => s.id === subject.id ? updated : s) })
+                  }
+                />
+              ))}
+              {addingSubject ? (
+                <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground">Vincular matéria existente</p>
+                  {availableSubjects.length === 0 ? (
+                    <p className="text-xs text-amber-600">Nenhuma matéria disponível. Crie matérias na etapa anterior.</p>
+                  ) : (
+                    <select
+                      value={selectedSubjectId}
+                      onChange={(e) => setSelectedSubjectId(e.target.value)}
+                      className="w-full h-8 rounded-md border border-input bg-background px-3 text-sm"
+                      disabled={linkingSubject}
+                    >
+                      <option value="">Selecione uma matéria...</option>
+                      {availableSubjects.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  )}
+                  <div className="flex gap-2">
+                    <Button size="sm" className="h-7 text-xs gap-1" onClick={linkSubject} disabled={linkingSubject || !selectedSubjectId}>
+                      {linkingSubject && <Loader2 className="h-3 w-3 animate-spin" />} Vincular
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAddingSubject(false)} disabled={linkingSubject}>Cancelar</Button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={openAddSubject} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
+                  <PlusCircle className="h-4 w-4" /> Vincular matéria
+                </button>
+              )}
+            </>
           )}
         </div>
       )}
@@ -585,26 +483,136 @@ function CursoCard({
   )
 }
 
+// ─── Formulário de criação de curso ───────────────────────
+function NovoCursoForm({ onCreated, onCancel }: {
+  onCreated: (c: CourseWithSubjects) => void; onCancel: () => void
+}) {
+  const [title, setTitle] = useState("")
+  const [description, setDescription] = useState("")
+  const [price, setPrice] = useState("")
+  const [careerId, setCareerId] = useState("")
+  const [careers, setCareers] = useState<import("@/lib/api").ApiCareer[]>([])
+  const [status, setStatus] = useState<"draft" | "published">("draft")
+  const [accessType, setAccessType] = useState<"interno" | "externo" | "ambos">("ambos")
+  const [durationDays, setDurationDays] = useState("")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    api.careers.list().then(setCareers).catch(console.error)
+  }, [])
+
+  async function submit() {
+    if (!title.trim()) { setError("Título é obrigatório."); return }
+    setSaving(true); setError("")
+    try {
+      const novo = await api.courses.create({
+        title: title.trim(),
+        description: description.trim(),
+        price: parseFloat(price) || 0,
+        career_id: careerId ? parseInt(careerId) : undefined,
+        status,
+        access_type: accessType,
+        duration_in_days: parseInt(durationDays) || 0,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+      })
+      onCreated({ ...novo, subjects: [] })
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erro ao criar curso") }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="rounded-xl border border-dashed border-primary bg-primary/5 p-5 space-y-4">
+      <p className="text-sm font-semibold text-foreground">Novo Curso</p>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2 space-y-1">
+          <Label className="text-xs">Título *</Label>
+          <Input placeholder="Ex: Reta Final - Assembleia Legislativa RO" value={title} onChange={(e) => setTitle(e.target.value)} disabled={saving} />
+        </div>
+        <div className="sm:col-span-2 space-y-1">
+          <Label className="text-xs">Descrição</Label>
+          <Input placeholder="Descrição do curso" value={description} onChange={(e) => setDescription(e.target.value)} disabled={saving} />
+        </div>
+        <div className="sm:col-span-2 space-y-1">
+          <Label className="text-xs">Carreira *</Label>
+          <select value={careerId} onChange={(e) => setCareerId(e.target.value)}
+            className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" disabled={saving}>
+            <option value="">Selecione uma carreira</option>
+            {careers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          {careers.length === 0 && <p className="text-xs text-amber-600">⚠ Nenhuma carreira cadastrada. Crie carreiras primeiro.</p>}
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs flex items-center gap-1"><DollarSign className="h-3 w-3" /> Preço (R$)</Label>
+          <Input type="number" placeholder="450.00" value={price} onChange={(e) => setPrice(e.target.value)} disabled={saving} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs flex items-center gap-1"><Clock className="h-3 w-3" /> Duração (dias)</Label>
+          <Input type="number" placeholder="30" value={durationDays} onChange={(e) => setDurationDays(e.target.value)} disabled={saving} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Data Início</Label>
+          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} disabled={saving} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Data Fim</Label>
+          <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} disabled={saving} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Status</Label>
+          <select value={status} onChange={(e) => setStatus(e.target.value as "draft" | "published")}
+            className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" disabled={saving}>
+            <option value="draft">Rascunho</option>
+            <option value="published">Publicado</option>
+          </select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs flex items-center gap-1"><Globe className="h-3 w-3" /> Acesso</Label>
+          <select value={accessType} onChange={(e) => setAccessType(e.target.value as "interno" | "externo" | "ambos")}
+            className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" disabled={saving}>
+            <option value="ambos">Interno e Externo</option>
+            <option value="interno">Apenas Interno</option>
+            <option value="externo">Apenas Externo</option>
+          </select>
+        </div>
+      </div>
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+
+      <div className="flex gap-2">
+        <Button onClick={submit} disabled={saving} className="gap-2">
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+          Criar Curso
+        </Button>
+        <Button variant="ghost" onClick={onCancel} disabled={saving}>Cancelar</Button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────
 export default function PedagogicaCursosPage() {
-  const [cursos, setCursos] = useState<Curso[]>(mockCursos)
+  const [courses, setCourses] = useState<CourseWithSubjects[]>([])
+  const [loading, setLoading] = useState(true)
   const [criando, setCriando] = useState(false)
-  const [novoCursoNome, setNovoCursoNome] = useState("")
-  const [novoCursoDesc, setNovoCursoDesc] = useState("")
 
-  function criarCurso() {
-    if (!novoCursoNome.trim()) return
-    const novo: Curso = {
-      id: uid(),
-      nome: novoCursoNome.trim(),
-      descricao: novoCursoDesc.trim(),
-      status: "rascunho",
-      modulos: [],
-    }
-    setCursos((prev) => [novo, ...prev])
-    setNovoCursoNome("")
-    setNovoCursoDesc("")
-    setCriando(false)
+  useEffect(() => {
+    api.courses.list()
+      .then((data) => setCourses(data.map((c) => ({ ...c, subjects: [] }))))
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
   }
 
   return (
@@ -615,24 +623,22 @@ export default function PedagogicaCursosPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Cursos</h1>
-            <p className="text-sm text-muted-foreground">
-              Organize cursos, módulos, matérias e videoaulas
-            </p>
+            <p className="text-sm text-muted-foreground">Organize cursos, matérias, tópicos e videoaulas</p>
           </div>
-          <Button onClick={() => setCriando(true)} className="gap-2">
-            <PlusCircle className="h-4 w-4" />
-            Novo Curso
-          </Button>
+          {!criando && (
+            <Button onClick={() => setCriando(true)} className="gap-2">
+              <PlusCircle className="h-4 w-4" /> Novo Curso
+            </Button>
+          )}
         </div>
 
-        {/* Hierarquia visual */}
+        {/* Legenda hierarquia */}
         <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
           {[
             { icon: BookOpen, label: "Curso", color: "text-primary" },
-            { icon: Layers, label: "Módulo", color: "text-purple-500" },
             { icon: GraduationCap, label: "Matéria", color: "text-blue-500" },
-            { icon: FileText, label: "Conteúdo", color: "text-yellow-500" },
-            { icon: PlayCircle, label: "Aula (vídeo + PDF)", color: "text-red-500" },
+            { icon: FileText, label: "Tópico", color: "text-yellow-500" },
+            { icon: PlayCircle, label: "Aula (YouTube)", color: "text-red-500" },
           ].map((item, i, arr) => (
             <span key={item.label} className="flex items-center gap-1">
               <item.icon className={`h-3.5 w-3.5 ${item.color}`} />
@@ -642,31 +648,16 @@ export default function PedagogicaCursosPage() {
           ))}
         </div>
 
-        {/* Formulário de criação */}
+        {/* Formulário novo curso */}
         {criando && (
-          <div className="rounded-xl border border-dashed border-primary bg-primary/5 p-5 space-y-3">
-            <p className="text-sm font-semibold text-foreground">Novo Curso</p>
-            <Input
-              autoFocus
-              placeholder="Nome do curso"
-              value={novoCursoNome}
-              onChange={(e) => setNovoCursoNome(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && criarCurso()}
-            />
-            <Input
-              placeholder="Descrição (opcional)"
-              value={novoCursoDesc}
-              onChange={(e) => setNovoCursoDesc(e.target.value)}
-            />
-            <div className="flex gap-2">
-              <Button onClick={criarCurso}>Criar Curso</Button>
-              <Button variant="ghost" onClick={() => setCriando(false)}>Cancelar</Button>
-            </div>
-          </div>
+          <NovoCursoForm
+            onCreated={(c) => { setCourses((prev) => [c, ...prev]); setCriando(false) }}
+            onCancel={() => setCriando(false)}
+          />
         )}
 
-        {/* Lista de cursos */}
-        {cursos.length === 0 ? (
+        {/* Lista */}
+        {courses.length === 0 && !criando ? (
           <div className="flex flex-col items-center gap-3 py-16 text-center">
             <BookOpen className="h-12 w-12 text-muted-foreground/30" />
             <p className="text-muted-foreground">Nenhum curso criado ainda.</p>
@@ -674,14 +665,12 @@ export default function PedagogicaCursosPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {cursos.map((curso) => (
+            {courses.map((course) => (
               <CursoCard
-                key={curso.id}
-                curso={curso}
-                onDelete={() => setCursos((prev) => prev.filter((c) => c.id !== curso.id))}
-                onUpdate={(updated) =>
-                  setCursos((prev) => prev.map((c) => c.id === curso.id ? updated : c))
-                }
+                key={course.id}
+                course={course}
+                onDelete={() => setCourses((prev) => prev.filter((c) => c.id !== course.id))}
+                onUpdate={(updated) => setCourses((prev) => prev.map((c) => c.id === course.id ? updated : c))}
               />
             ))}
           </div>

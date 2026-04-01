@@ -11,17 +11,20 @@ import {
   CalendarDays,
   LogOut,
   Menu,
-  X,
   ChevronLeft,
   Settings,
+  HelpCircle,
+  FolderOpen,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 
 const navItems = [
-  { href: "/professor", label: "Inicio", icon: LayoutDashboard },
+  { href: "/professor", label: "Início", icon: LayoutDashboard },
   { href: "/professor/turmas", label: "Minhas Turmas", icon: Users },
   { href: "/professor/cursos", label: "Cursos", icon: BookOpen },
+  { href: "/professor/duvidas", label: "Dúvidas", icon: HelpCircle },
+  { href: "/professor/materiais", label: "Materiais", icon: FolderOpen },
   { href: "/professor/eventos", label: "Eventos", icon: CalendarDays },
   { href: "/professor/configuracoes", label: "Configurações", icon: Settings },
 ]
