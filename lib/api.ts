@@ -21,13 +21,15 @@ export function clearAuth(): void {
 // --- Core request helper ---
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = getToken()
-  const headers: Record<string, string> = { "Content-Type": "application/json" }
+  const isFormData = body instanceof FormData
+  const headers: Record<string, string> = {}
+  if (!isFormData) headers["Content-Type"] = "application/json"
   if (token) headers["Authorization"] = `Bearer ${token}`
 
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: body instanceof FormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
   })
 
   if (!res.ok) {
@@ -60,6 +62,10 @@ export interface ApiStudent {
   whatsapp?: string
   cpf: string
   active: boolean
+  address?: string
+  address_number?: string
+  address_complement?: string
+  cep?: string
   user?: ApiUser
 }
 
@@ -131,6 +137,7 @@ export interface ApiTurma {
   schedule: string
   max_students: number
   status: string
+  modalidade: string
   course_id: number
   professor_id: number
   enrolled_count: number
@@ -235,6 +242,21 @@ export const api = {
     me: () => req<ApiUser>("GET", "/auth/me"),
   },
 
+  users: {
+    list: () => req<ApiUser[]>("GET", "/users"),
+    create: (body: {
+      name: string
+      email: string
+      cpf: string
+      password: string
+      role: string
+      commission_percent?: number
+    }) => req<ApiUser>("POST", "/users", body),
+    update: (id: number, body: Partial<ApiUser> & { password?: string }) =>
+      req<ApiUser>("PATCH", `/users/${id}`, body),
+    delete: (id: number) => req<void>("DELETE", `/users/${id}`),
+  },
+
   careers: {
     list: () => req<ApiCareer[]>("GET", "/careers"),
     create: (body: { name: string; description?: string }) => req<ApiCareer>("POST", "/careers", body),
@@ -283,8 +305,17 @@ export const api = {
 
   lesson_pdfs: {
     list: (lessonId: number) => req<ApiLessonPdf[]>("GET", `/lesson_pdfs?lesson_id=${lessonId}`),
-    create: (body: { lesson_id: number; name: string; file_url?: string; file_size?: string }) =>
-      req<ApiLessonPdf>("POST", "/lesson_pdfs", body),
+    create: (body: { lesson_id: number; name: string; file?: File; file_url?: string; file_size?: string }) => {
+      if (body.file) {
+        const form = new FormData()
+        form.append("lesson_id", String(body.lesson_id))
+        form.append("name", body.name)
+        form.append("file", body.file)
+        return req<ApiLessonPdf>("POST", "/lesson_pdfs", form)
+      }
+      const { file: _f, ...rest } = body
+      return req<ApiLessonPdf>("POST", "/lesson_pdfs", rest)
+    },
     delete: (id: number) => req<void>("DELETE", `/lesson_pdfs/${id}`),
   },
 
@@ -309,18 +340,19 @@ export const api = {
     create: (body: {
       student_id: number
       course_id: number
-      turma_id: number
+      turma_id?: number
       career_id?: number
       status: string
       started_at: string
       expires_at?: string
-      enrollment_type?: number
+      enrollment_type?: string
       payment_method?: string
       total_paid?: number
       contract_signed?: boolean
     }) => req<ApiEnrollment>("POST", "/enrollments", body),
     update: (id: number, body: Partial<ApiEnrollment>) =>
       req<ApiEnrollment>("PATCH", `/enrollments/${id}`, body),
+    delete: (id: number) => req<void>("DELETE", `/enrollments/${id}`),
   },
 
   events: {

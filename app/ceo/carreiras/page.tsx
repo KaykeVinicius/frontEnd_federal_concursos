@@ -1,52 +1,49 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useEffect, useMemo, useState } from "react"
+import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
-import { mockCareers, Career } from "@/lib/mock-data"
-import {
-  Briefcase,
-  Plus,
-  Search,
-  Settings,
-  Filter,
-  Calendar,
-  Edit3,
-  Trash2,
-} from "lucide-react"
+import { api, type ApiCareer } from "@/lib/api"
+import { Briefcase, Plus, Search, Filter, Calendar, Edit3, Trash2, Loader2 } from "lucide-react"
 
 export default function CeoCarreirasPage() {
-  const [careers, setCareers] = useState<Career[]>(mockCareers)
+  const [careers, setCareers] = useState<ApiCareer[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
-  // Form states for create modal
   const [createName, setCreateName] = useState("")
   const [createDescription, setCreateDescription] = useState("")
+
+  useEffect(() => {
+    api.careers.list()
+      .then(setCareers)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
 
   const stats = useMemo(() => ({
     total: careers.length,
   }), [careers])
 
-  const handleAdd = (e: { preventDefault(): void }) => {
+  const handleAdd = async (e: { preventDefault(): void }) => {
     e.preventDefault()
-    if (!createName || !createDescription) return
-
-    setCareers((prev) => [
-      ...prev,
-      {
-        id: Math.max(0, ...prev.map((c) => c.id)) + 1,
-        name: createName,
-        description: createDescription,
-        created_at: new Date().toISOString().slice(0, 10),
-      },
-    ])
-    resetCreateForm()
-    setIsCreateModalOpen(false)
+    if (!createName) return
+    setSaving(true)
+    try {
+      const created = await api.careers.create({ name: createName, description: createDescription })
+      setCareers((prev) => [created, ...prev])
+      resetCreateForm()
+      setIsCreateModalOpen(false)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const resetCreateForm = () => {
@@ -54,8 +51,13 @@ export default function CeoCarreirasPage() {
     setCreateDescription("")
   }
 
-  const deleteCareer = (careerId: number) => {
-    setCareers((prev) => prev.filter((c) => c.id !== careerId))
+  const deleteCareer = async (careerId: number) => {
+    try {
+      await api.careers.delete(careerId)
+      setCareers((prev) => prev.filter((c) => c.id !== careerId))
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   // Filter and search careers (with alphabetical sorting)
@@ -68,6 +70,14 @@ export default function CeoCarreirasPage() {
       })
       .sort((a, b) => a.name.localeCompare(b.name)) // Alphabetical sorting
   }, [careers, searchTerm])
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 lg:p-8">
@@ -265,11 +275,8 @@ export default function CeoCarreirasPage() {
                 >
                   Cancelar
                 </Button>
-                <Button
-                  type="submit"
-                  className="flex-1 bg-[#e8491d] hover:bg-[#d13a0f] text-white"
-                >
-                  Criar Carreira
+                <Button type="submit" disabled={saving} className="flex-1 bg-[#e8491d] hover:bg-[#d13a0f] text-white">
+                  {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Criando...</> : "Criar Carreira"}
                 </Button>
               </div>
             </form>

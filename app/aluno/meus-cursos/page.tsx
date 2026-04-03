@@ -2,20 +2,16 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { BookOpen, PlayCircle, Loader2, GraduationCap, Clock, ChevronRight, CheckCircle } from "lucide-react"
+import { BookOpen, PlayCircle, Loader2, GraduationCap, Clock, ChevronRight } from "lucide-react"
 import { api, type ApiEnrollment } from "@/lib/api"
 
 export default function MeusCursosPage() {
   const [loading, setLoading] = useState(true)
   const [enrollments, setEnrollments] = useState<ApiEnrollment[]>([])
-  const [completedLessons, setCompletedLessons] = useState<number[]>([])
 
   useEffect(() => {
-    Promise.all([api.aluno.dashboard(), api.aluno.completions.list()])
-      .then(([dashboard, completions]) => {
-        setEnrollments(dashboard.enrollments ?? [])
-        setCompletedLessons(completions.map((c) => c.lesson_id))
-      })
+    api.aluno.dashboard()
+      .then((dashboard) => setEnrollments(dashboard.enrollments ?? []))
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
@@ -57,7 +53,7 @@ export default function MeusCursosPage() {
               <h2 className="mb-4 text-sm font-bold uppercase tracking-widest text-muted-foreground">Em andamento</h2>
               <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
                 {ativos.map((enrollment) => (
-                  <CourseCard key={enrollment.id} enrollment={enrollment} completedLessons={completedLessons} />
+                  <CourseCard key={enrollment.id} enrollment={enrollment} />
                 ))}
               </div>
             </section>
@@ -67,7 +63,7 @@ export default function MeusCursosPage() {
               <h2 className="mb-4 text-sm font-bold uppercase tracking-widest text-muted-foreground">Concluídos / Cancelados</h2>
               <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
                 {inativos.map((enrollment) => (
-                  <CourseCard key={enrollment.id} enrollment={enrollment} completedLessons={completedLessons} inactive />
+                  <CourseCard key={enrollment.id} enrollment={enrollment} inactive />
                 ))}
               </div>
             </section>
@@ -80,20 +76,17 @@ export default function MeusCursosPage() {
 
 function CourseCard({
   enrollment,
-  completedLessons,
   inactive = false,
 }: {
   enrollment: ApiEnrollment
-  completedLessons: number[]
   inactive?: boolean
 }) {
   const course = enrollment.course
   const turma = enrollment.turma
-  const pct = 0 // Progress calculated per-course would require extra API calls; shown when entering course
 
   return (
     <Link
-      href={`/aluno/meus-cursos/assistir?enrollment_id=${enrollment.id}`}
+      href={`/aluno/meus-cursos/${enrollment.id}`}
       className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg ${
         inactive ? "opacity-60 hover:opacity-80" : "hover:border-primary/40"
       }`}
@@ -113,7 +106,6 @@ function CourseCard({
           >
             {enrollment.status === "active" ? "Ativo" : enrollment.status === "expired" ? "Expirado" : "Cancelado"}
           </span>
-          {pct === 100 && <CheckCircle className="h-4 w-4 text-green-500" />}
         </div>
 
         <h3 className="mb-1 text-base font-bold leading-snug text-foreground transition-colors group-hover:text-primary">

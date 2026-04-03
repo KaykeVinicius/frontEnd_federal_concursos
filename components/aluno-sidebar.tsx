@@ -2,32 +2,32 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
   Home,
   GraduationCap,
   CalendarDays,
-  LogOut,
   PanelLeftClose,
   PanelLeftOpen,
   SlidersHorizontal,
   MessageCircle,
   X,
   Menu,
+  Radio,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 
 const navItems = [
-  { href: "/aluno",             label: "Painel",        icon: Home },
-  { href: "/aluno/meus-cursos", label: "Meus Cursos",   icon: GraduationCap },
-  { href: "/aluno/eventos",     label: "Eventos",        icon: CalendarDays },
-  { href: "/aluno/configuracoes", label: "Configurações", icon: SlidersHorizontal },
+  { href: "/aluno",               label: "Painel",          icon: Home },
+  { href: "/aluno/meus-cursos",   label: "Meus Cursos",     icon: GraduationCap },
+  { href: "/aluno/ao-vivo",       label: "Ao Vivo",         icon: Radio },
+  { href: "/aluno/eventos",       label: "Eventos",          icon: CalendarDays },
+  { href: "/aluno/configuracoes", label: "Configurações",    icon: SlidersHorizontal },
 ]
 
 export function AlunoSidebar() {
   const pathname  = usePathname()
-  const router    = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed]   = useState(false)
   const [userName, setUserName]     = useState("")
@@ -39,11 +39,6 @@ export function AlunoSidebar() {
       setUserName(user.name || "Aluno")
     }
   }, [])
-
-  function handleLogout() {
-    localStorage.removeItem("currentUser")
-    router.push("/login")
-  }
 
   const SidebarContent = ({ collapsed }: { collapsed: boolean }) => (
     <div
@@ -133,20 +128,6 @@ export function AlunoSidebar() {
         </a>
       </nav>
 
-      {/* Logout */}
-      <div className="border-t border-sidebar-border p-2">
-        <button
-          onClick={handleLogout}
-          title={collapsed ? "Sair" : undefined}
-          className={cn(
-            "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground/60 transition-all hover:bg-sidebar-accent hover:text-sidebar-foreground",
-            collapsed ? "justify-center" : ""
-          )}
-        >
-          <LogOut style={{ width: 18, height: 18 }} className="shrink-0" />
-          {!collapsed && "Sair"}
-        </button>
-      </div>
     </div>
   )
 

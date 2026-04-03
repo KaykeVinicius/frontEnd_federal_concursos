@@ -11,6 +11,8 @@ import {
   Bell,
   Sun,
   Moon,
+  Clock,
+  Mail,
 } from "lucide-react"
 
 import {
@@ -20,16 +22,22 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
+import { api, type ApiEvent, type ApiEnrollment } from "@/lib/api"
 
 interface UserTopbarProps {
   roleLabel: string
 }
+
+type Notif =
+  | { type: "event"; id: number; title: string; sub: string }
+  | { type: "boleto"; id: number; title: string; sub: string }
 
 export function UserTopbar({ roleLabel }: UserTopbarProps) {
   const router = useRouter()
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const [userName, setUserName] = useState("Usuário")
+  const [notifs, setNotifs] = useState<Notif[]>([])
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -41,6 +49,35 @@ export function UserTopbar({ roleLabel }: UserTopbarProps) {
         setUserName(user.name || "Usuário")
       } catch {}
     }
+  }, [])
+
+  useEffect(() => {
+    const now = new Date()
+    const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+    Promise.all([api.events.list(), api.enrollments.list()])
+      .then(([events, enrollments]) => {
+        const eventNotifs: Notif[] = events
+          .filter((ev: ApiEvent) => { const d = new Date(ev.date); return d >= now && d <= in7 })
+          .map((ev: ApiEvent) => ({
+            type: "event" as const,
+            id: ev.id,
+            title: `Evento: ${ev.title}`,
+            sub: `${new Date(ev.date).toLocaleDateString("pt-BR")}${ev.location ? ` — ${ev.location}` : ""}`,
+          }))
+
+        const boletoNotifs: Notif[] = enrollments
+          .filter((en: ApiEnrollment) => en.payment_method === "boleto" && en.expires_at && (() => { const d = new Date(en.expires_at); return d >= now && d <= in7 })())
+          .map((en: ApiEnrollment) => ({
+            type: "boleto" as const,
+            id: en.id,
+            title: `Boleto a vencer — ${en.student?.name ?? `Matrícula #${en.id}`}`,
+            sub: `Vence em ${new Date(en.expires_at).toLocaleDateString("pt-BR")}`,
+          }))
+
+        setNotifs([...eventNotifs, ...boletoNotifs])
+      })
+      .catch(() => {})
   }, [])
 
   function logout() {
@@ -104,27 +141,43 @@ export function UserTopbar({ roleLabel }: UserTopbarProps) {
             <DropdownMenuTrigger asChild>
               <button className="relative flex items-center justify-center rounded-xl p-2 hover:bg-muted/60 transition-all cursor-pointer">
                 <Bell className="h-5 w-5 text-muted-foreground" />
-
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-medium text-white">
-                  3
-                </span>
+                {notifs.length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-medium text-white">
+                    {notifs.length}
+                  </span>
+                )}
               </button>
             </DropdownMenuTrigger>
 
             <DropdownMenuContent className="w-80 rounded-xl border shadow-xl">
               <div className="p-3 border-b">
                 <p className="text-sm font-medium">Notificações</p>
+                {notifs.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-0.5">{notifs.length} alerta(s) nos próximos 7 dias</p>
+                )}
               </div>
 
               <div className="max-h-80 overflow-y-auto">
-                <DropdownMenuItem className="flex flex-col items-start gap-1">
-                  <span className="text-sm font-medium">
-                    Nova matrícula realizada
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    Um novo aluno foi cadastrado
-                  </span>
-                </DropdownMenuItem>
+                {notifs.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    Nenhuma notificação no momento
+                  </div>
+                ) : (
+                  notifs.map((n) => (
+                    <DropdownMenuItem key={`${n.type}-${n.id}`} className="flex items-start gap-3 p-3">
+                      <div className={`mt-0.5 rounded-full p-1.5 shrink-0 ${n.type === "event" ? "bg-orange-100" : "bg-red-100"}`}>
+                        {n.type === "event"
+                          ? <Clock className="h-3.5 w-3.5 text-orange-600" />
+                          : <Mail className="h-3.5 w-3.5 text-red-600" />
+                        }
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium leading-tight">{n.title}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{n.sub}</p>
+                      </div>
+                    </DropdownMenuItem>
+                  ))
+                )}
               </div>
             </DropdownMenuContent>
           </DropdownMenu>

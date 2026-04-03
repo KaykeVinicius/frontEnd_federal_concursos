@@ -38,23 +38,28 @@ function LessonRow({ lesson, onDelete }: { lesson: ApiLesson; onDelete: () => vo
   const [pdfs, setPdfs] = useState<ApiLessonPdf[]>(lesson.lesson_pdfs ?? [])
   const [addingPdf, setAddingPdf] = useState(false)
   const [pdfName, setPdfName] = useState("")
-  const [pdfUrl, setPdfUrl] = useState("")
-  const [pdfSize, setPdfSize] = useState("")
+  const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [savingPdf, setSavingPdf] = useState(false)
   const [pdfError, setPdfError] = useState("")
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null
+    setPdfFile(file)
+    if (file && !pdfName) setPdfName(file.name.replace(/\.pdf$/i, ""))
+  }
+
   async function handleAddPdf() {
     if (!pdfName.trim()) { setPdfError("Nome é obrigatório."); return }
+    if (!pdfFile) { setPdfError("Selecione um arquivo PDF."); return }
     setSavingPdf(true); setPdfError("")
     try {
       const created = await api.lesson_pdfs.create({
         lesson_id: lesson.id,
         name: pdfName.trim(),
-        file_url: pdfUrl.trim() || undefined,
-        file_size: pdfSize.trim() || undefined,
+        file: pdfFile,
       })
       setPdfs((prev) => [...prev, created])
-      setPdfName(""); setPdfUrl(""); setPdfSize(""); setAddingPdf(false)
+      setPdfName(""); setPdfFile(null); setAddingPdf(false)
     } catch (e) {
       setPdfError(e instanceof Error ? e.message : "Erro ao salvar PDF")
     } finally {
@@ -118,18 +123,24 @@ function LessonRow({ lesson, onDelete }: { lesson: ApiLesson; onDelete: () => vo
 
             {addingPdf ? (
               <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 space-y-2">
-                <Input placeholder="Nome do PDF *" value={pdfName} onChange={(e) => setPdfName(e.target.value)} className="h-8 text-sm" disabled={savingPdf} />
-                <div className="relative">
-                  <Link2 className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input placeholder="URL do arquivo (Google Drive, etc.)" value={pdfUrl} onChange={(e) => setPdfUrl(e.target.value)} className="h-8 pl-8 text-sm" disabled={savingPdf} />
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1">Arquivo PDF *</label>
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    onChange={handleFileChange}
+                    disabled={savingPdf}
+                    className="block w-full text-xs text-muted-foreground file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/90 disabled:opacity-50"
+                  />
+                  {pdfFile && <p className="text-[10px] text-muted-foreground mt-1">{pdfFile.name} · {(pdfFile.size / 1024).toFixed(0)} KB</p>}
                 </div>
-                <Input placeholder="Tamanho (ex: 2.5 MB)" value={pdfSize} onChange={(e) => setPdfSize(e.target.value)} className="h-8 text-sm" disabled={savingPdf} />
+                <Input placeholder="Nome do PDF *" value={pdfName} onChange={(e) => setPdfName(e.target.value)} className="h-8 text-sm" disabled={savingPdf} />
                 {pdfError && <p className="text-xs text-destructive">{pdfError}</p>}
                 <div className="flex gap-2">
-                  <Button size="sm" className="h-7 gap-1 text-xs" onClick={handleAddPdf} disabled={savingPdf}>
-                    {savingPdf && <Loader2 className="h-3 w-3 animate-spin" />} Salvar PDF
+                  <Button size="sm" className="h-7 gap-1 text-xs" onClick={handleAddPdf} disabled={savingPdf || !pdfFile}>
+                    {savingPdf && <Loader2 className="h-3 w-3 animate-spin" />} Fazer Upload
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAddingPdf(false); setPdfError("") }} disabled={savingPdf}>Cancelar</Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAddingPdf(false); setPdfError(""); setPdfFile(null); setPdfName("") }} disabled={savingPdf}>Cancelar</Button>
                 </div>
               </div>
             ) : (

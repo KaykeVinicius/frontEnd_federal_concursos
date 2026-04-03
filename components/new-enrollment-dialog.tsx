@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
@@ -28,16 +28,7 @@ import {
 import { format, addDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
-import {
-  mockCourses,
-  mockStudents,
-  getTurmasByCourseId,
-  getCourseById,
-  mockCareers,
-  type Student,
-} from "@/lib/mock-data"
-
-import { fakeApiPost } from "@/lib/api"
+import { api, type ApiStudent, type ApiCourse, type ApiCareer, type ApiTurma, type ApiEnrollment } from "@/lib/api"
 
 import {
   Loader2,
@@ -74,6 +65,7 @@ import {
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onSuccess?: (enrollment: ApiEnrollment) => void
 }
 
 type Step =
@@ -161,11 +153,32 @@ const createNotification = async (studentData: any, enrollmentData: any, payment
   return true
 }
 
-export function NewEnrollmentDialog({ open, onOpenChange }: Props) {
+export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
   const [step, setStep] = useState<Step>("choose_type")
   const [studentType, setStudentType] = useState<"novato" | "ex_aluno" | null>(null)
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
+  const [selectedStudent, setSelectedStudent] = useState<ApiStudent | null>(null)
   const [studentSearch, setStudentSearch] = useState("")
+
+  // Dados reais da API
+  const [allStudents, setAllStudents] = useState<ApiStudent[]>([])
+  const [allCourses, setAllCourses] = useState<ApiCourse[]>([])
+  const [allCareers, setAllCareers] = useState<ApiCareer[]>([])
+  const [allTurmas, setAllTurmas] = useState<ApiTurma[]>([])
+
+  useEffect(() => {
+    if (!open) return
+    Promise.all([
+      api.students.list(),
+      api.courses.list(),
+      api.careers.list(),
+      api.turmas.list(),
+    ]).then(([s, c, ca, t]) => {
+      setAllStudents(s)
+      setAllCourses(c)
+      setAllCareers(ca)
+      setAllTurmas(t)
+    }).catch(console.error)
+  }, [open])
 
   const [selectedCareerId, setSelectedCareerId] = useState("")
   const [selectedCourseId, setSelectedCourseId] = useState("")
@@ -193,37 +206,21 @@ export function NewEnrollmentDialog({ open, onOpenChange }: Props) {
   // Filter courses by selected career
   const coursesByCareer = useMemo(() => {
     if (!selectedCareerId) return []
-    const filtered = mockCourses.filter((c) => {
-      if ('careerId' in c) {
-        return c.careerId === Number(selectedCareerId) && c.status === "published"
-      }
-      const careerCourseMap: Record<number, number[]> = {
-        1: [1, 2],
-        2: [3, 4],
-        3: [5, 6],
-        4: [7, 8],
-      }
-      const courseIds = careerCourseMap[Number(selectedCareerId)] || []
-      return courseIds.includes(c.id) && c.status === "published"
-    })
-    return filtered
-  }, [selectedCareerId])
+    return allCourses.filter((c) =>
+      c.career_id === Number(selectedCareerId) && c.status === "published"
+    )
+  }, [selectedCareerId, allCourses])
 
   // Filter turmas based on modality and course
   const filteredTurmas = useMemo(() => {
-    if (!selectedCourseId) return []
-    
-    let allTurmas = getTurmasByCourseId(Number(selectedCourseId))
-    
-    if (selectedModality === "online") {
-      return []
-    }
-    
-    return allTurmas.filter(t => typeof t.availableSlots === 'number' && t.availableSlots > 0)
-  }, [selectedCourseId, selectedModality])
+    if (!selectedCourseId || selectedModality === "online") return []
+    return allTurmas.filter(
+      (t) => t.course_id === Number(selectedCourseId) && t.enrolled_count < t.max_students
+    )
+  }, [selectedCourseId, selectedModality, allTurmas])
 
-  const selectedCourse = selectedCourseId ? getCourseById(Number(selectedCourseId)) : null
-  const selectedTurma = selectedTurmaId ? filteredTurmas.find(t => String(t.id) === selectedTurmaId) : null
+  const selectedCourse = selectedCourseId ? allCourses.find((c) => c.id === Number(selectedCourseId)) ?? null : null
+  const selectedTurma = selectedTurmaId ? filteredTurmas.find((t) => String(t.id) === selectedTurmaId) ?? null : null
 
   const originalPrice = selectedCourse?.price ?? 0
   const discount = studentType === "ex_aluno" ? originalPrice * EX_ALUNO_DISCOUNT : 0
@@ -233,13 +230,13 @@ export function NewEnrollmentDialog({ open, onOpenChange }: Props) {
 
   const filteredStudents = useMemo(() => {
     const q = studentSearch.toLowerCase()
-    return mockStudents.filter(
+    return allStudents.filter(
       (s) =>
         s.name.toLowerCase().includes(q) ||
         s.email.toLowerCase().includes(q) ||
         s.cpf.includes(q)
     )
-  }, [studentSearch])
+  }, [studentSearch, allStudents])
 
   const handleModalityChange = (value: string) => {
     setSelectedModality(value)
@@ -291,42 +288,45 @@ export function NewEnrollmentDialog({ open, onOpenChange }: Props) {
   async function handleFinalize(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    
-    const studentData = studentType === "novato" ? {
-      name: newName,
-      cpf: newCpf,
-      email: newEmail,
-      whatsapp: newWhatsapp,
-      instagram: newInstagram,
-      address: { rua, numero, bairro, cep }
-    } : selectedStudent
 
-    const enrollmentData = {
-      student: studentData,
-      career: mockCareers.find(c => String(c.id) === selectedCareerId),
-      course: selectedCourse,
-      turma: selectedTurma,
-      modality: selectedModality,
-      originalPrice,
-      discount,
-      finalPrice,
-      paymentMethod,
-      installments: paymentMethod === "credit" ? installments : 1,
-      paymentDeadline: paymentMethod === "prazo" ? paymentDeadline : undefined,
-      enrollmentDate: new Date().toISOString(),
+    const paymentMethodMap: Record<PaymentMethodType, string> = {
+      credit: "credito_parcelado",
+      debit: "credito_vista",
+      pix: "pix",
+      boleto: "boleto",
+      prazo: "boleto",
     }
 
     try {
-      await fakeApiPost(enrollmentData, 1500)
-      
-      if (studentData?.email) {
-        await sendContractByEmail(studentData, enrollmentData, paymentDeadline)
-        
-        if (paymentMethod === "prazo" && paymentDeadline) {
-          await createNotification(studentData, enrollmentData, paymentDeadline)
-        }
+      let studentId: number
+
+      if (studentType === "novato") {
+        // Criar aluno como usuário com role "aluno"
+        const newUser = await api.users.create({
+          name: newName,
+          email: newEmail,
+          cpf: newCpf,
+          password: newCpf.replace(/\D/g, ""),
+          role: "aluno",
+        })
+        studentId = newUser.id
+      } else {
+        studentId = selectedStudent!.id
       }
-      
+
+      const enrollment = await api.enrollments.create({
+        student_id: studentId,
+        course_id: Number(selectedCourseId),
+        turma_id: selectedTurmaId ? Number(selectedTurmaId) : undefined,
+        status: "active",
+        started_at: new Date().toISOString(),
+        payment_method: paymentMethodMap[paymentMethod],
+        total_paid: finalPrice,
+        expires_at: paymentDeadline?.toISOString(),
+        enrollment_type: selectedModality,
+      })
+
+      onSuccess?.(enrollment)
       setSaving(false)
       setStep("success")
     } catch (error) {
@@ -626,7 +626,7 @@ export function NewEnrollmentDialog({ open, onOpenChange }: Props) {
                         <SelectValue placeholder="Selecione uma carreira" />
                       </SelectTrigger>
                       <SelectContent>
-                        {mockCareers.map((c) => (
+                        {allCareers.map((c) => (
                           <SelectItem key={c.id} value={String(c.id)} className="cursor-pointer">
                             {c.name}
                           </SelectItem>
@@ -727,7 +727,7 @@ export function NewEnrollmentDialog({ open, onOpenChange }: Props) {
                                 <div className="flex justify-between items-center w-full">
                                   <span>{t.name}</span>
                                   <Badge variant="outline" className="ml-2 text-xs">
-                                    {t.availableSlots} vagas
+                                    {t.max_students - t.enrolled_count} vagas
                                   </Badge>
                                 </div>
                               </SelectItem>
@@ -770,7 +770,7 @@ export function NewEnrollmentDialog({ open, onOpenChange }: Props) {
                     <div className="text-sm text-gray-600 mt-2 pt-2 border-t border-orange-200 space-y-1">
                       <p className="flex items-center gap-2">
                         <Briefcase className="h-3 w-3" />
-                        Carreira: {mockCareers.find(c => String(c.id) === selectedCareerId)?.name}
+                        Carreira: {allCareers.find(c => String(c.id) === selectedCareerId)?.name}
                       </p>
                       <p className="flex items-center gap-2">
                         <BookOpen className="h-3 w-3" />

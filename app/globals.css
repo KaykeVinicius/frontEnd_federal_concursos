@@ -3,6 +3,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@keyframes text-glow {
+  0%, 100% { opacity: 0.75; }
+  50%       { opacity: 1; }
+}
+.animate-text-glow {
+  animation: text-glow 3s ease-in-out infinite;
+}
+
 :root {
   --background: #f8f9fa;
   --foreground: #1a1a1a;
@@ -121,5 +129,9 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  button, a, [role="button"], select, label[for], summary {
+    cursor: pointer;
   }
 }

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Search, Eye, Loader2 } from "lucide-react"
+import { Plus, Search, Eye, Loader2, Trash2, AlertTriangle } from "lucide-react"
 import { api, type ApiStudent, type ApiEnrollment, type ApiCourse, type ApiTurma } from "@/lib/api"
 
 const enrollmentStatusLabels: Record<string, string> = { active: "Ativa", canceled: "Cancelada", expired: "Expirada" }
@@ -30,10 +30,12 @@ export default function AlunosPage() {
   const [eStudentId, setEStudentId] = useState("")
   const [eCourseId, setECourseId] = useState("")
   const [eTurmaId, setETurmaId] = useState("")
+  const [eEnrollmentType, setEEnrollmentType] = useState("interno")
   const [eStartedAt, setEStartedAt] = useState("")
   const [eExpiresAt, setEExpiresAt] = useState("")
   const [ePaymentMethod, setEPaymentMethod] = useState("")
   const [eTotalPaid, setETotalPaid] = useState("")
+  const [eIsNewStudent, setEIsNewStudent] = useState(true)
   const [turmasForCourse, setTurmasForCourse] = useState<ApiTurma[]>([])
   const [loadingTurmas, setLoadingTurmas] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -41,6 +43,21 @@ export default function AlunosPage() {
 
   // Student detail dialog
   const [selectedStudent, setSelectedStudent] = useState<ApiStudent | null>(null)
+  const [deletingEnrollmentId, setDeletingEnrollmentId] = useState<number | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+
+  async function handleDeleteEnrollment(enrollmentId: number) {
+    setDeletingEnrollmentId(enrollmentId)
+    try {
+      const updated = await api.enrollments.update(enrollmentId, { status: "canceled" })
+      setEnrollments((prev) => prev.map((en) => en.id === enrollmentId ? updated : en))
+      setConfirmDeleteId(null)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setDeletingEnrollmentId(null)
+    }
+  }
 
   useEffect(() => {
     Promise.all([api.students.list(), api.enrollments.list(), api.courses.list()])
@@ -56,7 +73,14 @@ export default function AlunosPage() {
     setLoadingTurmas(true)
     try {
       const turmas = await api.turmas.list(parseInt(courseId))
-      setTurmasForCourse(turmas)
+      setTurmasForCourse(turmas.filter((t) => t.status === "aberta"))
+      // preenche datas do curso automaticamente
+      const course = courses.find((c) => c.id === parseInt(courseId))
+      if (course) {
+        if (course.start_date) setEStartedAt(course.start_date.slice(0, 10))
+        if (course.end_date) setEExpiresAt(course.end_date.slice(0, 10))
+        setETotalPaid(String(course.price ?? ""))
+      }
     } catch { setTurmasForCourse([]) }
     finally { setLoadingTurmas(false) }
   }
@@ -66,12 +90,20 @@ export default function AlunosPage() {
     if (!eStudentId || !eCourseId || !eTurmaId || !eStartedAt) {
       setEnrollError("Preencha os campos obrigatórios."); return
     }
+    // Validação: aluno já matriculado neste curso (ativa)
+    const duplicate = enrollments.find(
+      (en) => en.student?.id === parseInt(eStudentId) && en.course?.id === parseInt(eCourseId) && en.status === "active"
+    )
+    if (duplicate) {
+      setEnrollError("Este aluno já possui uma matrícula ativa neste curso."); return
+    }
     setSaving(true); setEnrollError("")
     try {
       const created = await api.enrollments.create({
         student_id: parseInt(eStudentId),
         course_id: parseInt(eCourseId),
         turma_id: parseInt(eTurmaId),
+        enrollment_type: eEnrollmentType as "interno" | "externo",
         status: "active",
         started_at: eStartedAt,
         expires_at: eExpiresAt || undefined,
@@ -81,7 +113,7 @@ export default function AlunosPage() {
       setEnrollments((prev) => [created, ...prev])
       setShowNewEnrollment(false)
       setEStudentId(""); setECourseId(""); setETurmaId(""); setEStartedAt(""); setEExpiresAt("")
-      setEPaymentMethod(""); setETotalPaid(""); setTurmasForCourse([])
+      setEPaymentMethod(""); setETotalPaid(""); setTurmasForCourse([]); setEIsNewStudent(true); setEEnrollmentType("interno")
     } catch (err: unknown) { setEnrollError(err instanceof Error ? err.message : "Erro ao criar matrícula") }
     finally { setSaving(false) }
   }
@@ -202,6 +234,21 @@ export default function AlunosPage() {
             <DialogDescription>Vincule um aluno a um curso e turma.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleNewEnrollment} className="space-y-4">
+
+            {/* Tipo de aluno */}
+            <div className="space-y-2">
+              <Label>Tipo de Aluno *</Label>
+              <div className="flex gap-2">
+                {[{ val: true, label: "Aluno Novo" }, { val: false, label: "Ex-Aluno / Rematrícula" }].map(({ val, label }) => (
+                  <button key={label} type="button"
+                    onClick={() => setEIsNewStudent(val)}
+                    className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${eIsNewStudent === val ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Aluno *</Label>
               <Select value={eStudentId} onValueChange={setEStudentId}>
@@ -213,6 +260,7 @@ export default function AlunosPage() {
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
               <Label>Curso *</Label>
               <Select value={eCourseId} onValueChange={handleCourseChange}>
@@ -224,19 +272,23 @@ export default function AlunosPage() {
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
               <Label>Turma *</Label>
               <Select value={eTurmaId} onValueChange={setETurmaId} disabled={!eCourseId || loadingTurmas}>
                 <SelectTrigger>
-                  <SelectValue placeholder={loadingTurmas ? "Carregando..." : "Selecione a turma"} />
+                  <SelectValue placeholder={loadingTurmas ? "Carregando..." : !eCourseId ? "Selecione o curso primeiro" : turmasForCourse.length === 0 ? "Nenhuma turma aberta" : "Selecione a turma"} />
                 </SelectTrigger>
                 <SelectContent>
                   {turmasForCourse.map((t) => (
-                    <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      {t.name} · {t.modalidade === "presencial" ? "Presencial" : "Híbrido"} · {t.enrolled_count}/{t.max_students} alunos
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Data de Início *</Label>
@@ -247,6 +299,7 @@ export default function AlunosPage() {
                 <Input type="date" value={eExpiresAt} onChange={(e) => setEExpiresAt(e.target.value)} />
               </div>
             </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Forma de Pagamento</Label>
@@ -261,10 +314,11 @@ export default function AlunosPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Valor Pago (R$)</Label>
+                <Label>Valor (R$)</Label>
                 <Input type="number" step="0.01" placeholder="0.00" value={eTotalPaid} onChange={(e) => setETotalPaid(e.target.value)} />
               </div>
             </div>
+
             {enrollError && <p className="text-sm text-destructive">{enrollError}</p>}
             <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="outline" onClick={() => setShowNewEnrollment(false)}>Cancelar</Button>
@@ -303,19 +357,48 @@ export default function AlunosPage() {
                 ) : (
                   <div className="space-y-2">
                     {getStudentEnrollments(selectedStudent.id).map((enr) => (
-                      <div key={enr.id} className="rounded-lg border p-3">
-                        <div className="flex items-center justify-between">
-                          <p className="font-medium text-foreground">{enr.course?.title ?? "Curso não informado"}</p>
+                      <div key={enr.id} className="rounded-lg border p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-foreground">{enr.course?.title ?? "Curso não informado"}</p>
+                            {enr.turma && <p className="text-sm text-muted-foreground">{enr.turma.name}</p>}
+                            <p className="text-xs text-muted-foreground">Início: {enr.started_at}</p>
+                            {enr.total_paid != null && (
+                              <p className="text-xs text-muted-foreground">
+                                Pago: R$ {Number(enr.total_paid).toFixed(2)} via {enr.payment_method ?? "—"}
+                              </p>
+                            )}
+                          </div>
                           <Badge className={enrollmentStatusColors[enr.status] ?? "bg-gray-100 text-gray-700"} variant="secondary">
                             {enrollmentStatusLabels[enr.status] ?? enr.status}
                           </Badge>
                         </div>
-                        {enr.turma && <p className="text-sm text-muted-foreground">{enr.turma.name}</p>}
-                        <p className="text-xs text-muted-foreground">Início: {enr.started_at}</p>
-                        {enr.total_paid != null && (
-                          <p className="text-xs text-muted-foreground">
-                            Pago: R$ {Number(enr.total_paid).toFixed(2)} via {enr.payment_method ?? "—"}
-                          </p>
+
+                        {confirmDeleteId === enr.id ? (
+                          <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                            <p className="flex-1 text-xs text-destructive">Cancelar esta matrícula?</p>
+                            <button
+                              onClick={() => handleDeleteEnrollment(enr.id)}
+                              disabled={deletingEnrollmentId === enr.id}
+                              className="rounded px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                            >
+                              {deletingEnrollmentId === enr.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Excluir"}
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteId(enr.id)}
+                            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Cancelar matrícula
+                          </button>
                         )}
                       </div>
                     ))}

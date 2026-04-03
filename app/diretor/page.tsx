@@ -3,127 +3,92 @@
 import { useEffect, useState } from "react"
 import Image from "next/image"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, BookOpen, DollarSign, TrendingUp, FileText, CalendarDays } from "lucide-react"
-import { fakeApiCall } from "@/lib/api"
-import { mockStudents, mockCourses, mockTurmas, mockEnrollments, mockEvents, mockContracts, mockCareers } from "@/lib/mock-data"
+import { Users, BookOpen, DollarSign, TrendingUp, FileText, CalendarDays, Loader2 } from "lucide-react"
+import { api, type ApiStudent, type ApiEnrollment, type ApiCourse, type ApiTurma, type ApiEvent, type ApiCareer } from "@/lib/api"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 
-interface Stats {
-  totalStudents: number
-  activeStudents: number
-  totalCourses: number
-  totalTurmas: number
-  totalEnrollments: number
-  activeEnrollments: number
-  totalRevenue: number
-  monthlyRevenue: number
-  totalEvents: number
-  upcomingEvents: number
-  pendingContracts: number
-}
-
 export default function DiretorDashboard() {
-  const [stats, setStats] = useState<Stats | null>(null)
+  const [students, setStudents] = useState<ApiStudent[]>([])
+  const [enrollments, setEnrollments] = useState<ApiEnrollment[]>([])
+  const [courses, setCourses] = useState<ApiCourse[]>([])
+  const [turmas, setTurmas] = useState<ApiTurma[]>([])
+  const [events, setEvents] = useState<ApiEvent[]>([])
+  const [careers, setCareers] = useState<ApiCareer[]>([])
   const [loading, setLoading] = useState(true)
   const [chartMetric, setChartMetric] = useState<"matriculas" | "receita">("matriculas")
   const [periodFilter, setPeriodFilter] = useState<"mes" | "trimestre" | "ano">("mes")
 
   useEffect(() => {
-    async function fetchStats() {
-      setLoading(true)
-      await fakeApiCall({
-        totalStudents: mockStudents.length,
-        activeStudents: mockStudents.filter((s) => s.active).length,
-        totalCourses: mockCourses.length,
-        totalTurmas: mockTurmas.length,
-        totalEnrollments: mockEnrollments.length,
-        activeEnrollments: mockEnrollments.filter((e) => e.status === "active").length,
-        totalRevenue: mockEnrollments.reduce((acc, e) => acc + e.total_paid, 0),
-        monthlyRevenue: mockEnrollments
-          .filter((e) => e.created_at.startsWith("2026-01"))
-          .reduce((acc, e) => acc + e.total_paid, 0),
-        totalEvents: mockEvents.length,
-        upcomingEvents: mockEvents.filter((e) => e.status === "agendado").length,
-        pendingContracts: mockContracts.filter((c) => c.status === "pending").length,
+    Promise.all([
+      api.students.list(),
+      api.enrollments.list(),
+      api.courses.list(),
+      api.turmas.list(),
+      api.events.list(),
+      api.careers.list(),
+    ])
+      .then(([s, e, c, t, ev, ca]) => {
+        setStudents(s)
+        setEnrollments(e)
+        setCourses(c)
+        setTurmas(t)
+        setEvents(ev)
+        setCareers(ca)
       })
-      setStats({
-        totalStudents: mockStudents.length,
-        activeStudents: mockStudents.filter((s) => s.active).length,
-        totalCourses: mockCourses.length,
-        totalTurmas: mockTurmas.length,
-        totalEnrollments: mockEnrollments.length,
-        activeEnrollments: mockEnrollments.filter((e) => e.status === "active").length,
-        totalRevenue: mockEnrollments.reduce((acc, e) => acc + e.total_paid, 0),
-        monthlyRevenue: mockEnrollments
-          .filter((e) => e.created_at.startsWith("2026-01"))
-          .reduce((acc, e) => acc + e.total_paid, 0),
-        totalEvents: mockEvents.length,
-        upcomingEvents: mockEvents.filter((e) => e.status === "agendado").length,
-        pendingContracts: mockContracts.filter((c) => c.status === "pending").length,
-      })
-      setLoading(false)
-    }
-    fetchStats()
+      .catch(console.error)
+      .finally(() => setLoading(false))
   }, [])
+
+  const now = new Date()
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+  const currentQuarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)
+  const currentYearStart = new Date(now.getFullYear(), 0, 1)
+
+  function getRevenueByPeriod(period: "mes" | "trimestre" | "ano") {
+    return enrollments.filter((e) => {
+      if (!e.started_at) return false
+      if (period === "mes") return e.started_at.startsWith(currentMonth)
+      const d = new Date(e.started_at)
+      if (period === "trimestre") return d >= currentQuarterStart
+      return d >= currentYearStart
+    }).reduce((acc, e) => acc + (e.total_paid ?? 0), 0)
+  }
+
+  const totalRevenue = enrollments.reduce((acc, e) => acc + (e.total_paid ?? 0), 0)
+  const monthlyRevenue = enrollments
+    .filter((e) => e.started_at?.startsWith(currentMonth))
+    .reduce((acc, e) => acc + (e.total_paid ?? 0), 0)
+  const activeEnrollments = enrollments.filter((e) => e.status === "active").length
+  const upcomingEvents = events.filter((e) => e.status === "agendado").length
 
   const modalityStats = [
     {
       label: "Presencial",
-      value: mockEnrollments.filter((e) => {
-        const course = mockCourses.find((c) => c.id === e.course_id)
-        return course?.access_type === "interno"
-      }).length,
+      value: enrollments.filter((e) => e.course?.access_type === "interno").length,
       color: "text-blue-600",
       bg: "bg-gradient-to-br from-blue-400 to-blue-600",
       icon: "🏢",
     },
     {
       label: "Online",
-      value: mockEnrollments.filter((e) => {
-        const course = mockCourses.find((c) => c.id === e.course_id)
-        return course?.access_type === "externo"
-      }).length,
+      value: enrollments.filter((e) => e.course?.access_type === "externo").length,
       color: "text-green-600",
       bg: "bg-gradient-to-br from-green-400 to-green-600",
       icon: "💻",
     },
     {
       label: "Híbrido",
-      value: mockEnrollments.filter((e) => {
-        const course = mockCourses.find((c) => c.id === e.course_id)
-        return course?.access_type === "ambos"
-      }).length,
+      value: enrollments.filter((e) => e.course?.access_type === "ambos").length,
       color: "text-orange-600",
       bg: "bg-gradient-to-br from-orange-400 to-orange-600",
       icon: "🔄",
     },
   ]
 
-  const getRevenueByPeriod = (period: "mes" | "trimestre" | "ano") => {
-    const now = new Date()
-    let startDate: Date
-
-    switch (period) {
-      case "mes":
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1)
-        break
-      case "trimestre":
-        startDate = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)
-        break
-      case "ano":
-        startDate = new Date(now.getFullYear(), 0, 1)
-        break
-    }
-
-    return mockEnrollments
-      .filter((e) => new Date(e.created_at) >= startDate)
-      .reduce((acc, e) => acc + e.total_paid, 0)
-  }
-
   const statCards = [
     {
       title: "Receita Total",
-      value: stats ? `R$ ${getRevenueByPeriod(periodFilter).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "-",
+      value: loading ? "-" : `R$ ${getRevenueByPeriod(periodFilter).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
       subtitle: `Período: ${periodFilter === "mes" ? "Mês atual" : periodFilter === "trimestre" ? "Trimestre atual" : "Ano atual"}`,
       icon: DollarSign,
       color: "text-green-600",
@@ -131,59 +96,59 @@ export default function DiretorDashboard() {
       filter: true,
     },
     {
-      title: "Novos Alunos",
-      value: stats?.activeStudents ?? 0,
-      subtitle: `${stats?.totalStudents ?? 0} total cadastrados`,
+      title: "Matrículas Ativas",
+      value: loading ? "-" : activeEnrollments,
+      subtitle: `${enrollments.length} total de matrículas`,
       icon: Users,
       color: "text-primary",
       bg: "bg-gradient-to-br from-primary/80 to-primary",
     },
     {
-      title: "TOTAL DE ALUNOS",
-      value: stats?.totalStudents ?? 0,
-      subtitle: `${stats?.activeStudents ?? 0} alunos ativos`,
+      title: "Total de Alunos",
+      value: loading ? "-" : students.length,
+      subtitle: `${students.filter((s) => s.active).length} alunos ativos`,
       icon: Users,
       color: "text-blue-600",
       bg: "bg-gradient-to-br from-blue-400 to-blue-600",
     },
     {
       title: "Cursos",
-      value: stats?.totalCourses ?? 0,
-      subtitle: `${stats?.totalTurmas ?? 0} turmas`,
+      value: loading ? "-" : courses.length,
+      subtitle: `${turmas.length} turmas`,
       icon: BookOpen,
       color: "text-purple-600",
       bg: "bg-gradient-to-br from-purple-400 to-purple-600",
     },
     {
       title: "Eventos",
-      value: stats?.upcomingEvents ?? 0,
-      subtitle: `${stats?.totalEvents ?? 0} total`,
+      value: loading ? "-" : upcomingEvents,
+      subtitle: `${events.length} total`,
       icon: CalendarDays,
       color: "text-orange-600",
       bg: "bg-gradient-to-br from-orange-400 to-orange-600",
     },
   ]
 
-  const courseChartData = mockCourses.map((course) => {
-    const enrollments = mockEnrollments.filter((e) => e.course_id === course.id).length
-    const revenue = mockEnrollments
-      .filter((e) => e.course_id === course.id)
-      .reduce((acc, e) => acc + e.total_paid, 0)
-
-    return {
-      name: course.title,
-      matriculas: enrollments,
-      receita: revenue,
-    }
+  const courseChartData = courses.map((course) => {
+    const count = enrollments.filter((e) => e.course?.id === course.id).length
+    const revenue = enrollments
+      .filter((e) => e.course?.id === course.id)
+      .reduce((acc, e) => acc + (e.total_paid ?? 0), 0)
+    return { name: course.title, matriculas: count, receita: revenue }
   })
 
-  const careerData = mockCareers.map((career) => {
-    const count = mockEnrollments.filter((e) => e.career_id === career.id).length
-    return {
-      name: career.name,
-      matriculas: count,
-    }
+  const careerData = careers.map((career) => {
+    const count = enrollments.filter((e) => e.course?.career_id === career.id).length
+    return { name: career.name, matriculas: count }
   })
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   return (
     <div className="relative min-h-screen p-4 lg:p-8">
@@ -201,18 +166,12 @@ export default function DiretorDashboard() {
       </div>
 
       <div className="relative z-10 mx-auto max-w-7xl space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground lg:text-3xl">
-              Painel do CEO
-            </h1>
-            <p className="text-muted-foreground">
-              Visao geral completa do sistema
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground lg:text-3xl">Painel do CEO</h1>
+          <p className="text-muted-foreground">Visão geral completa do sistema</p>
         </div>
 
-        {/* Modalidade de Alunos - No Topo */}
+        {/* Modalidade */}
         <div className="grid gap-4 sm:grid-cols-3">
           {modalityStats.map((item) => (
             <Card key={item.label} className="group hover:scale-105 transition-all duration-300 hover:shadow-xl border-0 overflow-hidden">
@@ -231,7 +190,7 @@ export default function DiretorDashboard() {
           ))}
         </div>
 
-        {/* Stats Grid */}
+        {/* Stats */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {statCards.map((card) => (
             <Card key={card.title} className="group hover:scale-105 transition-all duration-300 hover:shadow-lg border-0 overflow-hidden">
@@ -263,85 +222,79 @@ export default function DiretorDashboard() {
           ))}
         </div>
 
-        {/* Chart de Cursos */}
+        {/* Chart Cursos */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-lg text-foreground">Matriculas por Curso</CardTitle>
+              <CardTitle className="text-lg text-foreground">Matrículas por Curso</CardTitle>
               <select
                 value={chartMetric}
                 onChange={(e) => setChartMetric(e.target.value as "matriculas" | "receita")}
                 className="rounded border border-input bg-background px-2 py-1 text-sm"
               >
-                <option value="matriculas">Matriculas</option>
+                <option value="matriculas">Matrículas</option>
                 <option value="receita">Receita</option>
               </select>
             </div>
           </CardHeader>
           <CardContent className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={courseChartData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" hide={true} />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey={chartMetric} fill="#0ea5e9" />
-              </BarChart>
-            </ResponsiveContainer>
+            {courseChartData.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Sem dados</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={courseChartData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" hide={true} />
+                  <YAxis />
+                  <Tooltip formatter={(v, name) => name === "receita" ? `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : v} />
+                  <Bar dataKey={chartMetric} fill="#0ea5e9" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
-        {/* Gráfico de Carreiras */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg text-foreground">Matriculas por Carreira</CardTitle>
-          </CardHeader>
-          <CardContent className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={careerData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" hide={true} />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="matriculas" fill="#22c55e" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+        {/* Chart Carreiras */}
+        {careerData.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg text-foreground">Matrículas por Carreira</CardTitle>
+            </CardHeader>
+            <CardContent className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={careerData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" hide={true} />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="matriculas" fill="#22c55e" />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Quick Actions */}
+        {/* Quick Actions + Financeiro */}
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg text-foreground">Acoes Rapidas</CardTitle>
+              <CardTitle className="text-lg text-foreground">Ações Rápidas</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid gap-3 sm:grid-cols-2">
-                <a
-                  href="/diretor/financeiro"
-                  className="flex flex-col items-center gap-2 rounded-lg border bg-background p-4 transition-colors hover:border-primary hover:bg-accent"
-                >
+                <a href="/diretor/financeiro" className="flex flex-col items-center gap-2 rounded-lg border bg-background p-4 transition-colors hover:border-primary hover:bg-accent">
                   <DollarSign className="h-6 w-6 text-green-600" />
                   <span className="text-sm font-medium text-foreground">Financeiro</span>
                 </a>
-                <a
-                  href="/diretor/relatorios"
-                  className="flex flex-col items-center gap-2 rounded-lg border bg-background p-4 transition-colors hover:border-primary hover:bg-accent"
-                >
+                <a href="/diretor/relatorios" className="flex flex-col items-center gap-2 rounded-lg border bg-background p-4 transition-colors hover:border-primary hover:bg-accent">
                   <TrendingUp className="h-6 w-6 text-blue-600" />
-                  <span className="text-sm font-medium text-foreground">Relatorios</span>
+                  <span className="text-sm font-medium text-foreground">Relatórios</span>
                 </a>
-                <a
-                  href="/diretor/alunos"
-                  className="flex flex-col items-center gap-2 rounded-lg border bg-background p-4 transition-colors hover:border-primary hover:bg-accent"
-                >
+                <a href="/diretor/alunos" className="flex flex-col items-center gap-2 rounded-lg border bg-background p-4 transition-colors hover:border-primary hover:bg-accent">
                   <Users className="h-6 w-6 text-primary" />
                   <span className="text-sm font-medium text-foreground">Gerenciar Alunos</span>
                 </a>
-                <a
-                  href="/diretor/contratos"
-                  className="flex flex-col items-center gap-2 rounded-lg border bg-background p-4 transition-colors hover:border-primary hover:bg-accent"
-                >
+                <a href="/diretor/contratos" className="flex flex-col items-center gap-2 rounded-lg border bg-background p-4 transition-colors hover:border-primary hover:bg-accent">
                   <FileText className="h-6 w-6 text-purple-600" />
                   <span className="text-sm font-medium text-foreground">Contratos</span>
                 </a>
@@ -349,7 +302,6 @@ export default function DiretorDashboard() {
             </CardContent>
           </Card>
 
-          {/* Revenue Overview */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg text-foreground">Resumo Financeiro</CardTitle>
@@ -359,23 +311,23 @@ export default function DiretorDashboard() {
                 <div>
                   <p className="text-sm text-muted-foreground">Receita Total</p>
                   <p className="text-2xl font-bold text-green-600">
-                    R$ {stats?.totalRevenue?.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) ?? "0,00"}
+                    R$ {totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                   </p>
                 </div>
                 <DollarSign className="h-10 w-10 text-green-600/20" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">Este Mes</p>
+                  <p className="text-xs text-muted-foreground">Este Mês</p>
                   <p className="text-lg font-bold text-foreground">
-                    R$ {stats?.monthlyRevenue?.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) ?? "0,00"}
+                    R$ {monthlyRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">Media por Matricula</p>
+                  <p className="text-xs text-muted-foreground">Média por Matrícula</p>
                   <p className="text-lg font-bold text-foreground">
-                    R$ {stats && stats.totalEnrollments > 0
-                      ? (stats.totalRevenue / stats.totalEnrollments).toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+                    R$ {enrollments.length > 0
+                      ? (totalRevenue / enrollments.length).toLocaleString("pt-BR", { minimumFractionDigits: 2 })
                       : "0,00"}
                   </p>
                 </div>
@@ -384,15 +336,12 @@ export default function DiretorDashboard() {
           </Card>
         </div>
 
-        {/* Gerenciar usuários */}
+        {/* Gestão usuários */}
         <div className="rounded-xl border bg-card p-6">
           <h3 className="text-lg font-semibold text-foreground">Gestão de Usuários</h3>
           <p className="text-sm text-muted-foreground">CEO pode cadastrar e atribuir perfis de acesso para Assistente Comercial, Equipe Pedagógica, Professor e Aluno.</p>
           <div className="mt-4">
-            <a
-              href="/ceo/configuracoes"
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
+            <a href="/ceo/configuracoes" className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
               Ir para Configurações
             </a>
           </div>
@@ -400,8 +349,4 @@ export default function DiretorDashboard() {
       </div>
     </div>
   )
-}
-
-function cn(...classes: (string | boolean | undefined)[]) {
-  return classes.filter(Boolean).join(" ")
 }

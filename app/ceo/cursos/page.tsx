@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -8,16 +8,25 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { mockCourses, Course } from "@/lib/mock-data"
-import { Plus, BookOpen, Users, Monitor, Building2, Calendar, DollarSign, Edit3, Search } from "lucide-react"
+import { api, type ApiCourse } from "@/lib/api"
+import { Plus, BookOpen, Users, Monitor, Building2, Calendar, DollarSign, Edit3, Search, Loader2 } from "lucide-react"
 
 export default function CeoCursosPage() {
-  const [courses, setCourses] = useState<Course[]>(mockCourses)
+  const [courses, setCourses] = useState<ApiCourse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [filterModality, setFilterModality] = useState<"todos" | "interno" | "externo" | "ambos">("todos")
-  const [editingCourse, setEditingCourse] = useState<Course | null>(null)
+  const [editingCourse, setEditingCourse] = useState<ApiCourse | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+
+  useEffect(() => {
+    api.courses.list()
+      .then(setCourses)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
 
   // Form states for create modal
   const [createTitle, setCreateTitle] = useState("")
@@ -33,50 +42,59 @@ export default function CeoCursosPage() {
   const [editStartDate, setEditStartDate] = useState("")
   const [editEndDate, setEditEndDate] = useState("")
 
-  const handleCreateCourse = (e: { preventDefault(): void }) => {
+  const handleCreateCourse = async (e: { preventDefault(): void }) => {
     e.preventDefault()
-    const newCourse: Course = {
-      id: Math.max(0, ...courses.map((c) => c.id)) + 1,
-      title: createTitle,
-      description: "Criado pelo CEO",
-      price: createPrice,
-      status: "published",
-      access_type: createAccessType,
-      duration_in_days: 30,
-      start_date: createStartDate || undefined,
-      end_date: createEndDate || undefined,
-      created_at: new Date().toISOString().slice(0, 10),
+    setSaving(true)
+    try {
+      const newCourse = await api.courses.create({
+        title: createTitle,
+        price: createPrice,
+        status: "published",
+        access_type: createAccessType,
+        start_date: createStartDate || undefined,
+        end_date: createEndDate || undefined,
+      })
+      setCourses((prev) => [newCourse, ...prev])
+      resetCreateForm()
+      setIsCreateModalOpen(false)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSaving(false)
     }
-    setCourses((prev) => [...prev, newCourse])
-    resetCreateForm()
-    setIsCreateModalOpen(false)
   }
 
-  const handleEditCourse = (course: Course) => {
+  const handleEditCourse = (course: ApiCourse) => {
     setEditingCourse(course)
     setEditTitle(course.title)
     setEditPrice(course.price)
-    setEditAccessType(course.access_type)
+    setEditAccessType(course.access_type as "interno" | "externo" | "ambos")
     setEditStartDate(course.start_date || "")
     setEditEndDate(course.end_date || "")
     setIsEditModalOpen(true)
   }
 
-  const handleSaveEdit = (e: { preventDefault(): void }) => {
+  const handleSaveEdit = async (e: { preventDefault(): void }) => {
     e.preventDefault()
     if (!editingCourse) return
-    const updatedCourse: Course = {
-      ...editingCourse,
-      title: editTitle,
-      price: editPrice,
-      access_type: editAccessType,
-      start_date: editStartDate || undefined,
-      end_date: editEndDate || undefined,
+    setSaving(true)
+    try {
+      const updated = await api.courses.update(editingCourse.id, {
+        title: editTitle,
+        price: editPrice,
+        access_type: editAccessType,
+        start_date: editStartDate || undefined,
+        end_date: editEndDate || undefined,
+      })
+      setCourses((prev) => prev.map((c) => (c.id === editingCourse.id ? updated : c)))
+      setIsEditModalOpen(false)
+      setEditingCourse(null)
+      resetEditForm()
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSaving(false)
     }
-    setCourses((prev) => prev.map((c) => (c.id === editingCourse.id ? updatedCourse : c)))
-    setIsEditModalOpen(false)
-    setEditingCourse(null)
-    resetEditForm()
   }
 
   const resetCreateForm = () => {
@@ -110,6 +128,14 @@ export default function CeoCursosPage() {
       return matchesSearch && matchesModality
     })
   }, [courses, searchTerm, filterModality])
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 lg:p-8">
@@ -179,7 +205,7 @@ export default function CeoCursosPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button variant="outline" onClick={() => { setCourses(mockCourses); setSearchTerm(""); setFilterModality("todos") }}>
+            <Button variant="outline" onClick={() => { setSearchTerm(""); setFilterModality("todos") }}>
               Resetar Filtros
             </Button>
           </div>
@@ -261,7 +287,7 @@ export default function CeoCursosPage() {
                 <div className="pt-4 border-t border-slate-100">
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>ID: {course.id}</span>
-                    <span>Criado em {new Date(course.created_at).toLocaleDateString("pt-BR")}</span>
+                    <span>Criado em {course.created_at ? new Date(course.created_at).toLocaleDateString("pt-BR") : "—"}</span>
                   </div>
                 </div>
               </div>
@@ -435,11 +461,8 @@ export default function CeoCursosPage() {
                 >
                   Cancelar
                 </Button>
-                <Button
-                  type="submit"
-                  className="flex-1 bg-[#e8491d] hover:bg-[#d13a0f] text-white"
-                >
-                  Criar Curso
+                <Button type="submit" disabled={saving} className="flex-1 bg-[#e8491d] hover:bg-[#d13a0f] text-white">
+                  {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Criando...</> : "Criar Curso"}
                 </Button>
               </div>
             </form>
@@ -594,11 +617,8 @@ export default function CeoCursosPage() {
                 >
                   Cancelar
                 </Button>
-                <Button
-                  type="submit"
-                  className="flex-1 bg-[#e8491d] hover:bg-[#d13a0f] text-white"
-                >
-                  Salvar Alterações
+                <Button type="submit" disabled={saving} className="flex-1 bg-[#e8491d] hover:bg-[#d13a0f] text-white">
+                  {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Salvando...</> : "Salvar Alterações"}
                 </Button>
               </div>
             </form>

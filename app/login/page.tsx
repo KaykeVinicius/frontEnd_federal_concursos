@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react"
+import { Eye, EyeOff, Loader2, Lock, Mail, MessageCircle, Landmark, Calculator, Scale, BookOpen, Trophy, GraduationCap, Target, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -32,11 +32,9 @@ export default function LoginPage() {
     try {
       const { token, user } = await api.auth.login(email, password)
 
-      // Armazena o JWT e os dados do usuário
       setToken(token)
       localStorage.setItem("currentUser", JSON.stringify(user))
 
-      // Redireciona baseado no role
       switch (user.role) {
         case "ceo":
           router.push("/ceo")
@@ -66,140 +64,224 @@ export default function LoginPage() {
     }
   }
 
+  const phrases = [
+    { text: "Concursos Públicos.", icon: Landmark },
+    { text: "Conselho Federal de Contabilidade.", icon: Calculator },
+    { text: "Ordem dos Advogados do Brasil.", icon: Scale },
+    { text: "Aqui você estuda de verdade.", icon: BookOpen },
+    { text: "Sua aprovação começa aqui.", icon: Trophy },
+    { text: "Estude com quem entende de concursos.", icon: GraduationCap },
+    { text: "Transformamos dedicação em aprovação.", icon: Target },
+    { text: "Prepare-se. A vaga é sua.", icon: CheckCircle },
+  ]
+  const [phraseIndex, setPhraseIndex] = useState(0)
+  const [phraseVisible, setPhraseVisible] = useState(true)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPhraseVisible(false)
+      setTimeout(() => {
+        setPhraseIndex((prev) => (prev + 1) % phrases.length)
+        setPhraseVisible(true)
+      }, 400)
+    }, 3500)
+    return () => clearInterval(interval)
+  }, [])
+
+  const whatsappNumber = "556993697213"
+  const whatsappLink = `https://wa.me/${whatsappNumber}`
+
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#1a1a1a]">
-      {/* Background logo watermark */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.04]">
+    <div className="relative min-h-screen bg-[#0a0a0a]">
+      {/* Tiger Background - Full Page with more opacity */}
+      <div className="fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-black/85 z-10" />
         <Image
-          src="/images/logo.jpg"
+          src="/images/tigre_redimensionado.png"
           alt=""
-          width={900}
-          height={450}
-          className="max-w-[90vw] select-none"
-          style={{ width: "auto", height: "auto" }}
+          fill
+          className="object-cover object-center select-none opacity-20"
+          priority
+          style={{ objectFit: 'cover' }}
+        />
+      </div>
+
+      {/* Decorative top bar */}
+      <div className="pointer-events-none absolute left-0 top-0 z-20 h-1 w-full bg-primary" />
+
+      {/* Logo - centralizada no mobile, esquerda no desktop */}
+      <div className="absolute left-0 right-0 top-5 z-20 flex justify-center lg:left-6 lg:right-auto lg:top-6 lg:block">
+        <Image
+          src="/images/federal_cursos_sem_fundo.png"
+          alt="Federal Cursos"
+          width={140}
+          height={70}
+          className="rounded-lg"
+          style={{ width: "auto", height: "auto", maxWidth: "140px" }}
           priority
         />
       </div>
 
-      {/* Decorative accents */}
-      <div className="pointer-events-none absolute left-0 top-0 h-1 w-full bg-primary" />
-      <div className="pointer-events-none absolute bottom-0 left-0 h-1 w-full bg-primary" />
+      {/* WhatsApp Button - Bottom Right Corner */}
+      <a
+        href={whatsappLink}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-6 right-6 z-20 bg-green-500 hover:bg-green-600 text-white rounded-full p-3 shadow-lg transition-all duration-300 hover:scale-110 group"
+        aria-label="WhatsApp"
+      >
+        <MessageCircle className="h-6 w-6" />
+        <span className="absolute right-full mr-2 top-1/2 -translate-y-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+          Fale conosco
+        </span>
+      </a>
 
-      <div className="relative z-10 flex w-full max-w-md flex-col items-center gap-8 px-4">
-        {/* Logo */}
-        <div className="flex flex-col items-center gap-4">
-          <Image
-            src="/images/logo.jpg"
-            alt="Federal Cursos"
-            width={320}
-            height={160}
-            className="rounded-lg"
-            style={{ width: "auto", height: "auto" }}
-            priority
-          />
+      {/* Content - Layout 2 Colunas */}
+      <div className="relative z-10 flex min-h-screen">
+        {/* Left Section - Welcome Message */}
+        <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center px-12 py-12">
+          <div className="max-w-xl w-full text-center">
+            <h1 className="font-extrabold text-primary animate-text-glow mb-6">
+              <span className="block text-5xl md:text-6xl">Seja bem-vindo</span>
+              <span className="block text-5xl md:text-6xl">ao</span>
+              <span className="block text-4xl md:text-5xl whitespace-nowrap">Federal Cursos.</span>
+            </h1>
+            <div
+              className="flex items-center justify-center gap-3 transition-all duration-500 min-h-[3rem]"
+              style={{ opacity: phraseVisible ? 1 : 0, transform: phraseVisible ? "translateY(0)" : "translateY(8px)" }}
+            >
+              {(() => {
+                const phrase = phrases[phraseIndex]
+                const Icon = phrase.icon
+                return (
+                  <>
+                    <Icon className="h-6 w-6 text-primary shrink-0" />
+                    <span className="text-xl text-gray-200 font-medium">{phrase.text}</span>
+                  </>
+                )
+              })()}
+            </div>
+          </div>
         </div>
 
-        {/* Login Card */}
-        <Card className="w-full border-[#333] bg-[#222222]">
-          <CardContent className="p-6">
-            <div className="mb-6 text-center">
-              <h1 className="text-xl font-bold text-[#f1f1f1]">
-                Acesso ao Sistema
+        {/* Right Section - Login Card */}
+        <div className="flex w-full items-center justify-center lg:w-1/2 px-3 py-16 sm:px-4 sm:py-12">
+          <div className="w-full max-w-md">
+            {/* Mobile Welcome Text */}
+            <div className="mb-6 text-center lg:hidden">
+              <h1 className="font-extrabold text-primary animate-text-glow leading-tight">
+                <span className="block text-2xl">Seja bem-vindo ao</span>
+                <span className="block text-3xl whitespace-nowrap">Federal Concursos.</span>
               </h1>
-              <p className="mt-1 text-sm text-[#9ca3af]">
-                Entre com suas credenciais para continuar
-              </p>
             </div>
 
-            <form onSubmit={handleLogin} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="email" className="text-sm font-medium text-[#d1d5db]">
-                  Email
-                </Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6b7280]" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="seu@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="border-[#444] bg-[#2a2a2a] pl-10 text-[#f1f1f1] placeholder:text-[#6b7280] focus-visible:ring-primary"
-                    disabled={loading}
-                  />
+            {/* Login Card */}
+            <Card className="relative overflow-hidden border-white/10 bg-black/60 backdrop-blur-md shadow-2xl">
+              <CardContent className="relative z-10 p-5 sm:p-8">
+                <div className="mb-6 text-center">
+                  <h2 className="text-2xl font-bold text-white">
+                    Acesso ao Sistema
+                  </h2>
+                  <p className="mt-2 text-sm text-gray-300">
+                    Entre com suas credenciais para continuar
+                  </p>
                 </div>
-              </div>
 
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="password" className="text-sm font-medium text-[#d1d5db]">
-                  Senha
-                </Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6b7280]" />
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Sua senha"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="border-[#444] bg-[#2a2a2a] pl-10 pr-10 text-[#f1f1f1] placeholder:text-[#6b7280] focus-visible:ring-primary"
+                <form onSubmit={handleLogin} className="flex flex-col gap-5">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="email" className="text-sm font-medium text-gray-200">
+                      Email
+                    </Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="seu@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="h-11 border-white/20 bg-white/10 pl-10 text-white placeholder:text-gray-400 focus-visible:ring-primary focus-visible:ring-offset-0"
+                        disabled={loading}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="password" className="text-sm font-medium text-gray-200">
+                      Senha
+                    </Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Sua senha"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="h-11 border-white/20 bg-white/10 pl-10 pr-10 text-white placeholder:text-gray-400 focus-visible:ring-primary focus-visible:ring-offset-0"
+                        disabled={loading}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-200"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                        <span className="sr-only">
+                          {showPassword ? "Ocultar senha" : "Mostrar senha"}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {error && (
+                    <p className="rounded-md bg-red-500/20 px-3 py-2 text-sm text-red-300">
+                      {error}
+                    </p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    className="mt-2 h-11 w-full bg-primary text-white font-semibold hover:bg-primary/90 transition-all duration-200"
                     disabled={loading}
-                  />
+                  >
+                    {loading ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Entrando...
+                      </span>
+                    ) : (
+                      "Entrar"
+                    )}
+                  </Button>
+                </form>
+
+                <div className="mt-5 text-center">
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7280] transition-colors hover:text-[#d1d5db]"
-                    tabIndex={-1}
+                    className="text-xs text-primary transition-colors hover:text-primary/80"
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                    <span className="sr-only">
-                      {showPassword ? "Ocultar senha" : "Mostrar senha"}
-                    </span>
+                    Esqueceu sua senha?
                   </button>
                 </div>
-              </div>
 
-              {error && (
-                <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-[#f87171]">
-                  {error}
-                </p>
-              )}
-
-              <Button
-                type="submit"
-                className="mt-2 w-full bg-primary text-primary-foreground hover:bg-[#cc3f18]"
-                disabled={loading}
-              >
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Entrando...
-                  </span>
-                ) : (
-                  "Entrar"
-                )}
-              </Button>
-            </form>
-
-            <div className="mt-6 text-center">
-              <button
-                type="button"
-                className="text-sm text-primary transition-colors hover:text-[#cc3f18]"
-              >
-                Esqueceu sua senha?
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Footer */}
-        <p className="text-center text-xs text-[#6b7280]">
-          Federal Cursos - Concursos Publicos, CFC e OAB
-        </p>
+                <div className="mt-4 pt-4 border-t border-white/10 text-center space-y-1">
+                  <p className="text-sm font-semibold animate-pulse text-primary drop-shadow-[0_0_8px_rgba(232,73,29,0.6)]">
+                    Ainda não tem acesso?
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    O acesso é liberado após a matrícula. Fale com nossa equipe pelo WhatsApp.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </div>
   )
