@@ -13,6 +13,7 @@ import {
   Moon,
   Clock,
   Mail,
+  HelpCircle,
 } from "lucide-react"
 
 import {
@@ -22,7 +23,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
-import { api, type ApiEvent, type ApiEnrollment } from "@/lib/api"
+import { api, type ApiEvent, type ApiEnrollment, type ApiQuestion } from "@/lib/api"
 
 interface UserTopbarProps {
   roleLabel: string
@@ -31,6 +32,7 @@ interface UserTopbarProps {
 type Notif =
   | { type: "event"; id: number; title: string; sub: string }
   | { type: "boleto"; id: number; title: string; sub: string }
+  | { type: "duvida"; id: number; title: string; sub: string }
 
 export function UserTopbar({ roleLabel }: UserTopbarProps) {
   const router = useRouter()
@@ -55,30 +57,63 @@ export function UserTopbar({ roleLabel }: UserTopbarProps) {
     const now = new Date()
     const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
 
-    Promise.all([api.events.list(), api.enrollments.list()])
-      .then(([events, enrollments]) => {
-        const eventNotifs: Notif[] = events
-          .filter((ev: ApiEvent) => { const d = new Date(ev.date); return d >= now && d <= in7 })
-          .map((ev: ApiEvent) => ({
-            type: "event" as const,
-            id: ev.id,
-            title: `Evento: ${ev.title}`,
-            sub: `${new Date(ev.date).toLocaleDateString("pt-BR")}${ev.location ? ` — ${ev.location}` : ""}`,
+    if (roleLabel === "Professor") {
+      // Professor: apenas dúvidas pendentes das suas matérias
+      api.professor.questions("pending")
+        .then((questions: ApiQuestion[]) => {
+          const notifs: Notif[] = questions.map((q) => ({
+            type: "duvida" as const,
+            id: q.id,
+            title: `Dúvida de ${q.student?.name ?? "Aluno"}`,
+            sub: [q.subject?.name, q.lesson?.title].filter(Boolean).join(" — "),
           }))
+          setNotifs(notifs)
+        })
+        .catch(() => {})
 
-        const boletoNotifs: Notif[] = enrollments
-          .filter((en: ApiEnrollment) => en.payment_method === "boleto" && en.expires_at && (() => { const d = new Date(en.expires_at); return d >= now && d <= in7 })())
-          .map((en: ApiEnrollment) => ({
-            type: "boleto" as const,
-            id: en.id,
-            title: `Boleto a vencer — ${en.student?.name ?? `Matrícula #${en.id}`}`,
-            sub: `Vence em ${new Date(en.expires_at).toLocaleDateString("pt-BR")}`,
-          }))
+    } else if (roleLabel === "Aluno") {
+      // Aluno: dúvidas respondidas (novas respostas)
+      api.aluno.questions()
+        .then((questions: ApiQuestion[]) => {
+          const notifs: Notif[] = questions
+            .filter((q) => q.status === "answered")
+            .map((q) => ({
+              type: "duvida" as const,
+              id: q.id,
+              title: `Dúvida respondida — ${q.subject?.name ?? ""}`,
+              sub: q.lesson?.title ?? "",
+            }))
+          setNotifs(notifs)
+        })
+        .catch(() => {})
 
-        setNotifs([...eventNotifs, ...boletoNotifs])
-      })
-      .catch(() => {})
-  }, [])
+    } else {
+      // CEO, admin, pedagógico, assistente: eventos próximos + boletos vencendo
+      Promise.all([api.events.list(), api.enrollments.list()])
+        .then(([events, enrollments]) => {
+          const eventNotifs: Notif[] = events
+            .filter((ev: ApiEvent) => { const d = new Date(ev.date); return d >= now && d <= in7 })
+            .map((ev: ApiEvent) => ({
+              type: "event" as const,
+              id: ev.id,
+              title: `Evento: ${ev.title}`,
+              sub: `${new Date(ev.date).toLocaleDateString("pt-BR")}${ev.location ? ` — ${ev.location}` : ""}`,
+            }))
+
+          const boletoNotifs: Notif[] = enrollments
+            .filter((en: ApiEnrollment) => en.payment_method === "boleto" && en.expires_at && (() => { const d = new Date(en.expires_at); return d >= now && d <= in7 })())
+            .map((en: ApiEnrollment) => ({
+              type: "boleto" as const,
+              id: en.id,
+              title: `Boleto a vencer — ${en.student?.name ?? `Matrícula #${en.id}`}`,
+              sub: `Vence em ${new Date(en.expires_at).toLocaleDateString("pt-BR")}`,
+            }))
+
+          setNotifs([...eventNotifs, ...boletoNotifs])
+        })
+        .catch(() => {})
+    }
+  }, [roleLabel])
 
   function logout() {
     localStorage.removeItem("currentUser")
@@ -152,9 +187,15 @@ export function UserTopbar({ roleLabel }: UserTopbarProps) {
             <DropdownMenuContent className="w-80 rounded-xl border shadow-xl">
               <div className="p-3 border-b">
                 <p className="text-sm font-medium">Notificações</p>
-                {notifs.length > 0 && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{notifs.length} alerta(s) nos próximos 7 dias</p>
-                )}
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {notifs.length === 0
+                    ? "Nenhuma notificação"
+                    : roleLabel === "Professor"
+                    ? `${notifs.length} dúvida(s) pendente(s)`
+                    : roleLabel === "Aluno"
+                    ? `${notifs.length} dúvida(s) respondida(s)`
+                    : `${notifs.length} alerta(s)`}
+                </p>
               </div>
 
               <div className="max-h-80 overflow-y-auto">
@@ -164,21 +205,38 @@ export function UserTopbar({ roleLabel }: UserTopbarProps) {
                   </div>
                 ) : (
                   notifs.map((n) => (
-                    <DropdownMenuItem key={`${n.type}-${n.id}`} className="flex items-start gap-3 p-3">
-                      <div className={`mt-0.5 rounded-full p-1.5 shrink-0 ${n.type === "event" ? "bg-orange-100" : "bg-red-100"}`}>
+                    <DropdownMenuItem key={`${n.type}-${n.id}`} className="flex items-start gap-3 p-3 cursor-pointer">
+                      <div className={`mt-0.5 rounded-full p-1.5 shrink-0 ${n.type === "event" ? "bg-orange-100" : n.type === "duvida" ? "bg-yellow-100" : "bg-red-100"}`}>
                         {n.type === "event"
                           ? <Clock className="h-3.5 w-3.5 text-orange-600" />
+                          : n.type === "duvida"
+                          ? <HelpCircle className="h-3.5 w-3.5 text-yellow-600" />
                           : <Mail className="h-3.5 w-3.5 text-red-600" />
                         }
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium leading-tight">{n.title}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{n.sub}</p>
+                        {n.sub && <p className="text-xs text-muted-foreground mt-0.5">{n.sub}</p>}
                       </div>
                     </DropdownMenuItem>
                   ))
                 )}
               </div>
+
+              {notifs.length > 0 && roleLabel === "Professor" && (
+                <div className="border-t p-2">
+                  <a href="/professor/duvidas" className="block w-full rounded-lg px-3 py-1.5 text-center text-xs font-medium text-primary hover:bg-primary/5">
+                    Ver todas as dúvidas
+                  </a>
+                </div>
+              )}
+              {notifs.length > 0 && roleLabel === "Aluno" && (
+                <div className="border-t p-2">
+                  <a href="/aluno/duvidas" className="block w-full rounded-lg px-3 py-1.5 text-center text-xs font-medium text-primary hover:bg-primary/5">
+                    Ver minhas dúvidas
+                  </a>
+                </div>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 

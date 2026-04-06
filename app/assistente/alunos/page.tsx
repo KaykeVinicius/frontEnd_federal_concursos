@@ -35,6 +35,12 @@ export default function AlunosPage() {
   const [saving, setSaving] = useState(false)
   const [enrollError, setEnrollError] = useState("")
 
+  // Campos novo aluno
+  const [eNewName, setENewName] = useState("")
+  const [eNewEmail, setENewEmail] = useState("")
+  const [eNewCpf, setENewCpf] = useState("")
+  const [eNewWhatsapp, setENewWhatsapp] = useState("")
+
   const [contractEnrollmentId, setContractEnrollmentId] = useState<number | null>(null)
 
   useEffect(() => {
@@ -62,21 +68,45 @@ export default function AlunosPage() {
     finally { setLoadingTurmas(false) }
   }
 
+  function resetEnrollForm() {
+    setEStudentId(""); setECourseId(""); setETurmaId(""); setEStartedAt(""); setEExpiresAt("")
+    setEPaymentMethod(""); setETotalPaid(""); setTurmasForCourse([]); setEIsNewStudent(true); setEEnrollmentType("interno")
+    setENewName(""); setENewEmail(""); setENewCpf(""); setENewWhatsapp("")
+  }
+
   async function handleNewEnrollment(e: { preventDefault(): void }) {
     e.preventDefault()
-    if (!eStudentId || !eCourseId || !eStartedAt) {
+    if (!eCourseId || !eStartedAt) {
       setEnrollError("Preencha os campos obrigatórios."); return
-    }
-    const duplicate = enrollments.find(
-      (en) => en.student?.id === parseInt(eStudentId) && en.course?.id === parseInt(eCourseId) && en.status === "active"
-    )
-    if (duplicate) {
-      setEnrollError("Este aluno já possui uma matrícula ativa neste curso."); return
     }
     setSaving(true); setEnrollError("")
     try {
+      let studentId = parseInt(eStudentId)
+
+      if (eIsNewStudent) {
+        if (!eNewName || !eNewEmail || !eNewCpf) {
+          setEnrollError("Preencha nome, email e CPF do novo aluno."); setSaving(false); return
+        }
+        const newStudent = await api.students.create({
+          name: eNewName,
+          email: eNewEmail,
+          cpf: eNewCpf,
+          whatsapp: eNewWhatsapp || undefined,
+          active: true,
+        })
+        setStudents((prev) => [newStudent, ...prev])
+        studentId = newStudent.id
+      }
+
+      const duplicate = enrollments.find(
+        (en) => en.student?.id === studentId && en.course?.id === parseInt(eCourseId) && en.status === "active"
+      )
+      if (duplicate) {
+        setEnrollError("Este aluno já possui uma matrícula ativa neste curso."); setSaving(false); return
+      }
+
       const created = await api.enrollments.create({
-        student_id: parseInt(eStudentId),
+        student_id: studentId,
         course_id: parseInt(eCourseId),
         turma_id: eTurmaId ? parseInt(eTurmaId) : undefined,
         enrollment_type: eEnrollmentType as "interno" | "externo",
@@ -88,8 +118,7 @@ export default function AlunosPage() {
       })
       setEnrollments((prev) => [created, ...prev])
       setShowNewEnrollment(false)
-      setEStudentId(""); setECourseId(""); setETurmaId(""); setEStartedAt(""); setEExpiresAt("")
-      setEPaymentMethod(""); setETotalPaid(""); setTurmasForCourse([]); setEIsNewStudent(true); setEEnrollmentType("interno")
+      resetEnrollForm()
     } catch (err: unknown) {
       setEnrollError(err instanceof Error ? err.message : "Erro ao criar matrícula")
     } finally { setSaving(false) }
@@ -217,7 +246,7 @@ export default function AlunosPage() {
       </Card>
 
       {/* Nova Matrícula Dialog */}
-      <Dialog open={showNewEnrollment} onOpenChange={setShowNewEnrollment}>
+      <Dialog open={showNewEnrollment} onOpenChange={(open) => { if (!open) resetEnrollForm(); setShowNewEnrollment(open) }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-foreground">Nova Matrícula</DialogTitle>
@@ -239,17 +268,42 @@ export default function AlunosPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Aluno *</Label>
-              <Select value={eStudentId} onValueChange={setEStudentId}>
-                <SelectTrigger><SelectValue placeholder="Selecione o aluno" /></SelectTrigger>
-                <SelectContent>
-                  {students.map((s) => (
-                    <SelectItem key={s.id} value={String(s.id)}>{s.name} — {s.cpf}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {eIsNewStudent ? (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Nome Completo *</Label>
+                    <Input placeholder="Nome do aluno" value={eNewName} onChange={(e) => setENewName(e.target.value)} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>CPF *</Label>
+                    <Input placeholder="000.000.000-00" value={eNewCpf} onChange={(e) => setENewCpf(e.target.value)} required />
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Email *</Label>
+                    <Input type="email" placeholder="email@exemplo.com" value={eNewEmail} onChange={(e) => setENewEmail(e.target.value)} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>WhatsApp</Label>
+                    <Input placeholder="(00) 00000-0000" value={eNewWhatsapp} onChange={(e) => setENewWhatsapp(e.target.value)} />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <Label>Aluno *</Label>
+                <Select value={eStudentId} onValueChange={setEStudentId}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o aluno" /></SelectTrigger>
+                  <SelectContent>
+                    {students.map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)}>{s.name} — {s.cpf}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Curso *</Label>
@@ -312,7 +366,7 @@ export default function AlunosPage() {
 
             {enrollError && <p className="text-sm text-destructive">{enrollError}</p>}
             <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="outline" onClick={() => setShowNewEnrollment(false)}>Cancelar</Button>
+              <Button type="button" variant="outline" onClick={() => { resetEnrollForm(); setShowNewEnrollment(false) }}>Cancelar</Button>
               <Button type="submit" disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90">
                 {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando...</> : "Criar Matrícula"}
               </Button>

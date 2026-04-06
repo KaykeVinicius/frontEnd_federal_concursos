@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import {
   api,
-  type ApiCourse, type ApiSubject, type ApiTopic, type ApiLesson, type ApiLessonPdf,
+  type ApiCourse, type ApiSubject, type ApiTopic, type ApiLesson, type ApiLessonPdf, type ApiUser,
 } from "@/lib/api"
 
 // ─── Inline add helper ────────────────────────────────────
@@ -260,11 +260,39 @@ function TopicBlock({ topic, onDelete, onLessonsChange }: {
 type TopicWithLessons = ApiTopic & { lessons: ApiLesson[] }
 type SubjectWithTopics = ApiSubject & { topics: TopicWithLessons[] }
 
-function SubjectBlock({ subject, onDelete, onUpdate }: {
+function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjects }: {
   subject: SubjectWithTopics; onDelete: () => void; onUpdate: (s: SubjectWithTopics) => void
+  professors: ApiUser[]; allGlobalSubjects: ApiSubject[]
 }) {
   const [open, setOpen] = useState(false)
   const [addingTopic, setAddingTopic] = useState(false)
+  const [editingProf, setEditingProf] = useState(false)
+  const [newProfId, setNewProfId] = useState("")
+  const [savingProf, setSavingProf] = useState(false)
+
+  // Professores que já lecionam esta disciplina (mesmo nome) globalmente
+  const eligibleProfessorIds = new Set(
+    allGlobalSubjects
+      .filter((s) => s.name.toLowerCase() === subject.name.toLowerCase() && s.professor_id)
+      .map((s) => s.professor_id!)
+  )
+  const eligibleProfessors = eligibleProfessorIds.size > 0
+    ? professors.filter((p) => eligibleProfessorIds.has(p.id))
+    : professors
+
+  const currentProfessor = professors.find((p) => p.id === subject.professor_id)
+
+  async function saveProf() {
+    if (!newProfId) return
+    setSavingProf(true)
+    try {
+      await api.subjects.update(subject.id, { professor_id: parseInt(newProfId) })
+      onUpdate({ ...subject, professor_id: parseInt(newProfId) })
+      setEditingProf(false)
+      setNewProfId("")
+    } catch (e) { console.error(e) }
+    finally { setSavingProf(false) }
+  }
 
   async function addTopic(title: string) {
     try {
@@ -284,16 +312,57 @@ function SubjectBlock({ subject, onDelete, onUpdate }: {
   return (
     <div className="rounded-lg border border-border bg-background">
       <button className="flex w-full items-center justify-between px-4 py-2.5 text-left" onClick={() => setOpen(!open)}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <GraduationCap className="h-4 w-4 text-blue-500" />
           <span className="text-sm font-medium">{subject.name}</span>
           <Badge variant="secondary" className="text-xs">{subject.topics.length} tópico(s)</Badge>
+          {currentProfessor ? (
+            <span className="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[11px] text-blue-700">
+              Prof: {currentProfessor.name.split(" ")[0]}
+            </span>
+          ) : (
+            <span className="rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[11px] text-orange-600">
+              Sem professor
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); setEditingProf((v) => !v); setNewProfId("") }}
+            className="text-muted-foreground hover:text-blue-600"
+            title="Alterar professor"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </button>
           <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </div>
       </button>
+
+      {editingProf && (
+        <div className="border-t border-border bg-blue-50/50 px-4 py-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <select
+            value={newProfId}
+            onChange={(e) => setNewProfId(e.target.value)}
+            className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-sm"
+            disabled={savingProf}
+          >
+            <option value="">Selecione o professor...</option>
+            {eligibleProfessors.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <Button size="sm" className="h-7 text-xs px-3" onClick={saveProf} disabled={savingProf || !newProfId}>
+            {savingProf ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => { setEditingProf(false); setNewProfId("") }} disabled={savingProf}>
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+
       {open && (
         <div className="border-t border-border px-4 py-3 space-y-2">
           {subject.topics.map((topic) => (
@@ -322,8 +391,9 @@ function SubjectBlock({ subject, onDelete, onUpdate }: {
 // ─── Course Card ──────────────────────────────────────────
 type CourseWithSubjects = ApiCourse & { subjects: SubjectWithTopics[] }
 
-function CursoCard({ course, onDelete, onUpdate }: {
+function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }: {
   course: CourseWithSubjects; onDelete: () => void; onUpdate: (c: CourseWithSubjects) => void
+  professors: ApiUser[]; allGlobalSubjects: ApiSubject[]
 }) {
   const [open, setOpen] = useState(false)
   const [addingSubject, setAddingSubject] = useState(false)
@@ -363,7 +433,7 @@ function CursoCard({ course, onDelete, onUpdate }: {
     setSelectedSubjectId("")
     const all = await api.subjects.list().catch(() => [])
     const linkedIds = course.subjects.map((s) => s.id)
-    // mostra matérias sem curso vinculado (disponíveis) que ainda não estão neste curso
+    // Apenas matérias não vinculadas a outro curso e que já têm professor atribuído
     setAvailableSubjects(all.filter((s) => !linkedIds.includes(s.id) && !s.course_id))
     setAddingSubject(true)
   }
@@ -454,28 +524,44 @@ function CursoCard({ course, onDelete, onUpdate }: {
                   onUpdate={(updated) =>
                     onUpdate({ ...course, subjects: course.subjects.map((s) => s.id === subject.id ? updated : s) })
                   }
+                  professors={professors}
+                  allGlobalSubjects={allGlobalSubjects}
                 />
               ))}
               {addingSubject ? (
                 <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground">Vincular matéria existente</p>
+                  <p className="text-xs font-semibold text-muted-foreground">Vincular matéria ao curso</p>
                   {availableSubjects.length === 0 ? (
-                    <p className="text-xs text-amber-600">Nenhuma matéria disponível. Crie matérias na etapa anterior.</p>
+                    <p className="text-xs text-amber-600">Nenhuma matéria disponível. Crie matérias e vincule professores primeiro em Usuários.</p>
                   ) : (
-                    <select
-                      value={selectedSubjectId}
-                      onChange={(e) => setSelectedSubjectId(e.target.value)}
-                      className="w-full h-8 rounded-md border border-input bg-background px-3 text-sm"
-                      disabled={linkingSubject}
-                    >
-                      <option value="">Selecione uma matéria...</option>
-                      {availableSubjects.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
+                    <>
+                      <select
+                        value={selectedSubjectId}
+                        onChange={(e) => setSelectedSubjectId(e.target.value)}
+                        className="w-full h-8 rounded-md border border-input bg-background px-3 text-sm"
+                        disabled={linkingSubject}
+                      >
+                        <option value="">Selecione uma matéria...</option>
+                        {availableSubjects.map((s) => {
+                          const prof = professors.find((p) => p.id === s.professor_id)
+                          const hasProf = !!prof
+                          return (
+                            <option key={s.id} value={s.id} disabled={!hasProf}>
+                              {s.name}{hasProf ? ` — Prof. ${prof!.name.split(" ")[0]}` : " ⚠ Sem professor"}
+                            </option>
+                          )
+                        })}
+                      </select>
+                      {selectedSubjectId && !availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))?.professor_id && (
+                        <p className="text-xs text-destructive">Esta matéria não tem professor atribuído. Vá em CEO → Usuários e vincule um professor a ela.</p>
+                      )}
+                    </>
                   )}
                   <div className="flex gap-2">
-                    <Button size="sm" className="h-7 text-xs gap-1" onClick={linkSubject} disabled={linkingSubject || !selectedSubjectId}>
+                    <Button
+                      size="sm" className="h-7 text-xs gap-1" onClick={linkSubject}
+                      disabled={linkingSubject || !selectedSubjectId || !availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))?.professor_id}
+                    >
                       {linkingSubject && <Loader2 className="h-3 w-3 animate-spin" />} Vincular
                     </Button>
                     <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAddingSubject(false)} disabled={linkingSubject}>Cancelar</Button>
@@ -608,6 +694,8 @@ function NovoCursoForm({ onCreated, onCancel }: {
 // ─── Main Page ────────────────────────────────────────────
 export default function PedagogicaCursosPage() {
   const [courses, setCourses] = useState<CourseWithSubjects[]>([])
+  const [professors, setProfessors] = useState<ApiUser[]>([])
+  const [allGlobalSubjects, setAllGlobalSubjects] = useState<ApiSubject[]>([])
   const [loading, setLoading] = useState(true)
   const [criando, setCriando] = useState(false)
 
@@ -616,6 +704,14 @@ export default function PedagogicaCursosPage() {
       .then((data) => setCourses(data.map((c) => ({ ...c, subjects: [] }))))
       .catch(console.error)
       .finally(() => setLoading(false))
+
+    api.users.list()
+      .then((users) => setProfessors(users.filter((u) => u.role === "professor")))
+      .catch(console.error)
+
+    api.subjects.list()
+      .then(setAllGlobalSubjects)
+      .catch(console.error)
   }, [])
 
   if (loading) {
@@ -682,6 +778,8 @@ export default function PedagogicaCursosPage() {
                 course={course}
                 onDelete={() => setCourses((prev) => prev.filter((c) => c.id !== course.id))}
                 onUpdate={(updated) => setCourses((prev) => prev.map((c) => c.id === course.id ? updated : c))}
+                professors={professors}
+                allGlobalSubjects={allGlobalSubjects}
               />
             ))}
           </div>

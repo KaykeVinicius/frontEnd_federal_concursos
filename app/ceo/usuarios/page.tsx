@@ -39,12 +39,20 @@ export default function CeoUsuariosPage() {
   const [createCommission, setCreateCommission] = useState(10)
   // Matérias selecionadas quando perfil = professor
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<number[]>([])
+  // Nova matéria inline
+  const [newSubjectName, setNewSubjectName] = useState("")
+  const [addingSubject, setAddingSubject] = useState(false)
+  const [savingSubject, setSavingSubject] = useState(false)
 
   useEffect(() => {
-    Promise.all([api.users.list(), api.subjects.list()])
-      .then(([u, s]) => { setUsers(u); setSubjects(s) })
+    api.users.list()
+      .then(setUsers)
       .catch(console.error)
       .finally(() => setLoading(false))
+
+    api.subjects.list()
+      .then(setSubjects)
+      .catch(console.error)
   }, [])
 
   const filteredUsers = useMemo(() => {
@@ -78,6 +86,22 @@ export default function CeoUsuariosPage() {
     setSelectedSubjectIds((prev) =>
       prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
     )
+  }
+
+  async function handleCreateSubject() {
+    if (!newSubjectName.trim()) return
+    setSavingSubject(true)
+    try {
+      const created = await api.subjects.create({ name: newSubjectName.trim() })
+      setSubjects((prev) => [...prev, created])
+      setSelectedSubjectIds((prev) => [...prev, created.id])
+      setNewSubjectName("")
+      setAddingSubject(false)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSavingSubject(false)
+    }
   }
 
   async function handleCreateUser(e: { preventDefault(): void }) {
@@ -138,6 +162,8 @@ export default function CeoUsuariosPage() {
     setCreateCommission(10)
     setSelectedSubjectIds([])
     setCreateError("")
+    setNewSubjectName("")
+    setAddingSubject(false)
   }
 
   const getRoleIcon = (role: string) => {
@@ -510,42 +536,83 @@ export default function CeoUsuariosPage() {
 
               {/* Matérias — professor */}
               {createRole === "professor" && (
-                <div>
-                  <Label className="text-sm font-medium mb-2 block">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">
                     <BookOpen className="h-4 w-4 inline mr-2" />Matérias que vai ministrar
                   </Label>
-                  {subjects.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhuma matéria cadastrada ainda.</p>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto rounded-lg border p-3">
-                      {subjects.map((s) => {
-                        const checked = selectedSubjectIds.includes(s.id)
-                        const hasOtherProfessor = s.professor_id && !selectedSubjectIds.includes(s.id)
+
+                  {/* Select para adicionar matéria existente */}
+                  <div className="flex gap-2">
+                    <select
+                      className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                      defaultValue=""
+                      onChange={(e) => {
+                        const id = parseInt(e.target.value)
+                        if (id && !selectedSubjectIds.includes(id)) {
+                          setSelectedSubjectIds((prev) => [...prev, id])
+                        }
+                        e.target.value = ""
+                      }}
+                    >
+                      <option value="">Selecione uma matéria...</option>
+                      {subjects
+                        .filter((s) => !selectedSubjectIds.includes(s.id))
+                        .map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}{s.professor_id ? " (já tem professor)" : ""}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {/* Matérias já selecionadas */}
+                  {selectedSubjectIds.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedSubjectIds.map((id) => {
+                        const s = subjects.find((s) => s.id === id)
+                        if (!s) return null
                         return (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => toggleSubject(s.id)}
-                            className={`flex items-center gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors ${
-                              checked
-                                ? "border-green-500 bg-green-50 text-green-800"
-                                : "border-gray-200 hover:border-[#e8491d]/40 text-muted-foreground"
-                            }`}
-                          >
-                            <CheckCircle className={`h-3.5 w-3.5 shrink-0 ${checked ? "text-green-600" : "text-gray-300"}`} />
-                            <span className="truncate">{s.name}</span>
-                            {hasOtherProfessor && (
-                              <span className="ml-auto shrink-0 text-[10px] text-orange-500">ocupada</span>
-                            )}
-                          </button>
+                          <span key={id} className="flex items-center gap-1 rounded-full bg-green-50 border border-green-200 px-3 py-1 text-sm text-green-800">
+                            {s.name}
+                            <button type="button" onClick={() => toggleSubject(id)} className="ml-1 text-green-600 hover:text-red-500">
+                              <XCircle className="h-3.5 w-3.5" />
+                            </button>
+                          </span>
                         )
                       })}
                     </div>
                   )}
-                  {selectedSubjectIds.length > 0 && (
-                    <p className="mt-1.5 text-xs text-muted-foreground">
-                      {selectedSubjectIds.length} matéria(s) selecionada(s)
-                    </p>
+
+                  {/* Criar nova matéria inline */}
+                  {addingSubject ? (
+                    <div className="flex gap-2">
+                      <Input
+                        autoFocus
+                        placeholder="Nome da nova matéria"
+                        value={newSubjectName}
+                        onChange={(e) => setNewSubjectName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); handleCreateSubject() }
+                          if (e.key === "Escape") { setAddingSubject(false); setNewSubjectName("") }
+                        }}
+                        disabled={savingSubject}
+                        className="h-8 text-sm"
+                      />
+                      <Button type="button" size="sm" className="h-8 px-3 bg-[#e8491d] hover:bg-[#d13a0f]" onClick={handleCreateSubject} disabled={savingSubject || !newSubjectName.trim()}>
+                        {savingSubject ? <Loader2 className="h-3 w-3 animate-spin" /> : "Criar"}
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" className="h-8 px-2" onClick={() => { setAddingSubject(false); setNewSubjectName("") }}>
+                        <XCircle className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setAddingSubject(true)}
+                      className="flex items-center gap-1 text-xs text-[#e8491d] hover:underline"
+                    >
+                      <Plus className="h-3 w-3" /> Criar nova matéria
+                    </button>
                   )}
                 </div>
               )}

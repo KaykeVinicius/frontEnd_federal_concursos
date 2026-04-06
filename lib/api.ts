@@ -33,6 +33,15 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   })
 
   if (!res.ok) {
+    if (res.status === 401) {
+      // Token expirado ou inválido — limpa sessão e redireciona para login
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("auth_token")
+        localStorage.removeItem("currentUser")
+        window.location.href = "/login"
+      }
+      throw new Error("Sessão expirada. Faça login novamente.")
+    }
     const err = await res.json().catch(() => ({ error: `Erro ${res.status}` }))
     const msg = err.error ?? (Array.isArray(err.errors) ? err.errors.join(", ") : null) ?? `Erro ${res.status}`
     throw new Error(msg)
