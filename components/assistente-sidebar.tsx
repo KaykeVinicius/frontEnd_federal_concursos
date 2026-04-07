@@ -82,22 +82,6 @@ export function AssistenteSidebar() {
         })}
       </nav>
 
-      {/* Footer */}
-      {!collapsed && (
-        <div className="border-t border-sidebar-border p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-primary text-sm font-bold text-sidebar-primary-foreground">
-              A
-            </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-medium">Assistente Comercial</span>
-              <span className="text-xs text-sidebar-foreground/50">
-                assistente@federalcursos.com.br
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 

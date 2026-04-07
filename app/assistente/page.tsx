@@ -1,21 +1,13 @@
 "use client"
 
 import Image from "next/image"
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
-  Users,
-  BookOpen,
-  Layers,
-  CalendarDays,
-  Plus,
-  TrendingUp,
-  TrendingDown,
   Sparkles,
   ShoppingBag,
-  Ticket,
   ChevronRight,
   GraduationCap,
   MapPin,
@@ -23,15 +15,18 @@ import {
   Monitor,
   Building,
   Laptop,
+  Ticket,
+  CalendarDays,
+  DollarSign,
+  Loader2,
+  BookOpen,
   Filter,
-  Sun,
-  Moon,
+  Users,
 } from "lucide-react"
 
 import { RecentEnrollments } from "@/components/recent-enrollments"
 import { NewEnrollmentDialog } from "@/components/new-enrollment-dialog"
 import { EventSaleDialog } from "@/components/event-sale-dialog"
-
 import {
   Carousel,
   CarouselContent,
@@ -39,208 +34,87 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel"
-import React from "react"
 
-// Mock data para cursos disponíveis
-const availableCourses = [
-  {
-    id: 1,
-    title: "Curso Preparatório para Auditor Fiscal",
-    description: "Prepare-se para os principais concursos de auditor fiscal com conteúdo atualizado.",
-    duration: "12 meses",
-    modality: "online",
-    modalityLabel: "Online",
-    modalityIcon: Monitor,
-    location: "Plataforma EAD",
-    schedule: "",
-    price: 297,
-    totalSpots: 50,
-    soldSpots: 28,
-  },
-  {
-    id: 2,
-    title: "Técnico Judiciário - Área Administrativa",
-    description: "Curso completo para tribunais com foco em jurisprudência e legislação.",
-    duration: "8 meses",
-    modality: "presencial",
-    modalityLabel: "Presencial",
-    modalityIcon: Building,
-    location: "Unidade Centro - Sala 302",
-    schedule: "tarde",
-    scheduleLabel: "Tarde (14h às 18h)",
-    price: 197,
-    totalSpots: 40,
-    soldSpots: 32,
-  },
-  {
-    id: 3,
-    title: "Policial Federal - Curso Intensivo",
-    description: "Preparação intensiva para o concurso da Polícia Federal.",
-    duration: "6 meses",
-    modality: "online",
-    modalityLabel: "Online",
-    modalityIcon: Monitor,
-    location: "Plataforma EAD",
-    schedule: "",
-    price: 397,
-    totalSpots: 60,
-    soldSpots: 45,
-  },
-  {
-    id: 4,
-    title: "Controladoria e Auditoria Pública",
-    description: "Curso especializado para carreiras de controle.",
-    duration: "10 meses",
-    modality: "hibrido",
-    modalityLabel: "Híbrido",
-    modalityIcon: Laptop,
-    location: "Unidade Centro e Online",
-    schedule: "",
-    price: 347,
-    totalSpots: 35,
-    soldSpots: 22,
-  },
-  {
-    id: 5,
-    title: "Direito Constitucional Avançado",
-    description: "Aprofundamento em direito constitucional para concursos de alto nível.",
-    duration: "4 meses",
-    modality: "online",
-    modalityLabel: "Online",
-    modalityIcon: Monitor,
-    location: "Plataforma EAD",
-    schedule: "",
-    price: 247,
-    totalSpots: 45,
-    soldSpots: 18,
-  },
-  {
-    id: 6,
-    title: "Direito Administrativo - Turma Noturna",
-    description: "Curso focado em direito administrativo para concursos de nível médio e superior.",
-    duration: "6 meses",
-    modality: "presencial",
-    modalityLabel: "Presencial",
-    modalityIcon: Building,
-    location: "Unidade Sul - Sala 101",
-    schedule: "noite",
-    scheduleLabel: "Noite (19h às 23h)",
-    price: 297,
-    totalSpots: 35,
-    soldSpots: 20,
-  },
-]
+import { api, type ApiCourse, type ApiEvent, type ApiTurma } from "@/lib/api"
 
-// Mock data para eventos disponíveis (apenas online e presencial)
-const availableEvents = [
-  {
-    id: 1,
-    title: "Workshop: Nova Lei de Licitações",
-    description: "Aprenda todas as mudanças da nova lei de licitações e como se preparar para concursos.",
-    date: "15/04/2026",
-    time: "19:00 às 22:00",
-    location: "Presencial - Auditório Principal",
-    price: 297,
-    availableTickets: 50,
-    soldTickets: 23,
-    eventType: "presencial",
-  },
-  {
-    id: 2,
-    title: "Palestra: Carreiras Públicas em Alta",
-    description: "Descubra as carreiras públicas com maior projeção para os próximos anos.",
-    date: "22/04/2026",
-    time: "18:30 às 21:30",
-    location: "Online - Plataforma Zoom",
-    price: 197,
-    availableTickets: 100,
-    soldTickets: 45,
-    eventType: "online",
-  },
-  {
-    id: 3,
-    title: "Simulado Nacional de Conhecimentos",
-    description: "Participe do maior simulado do país e teste seus conhecimentos.",
-    date: "30/04/2026",
-    time: "09:00 às 17:00",
-    location: "Online - Plataforma EAD",
-    price: 97,
-    availableTickets: 200,
-    soldTickets: 89,
-    eventType: "online",
-  },
-  {
-    id: 4,
-    title: "Mentoria: Como se preparar para concursos",
-    description: "Mentoria exclusiva com estratégias de estudo e planejamento.",
-    date: "05/05/2026",
-    time: "19:30 às 21:30",
-    location: "Presencial - Auditório Virtual",
-    price: 149,
-    availableTickets: 30,
-    soldTickets: 12,
-    eventType: "presencial",
-  },
-]
-
-const getModalityColor = (modality: string) => {
-  switch(modality) {
-    case 'online':
-      return 'bg-blue-100 text-blue-700 border-blue-200'
-    case 'presencial':
-      return 'bg-green-100 text-green-700 border-green-200'
-    case 'hibrido':
-      return 'bg-purple-100 text-purple-700 border-purple-200'
-    default:
-      return 'bg-gray-100 text-gray-700 border-gray-200'
-  }
+const accessColor: Record<string, string> = {
+  online:    "bg-blue-100 text-blue-700 border-blue-200",
+  presencial:"bg-green-100 text-green-700 border-green-200",
+  hibrido:   "bg-purple-100 text-purple-700 border-purple-200",
 }
 
-const getEventTypeColor = (eventType: string) => {
-  if (eventType === 'online') {
-    return 'bg-blue-100 text-blue-700 border-blue-200'
-  }
-  return 'bg-green-100 text-green-700 border-green-200'
+const accessLabel: Record<string, string> = {
+  online:    "Online",
+  presencial:"Presencial",
+  hibrido:   "Híbrido",
+}
+
+const AccessIcon: Record<string, React.ElementType> = {
+  online:    Monitor,
+  presencial:Building,
+  hibrido:   Laptop,
+}
+
+const eventTypeColor: Record<string, string> = {
+  online:    "bg-blue-100 text-blue-700 border-blue-200",
+  presencial:"bg-green-100 text-green-700 border-green-200",
 }
 
 export default function AssistenteDashboardPage() {
+  const [courses, setCourses]               = useState<ApiCourse[]>([])
+  const [events, setEvents]                 = useState<ApiEvent[]>([])
+  const [turmas, setTurmas]                 = useState<ApiTurma[]>([])
+  const [loading, setLoading]               = useState(true)
   const [showEnrollmentModal, setShowEnrollmentModal] = useState(false)
-  const [showEventSaleModal, setShowEventSaleModal] = useState(false)
-  const [courseFilter, setCourseFilter] = useState<string>("all")
-  const [eventFilter, setEventFilter] = useState<string>("all")
+  const [showEventSaleModal, setShowEventSaleModal]   = useState(false)
+  const [courseFilter, setCourseFilter]     = useState("all")
 
-  // Filtrando cursos por modalidade (separado dos eventos)
-  const filteredCourses = courseFilter === "all" 
-    ? availableCourses 
-    : availableCourses.filter(course => course.modality === courseFilter)
+  useEffect(() => {
+    Promise.all([api.courses.list(), api.events.list(), api.turmas.list()])
+      .then(([c, e, t]) => { setCourses(c); setEvents(e); setTurmas(t) })
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
 
-  // Filtrando eventos (apenas online/presencial)
-  const filteredEvents = eventFilter === "all" 
-    ? availableEvents 
-    : availableEvents.filter(event => event.eventType === eventFilter)
-
-  // Combinando cursos e eventos para o carrossel
-  const carouselItems = [
-    ...filteredCourses.map(course => ({ type: 'course' as const, data: course })),
-    ...filteredEvents.map(event => ({ type: 'event' as const, data: event }))
+  const MODALITIES = [
+    { value: "all",        label: "Todos",      Icon: BookOpen  },
+    { value: "online",     label: "Online",     Icon: Monitor   },
+    { value: "presencial", label: "Presencial", Icon: Building  },
+    { value: "hibrido",    label: "Híbrido",    Icon: Laptop    },
   ]
 
-  const getModalityIcon = (modality: string) => {
-    switch(modality) {
-      case 'online':
-        return Monitor
-      case 'presencial':
-        return Building
-      case 'hibrido':
-        return Laptop
-      default:
-        return Monitor
-    }
-  }
+  const filteredCourses = useMemo(() =>
+    courseFilter === "all"
+      ? courses
+      : courses.filter((c) => (c.access_type ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === courseFilter),
+  [courses, courseFilter])
+
+  const activeEvents = useMemo(() => events, [events])
+
+  const carouselItems = useMemo(() => [
+    ...filteredCourses.map((c) => ({ type: "course" as const, data: c })),
+    ...activeEvents.map((e) => ({ type: "event" as const, data: e })),
+  ], [filteredCourses, activeEvents])
+
+  // Adapter para o EventSaleDialog que ainda espera o shape antigo
+  const eventsForDialog = useMemo(() =>
+    activeEvents.map((e) => ({
+      id: e.id,
+      title: e.title,
+      description: e.description,
+      date: e.date,
+      time: e.start_time && e.end_time ? `${e.start_time} às ${e.end_time}` : e.start_time ?? "",
+      location: e.location,
+      price: 0,
+      availableTickets: 0,
+      soldTickets: 0,
+      eventType: e.event_type,
+    })),
+  [activeEvents])
 
   return (
-    <div className="h-full overflow-hidden">
-      <div className="relative p-4 lg:p-6 max-w-full h-full flex flex-col">
+    <div>
+      <div className="relative p-4 lg:p-6 max-w-full">
         {/* Background watermark */}
         <div className="pointer-events-none fixed inset-0 flex items-center justify-center opacity-[0.04]">
           <Image
@@ -254,9 +128,9 @@ export default function AssistenteDashboardPage() {
           />
         </div>
 
-        <div className="relative z-10 flex-1 flex flex-col space-y-4 min-h-0">
-          {/* CARROSSEL UNIFICADO COM FILTROS */}
-          <Card className="h-96 flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl">
+        <div className="relative z-10 space-y-4">
+          {/* CARROSSEL */}
+          <Card className="flex flex-col overflow-hidden transition-all duration-300 hover:shadow-xl">
             <CardHeader className="border-b border-gray-100 pb-4 flex-shrink-0">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
@@ -265,11 +139,11 @@ export default function AssistenteDashboardPage() {
                     Oportunidades Disponíveis
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Cursos e eventos disponíveis para matrícula e venda
+                    Cursos e eventos ativos para matrícula e venda
                   </p>
                 </div>
-                <div className="flex gap-2">
-                  <Button 
+                <div className="flex gap-2 flex-wrap">
+                  <Button
                     onClick={() => setShowEnrollmentModal(true)}
                     size="sm"
                     className="gap-2 bg-[#e8491d] hover:bg-[#d43d15] text-white shadow-md hover:shadow-lg transition-all duration-300 cursor-pointer"
@@ -277,7 +151,7 @@ export default function AssistenteDashboardPage() {
                     <GraduationCap className="h-4 w-4" />
                     Matricular em Curso
                   </Button>
-                  <Button 
+                  <Button
                     onClick={() => setShowEventSaleModal(true)}
                     size="sm"
                     className="gap-2 bg-[#e8491d] hover:bg-[#d43d15] text-white shadow-md hover:shadow-lg transition-all duration-300 cursor-pointer"
@@ -288,371 +162,352 @@ export default function AssistenteDashboardPage() {
                 </div>
               </div>
 
-              {/* Filtros apenas para Cursos */}
-              <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-gray-100">
-                <span className="text-xs text-gray-500 mr-2">Filtrar cursos:</span>
-                <Badge 
-                  variant={courseFilter === "all" ? "default" : "outline"}
-                  className={`cursor-pointer transition-all text-xs ${courseFilter === "all" ? "bg-[#e8491d] hover:bg-[#d43d15]" : "hover:bg-gray-100"}`}
-                  onClick={() => setCourseFilter("all")}
-                >
-                  Todos
-                </Badge>
-                <Badge 
-                  variant={courseFilter === "online" ? "default" : "outline"}
-                  className={`cursor-pointer transition-all text-xs ${courseFilter === "online" ? "bg-[#e8491d] hover:bg-[#d43d15]" : "hover:bg-gray-100"}`}
-                  onClick={() => setCourseFilter("online")}
-                >
-                  <Monitor className="h-3 w-3 mr-1" />
-                  Online
-                </Badge>
-                <Badge 
-                  variant={courseFilter === "presencial" ? "default" : "outline"}
-                  className={`cursor-pointer transition-all text-xs ${courseFilter === "presencial" ? "bg-[#e8491d] hover:bg-[#d43d15]" : "hover:bg-gray-100"}`}
-                  onClick={() => setCourseFilter("presencial")}
-                >
-                  <Building className="h-3 w-3 mr-1" />
-                  Presencial
-                </Badge>
-                <Badge 
-                  variant={courseFilter === "hibrido" ? "default" : "outline"}
-                  className={`cursor-pointer transition-all text-xs ${courseFilter === "hibrido" ? "bg-[#e8491d] hover:bg-[#d43d15]" : "hover:bg-gray-100"}`}
-                  onClick={() => setCourseFilter("hibrido")}
-                >
-                  <Laptop className="h-3 w-3 mr-1" />
-                  Híbrido
-                </Badge>
+              {/* Filtros de modalidade */}
+              <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-gray-100 items-center">
+                <span className="text-xs text-gray-500 flex items-center gap-1">
+                  <Filter className="h-3 w-3" /> Modalidade:
+                </span>
+                {MODALITIES.map(({ value, label, Icon }) => (
+                  <Badge
+                    key={value}
+                    variant={courseFilter === value ? "default" : "outline"}
+                    className={`cursor-pointer transition-all text-xs gap-1 ${
+                      courseFilter === value ? "bg-[#e8491d] hover:bg-[#d43d15]" : "hover:bg-gray-100"
+                    }`}
+                    onClick={() => setCourseFilter(value)}
+                  >
+                    <Icon className="h-3 w-3" />
+                    {label}
+                  </Badge>
+                ))}
               </div>
             </CardHeader>
-            <CardContent className="overflow-y-auto h-72 pt-4">
-              {carouselItems.length > 0 ? (
-                <Carousel
-                  opts={{
-                    align: "start",
-                    loop: true,
-                  }}
-                  className="w-full max-w-full"
-                >
+
+            <CardContent className="pt-4">
+              {loading ? (
+                <div className="flex justify-center py-10">
+                  <Loader2 className="h-6 w-6 animate-spin text-[#e8491d]" />
+                </div>
+              ) : carouselItems.length > 0 ? (
+                <Carousel opts={{ align: "start", loop: true }} className="w-full">
                   <CarouselContent className="-ml-2 md:-ml-4">
                     {carouselItems.map((item, index) => (
-                      <CarouselItem key={index} className="pl-2 md:pl-4 basis-[90%] sm:basis-[45%] md:basis-[32%] lg:basis-[24%] xl:basis-[19%]">
-                        {item.type === 'course' ? (
-                          // Card de Curso
-                          <div className="group relative overflow-hidden rounded-xl border-2 border-gray-200 bg-white p-4 transition-all duration-300 hover:border-[#e8491d] hover:shadow-xl hover:-translate-y-1 cursor-pointer h-full">
-                            <div className="absolute inset-0 bg-gradient-to-br from-[#e8491d]/5 to-[#e8491d]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                            <div className="relative h-full flex flex-col">
-                              <div className="flex items-start justify-between mb-2">
-                                <div className="rounded-lg bg-orange-50 p-1.5">
-                                  <GraduationCap className="h-4 w-4 text-[#e8491d]" />
-                                </div>
-                                <Badge className={`text-xs ${getModalityColor(item.data.modality)}`}>
-                                  {React.createElement(getModalityIcon(item.data.modality), { className: "h-3 w-3 mr-1" })}
-                                  {item.data.modalityLabel}
-                                </Badge>
-                              </div>
-                              <h3 className="font-semibold text-gray-900 mb-1 text-sm line-clamp-2">{item.data.title}</h3>
-                              <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {item.data.duration}
-                              </p>
-                              <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
-                                <MapPin className="h-3 w-3" />
-                                {item.data.location}
-                              </p>
-                              {item.data.modality === "presencial" && item.data.schedule && (
-                                <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
-                                  {item.data.schedule === "tarde" ? (
-                                    <Sun className="h-3 w-3 text-yellow-500" />
-                                  ) : (
-                                    <Moon className="h-3 w-3 text-blue-500" />
-                                  )}
-                                  {item.data.scheduleLabel}
-                                </p>
-                              )}
-                              <p className="text-xs text-gray-400 mb-2 line-clamp-2">{item.data.description}</p>
-                              <div className="mt-auto">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-xs text-gray-500">
-                                    Vagas: {item.data.totalSpots - item.data.soldSpots}
-                                  </span>
-                                  <span className="text-xs font-medium text-green-600">
-                                    {item.data.soldSpots} vendidas
-                                  </span>
-                                </div>
-                                <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2 overflow-hidden">
-                                  <div className="flex h-full">
-                                    <div 
-                                      className="bg-green-500 h-full transition-all duration-500"
-                                      style={{ width: `${(item.data.soldSpots / item.data.totalSpots) * 100}%` }}
-                                    />
-                                    <div 
-                                      className="bg-[#e8491d] h-full transition-all duration-500"
-                                      style={{ width: `${((item.data.totalSpots - item.data.soldSpots) / item.data.totalSpots) * 100}%` }}
-                                    />
-                                  </div>
-                                </div>
-                                <div className="flex items-center justify-between mt-2">
-                                  <div>
-                                    <span className="text-xl font-bold text-[#e8491d]">
-                                      R$ {item.data.price.toFixed(2)}
-                                    </span>
-                                    <p className="text-xs text-gray-500">à vista</p>
-                                  </div>
-                                  <Button 
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setShowEnrollmentModal(true)
-                                    }}
-                                    className="bg-[#e8491d] hover:bg-[#d43d15] text-white cursor-pointer shadow-md hover:shadow-lg transition-all text-xs h-8"
-                                  >
-                                    Matricular
-                                    <ChevronRight className="ml-1 h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                      <CarouselItem
+                        key={index}
+                        className="pl-2 md:pl-4 basis-[88%] sm:basis-[46%] md:basis-[32%] lg:basis-[24%] xl:basis-[20%]"
+                      >
+                        {item.type === "course" ? (
+                          <CourseCard
+                            course={item.data}
+                            onEnroll={() => setShowEnrollmentModal(true)}
+                          />
                         ) : (
-                          // Card de Evento
-                          <div className="group relative overflow-hidden rounded-xl border-2 border-gray-200 bg-white p-4 transition-all duration-300 hover:border-[#e8491d] hover:shadow-xl hover:-translate-y-1 cursor-pointer h-full">
-                            <div className="absolute inset-0 bg-gradient-to-br from-[#e8491d]/5 to-[#e8491d]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                            <div className="relative h-full flex flex-col">
-                              <div className="flex items-start justify-between mb-2">
-                                <div className="rounded-lg bg-orange-50 p-1.5">
-                                  <Ticket className="h-4 w-4 text-[#e8491d]" />
-                                </div>
-                                <Badge className={getEventTypeColor(item.data.eventType)}>
-                                  {item.data.eventType === "online" ? (
-                                    <Monitor className="h-3 w-3 mr-1" />
-                                  ) : (
-                                    <Building className="h-3 w-3 mr-1" />
-                                  )}
-                                  {item.data.eventType === "online" ? "Online" : "Presencial"}
-                                </Badge>
-                              </div>
-                              <h3 className="font-semibold text-gray-900 mb-1 text-sm line-clamp-2">{item.data.title}</h3>
-                              <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
-                                <CalendarDays className="h-3 w-3" />
-                                {item.data.date} • {item.data.time}
-                              </p>
-                              <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
-                                <MapPin className="h-3 w-3" />
-                                {item.data.location}
-                              </p>
-                              <p className="text-xs text-gray-400 mb-2 line-clamp-2">{item.data.description}</p>
-                              <div className="mt-auto">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-xs text-gray-500">
-                                    Ingressos: {item.data.availableTickets - item.data.soldTickets}
-                                  </span>
-                                  <span className="text-xs font-medium text-green-600">
-                                    {item.data.soldTickets} vendidos
-                                  </span>
-                                </div>
-                                <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2 overflow-hidden">
-                                  <div className="flex h-full">
-                                    <div 
-                                      className="bg-green-500 h-full transition-all duration-500"
-                                      style={{ width: `${(item.data.soldTickets / item.data.availableTickets) * 100}%` }}
-                                    />
-                                    <div 
-                                      className="bg-[#e8491d] h-full transition-all duration-500"
-                                      style={{ width: `${((item.data.availableTickets - item.data.soldTickets) / item.data.availableTickets) * 100}%` }}
-                                    />
-                                  </div>
-                                </div>
-                                <div className="flex items-center justify-between mt-2">
-                                  <div>
-                                    <span className="text-xl font-bold text-[#e8491d]">
-                                      R$ {item.data.price.toFixed(2)}
-                                    </span>
-                                    <p className="text-xs text-gray-500">por pessoa</p>
-                                  </div>
-                                  <Button 
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setShowEventSaleModal(true)
-                                    }}
-                                    className="bg-[#e8491d] hover:bg-[#d43d15] text-white cursor-pointer shadow-md hover:shadow-lg transition-all text-xs h-8"
-                                  >
-                                    Vender
-                                    <ChevronRight className="ml-1 h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                          <EventCard
+                            event={item.data}
+                            onSell={() => setShowEventSaleModal(true)}
+                          />
                         )}
                       </CarouselItem>
                     ))}
                   </CarouselContent>
-                  <CarouselPrevious className="absolute left-4 bg-white shadow-md hover:bg-[#e8491d] hover:text-white transition-all cursor-pointer h-8 w-8 z-10" />
-                  <CarouselNext className="absolute right-4 bg-white shadow-md hover:bg-[#e8491d] hover:text-white transition-all cursor-pointer h-8 w-8 z-10" />
+                  <CarouselPrevious className="absolute left-2 bg-white shadow-md hover:bg-[#e8491d] hover:text-white transition-all cursor-pointer h-8 w-8 z-10" />
+                  <CarouselNext className="absolute right-2 bg-white shadow-md hover:bg-[#e8491d] hover:text-white transition-all cursor-pointer h-8 w-8 z-10" />
                 </Carousel>
               ) : (
-                <div className="text-center py-8">
-                  <p className="text-gray-500 text-sm">Nenhum item encontrado com o filtro selecionado</p>
+                <div className="text-center py-10 text-gray-400">
+                  <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-40" />
+                  <p className="text-sm">Nenhum item encontrado com o filtro selecionado</p>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* GRÁFICOS DE VAGAS COM FILTROS - FORA DO SCROLL */}
+          {/* GRÁFICOS DE VAGAS */}
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card className="overflow-hidden transition-all duration-300 hover:shadow-xl">
+            {/* Vagas por turma */}
+            <Card className="overflow-hidden">
               <CardHeader className="border-b border-gray-100 pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <GraduationCap className="h-5 w-5 text-[#e8491d]" />
-                    Vagas em Cursos
+                    <Users className="h-5 w-5 text-[#e8491d]" />
+                    Vagas por Turma
                   </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-3 w-3 text-gray-400" />
-                    <select
-                      value={courseFilter}
-                      onChange={(e) => setCourseFilter(e.target.value)}
-                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 cursor-pointer hover:border-[#e8491d] transition-colors"
-                    >
-                      <option value="all">Todos os cursos</option>
-                      <option value="online">Apenas Online</option>
-                      <option value="presencial">Apenas Presencial</option>
-                      <option value="hibrido">Apenas Híbrido</option>
-                    </select>
-                  </div>
+                  <span className="text-xs text-muted-foreground">{turmas.length} turma(s)</span>
                 </div>
               </CardHeader>
-              <CardContent className="pt-3">
-                <div className="space-y-3">
-                  {filteredCourses.map((course) => {
-                    const availableSpots = course.totalSpots - course.soldSpots
-                    const soldPercentage = (course.soldSpots / course.totalSpots) * 100
-                    const availablePercentage = (availableSpots / course.totalSpots) * 100
-                    return (
-                      <div key={course.id} className="space-y-1">
-                        <div className="flex justify-between items-center">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-1 flex-wrap">
-                              <span className="font-medium text-gray-700 text-xs">{course.title}</span>
-                              <Badge className={`text-xs ${getModalityColor(course.modality)}`}>
-                                {course.modalityLabel}
-                              </Badge>
+              <CardContent className="pt-4">
+                {loading ? (
+                  <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-[#e8491d]" /></div>
+                ) : turmas.length === 0 ? (
+                  <p className="text-sm text-center text-muted-foreground py-6">Nenhuma turma cadastrada</p>
+                ) : (
+                  <div className="space-y-4">
+                    {turmas.map((turma) => {
+                      const available = turma.max_students - turma.enrolled_count
+                      const soldPct = turma.max_students > 0 ? (turma.enrolled_count / turma.max_students) * 100 : 0
+                      return (
+                        <div key={turma.id} className="space-y-1">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1 min-w-0 pr-3">
+                              <p className="text-xs font-semibold text-gray-700 line-clamp-1">{turma.name}</p>
+                              <p className="text-[11px] text-muted-foreground">{turma.course?.title ?? `Curso #${turma.course_id}`}</p>
                             </div>
-                            <p className="text-xs text-gray-500 mt-0.5">{course.location}</p>
+                            <div className="text-right flex-shrink-0">
+                              <span className="text-xs font-bold text-green-600">{turma.enrolled_count}</span>
+                              <span className="text-xs text-gray-400"> / {turma.max_students}</span>
+                              <p className="text-[11px] text-muted-foreground">{available} disponíveis</p>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <span className="text-xs font-semibold text-green-600">{course.soldSpots}</span>
-                            <span className="text-xs text-gray-400"> / {course.totalSpots}</span>
-                            <p className="text-xs text-gray-500">{availableSpots} vagas</p>
-                          </div>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                          <div className="flex h-full">
-                            <div 
-                              className="bg-green-500 h-full transition-all duration-500"
-                              style={{ width: `${soldPercentage}%` }}
-                            />
-                            <div 
-                              className="bg-[#e8491d] h-full transition-all duration-500"
-                              style={{ width: `${availablePercentage}%` }}
+                          <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                            <div
+                              className="bg-gradient-to-r from-[#e8491d] to-[#f97316] h-full rounded-full transition-all duration-500"
+                              style={{ width: `${soldPct}%` }}
                             />
                           </div>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-[#e8491d] font-medium">{Math.round(soldPct)}% ocupado</span>
+                            <span className="text-gray-400">{available} vagas livres</span>
+                          </div>
                         </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-green-600">✓ {course.soldSpots} vendidas</span>
-                          <span className="text-[#e8491d]">○ {availableSpots} disponíveis</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                      )
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            <Card className="overflow-hidden transition-all duration-300 hover:shadow-xl">
+            {/* Eventos */}
+            <Card className="overflow-hidden">
               <CardHeader className="border-b border-gray-100 pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <Ticket className="h-5 w-5 text-[#e8491d]" />
-                    Ingressos para Eventos
+                    <Ticket className="h-5 w-5 text-violet-500" />
+                    Eventos Disponíveis
                   </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-3 w-3 text-gray-400" />
-                    <select
-                      value={eventFilter}
-                      onChange={(e) => setEventFilter(e.target.value)}
-                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 cursor-pointer hover:border-[#e8491d] transition-colors"
-                    >
-                      <option value="all">Todos os eventos</option>
-                      <option value="online">Apenas Online</option>
-                      <option value="presencial">Apenas Presencial</option>
-                    </select>
-                  </div>
+                  <span className="text-xs text-muted-foreground">{events.length} evento(s)</span>
                 </div>
               </CardHeader>
-              <CardContent className="pt-3">
-                <div className="space-y-3">
-                  {filteredEvents.map((event) => {
-                    const availableTickets = event.availableTickets - event.soldTickets
-                    const soldPercentage = (event.soldTickets / event.availableTickets) * 100
-                    const availablePercentage = (availableTickets / event.availableTickets) * 100
-                    return (
-                      <div key={event.id} className="space-y-1">
-                        <div className="flex justify-between items-center">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-1 flex-wrap">
-                              <span className="font-medium text-gray-700 text-xs">{event.title}</span>
-                              <Badge className={getEventTypeColor(event.eventType)}>
-                                {event.eventType === "online" ? "Online" : "Presencial"}
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-0.5">{event.date} • {event.location}</p>
+              <CardContent className="pt-4">
+                {loading ? (
+                  <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-violet-500" /></div>
+                ) : events.length === 0 ? (
+                  <p className="text-sm text-center text-muted-foreground py-6">Nenhum evento cadastrado</p>
+                ) : (
+                  <div className="space-y-3">
+                    {events.map((event) => {
+                      const TypeIcon = event.event_type === "online" ? Monitor : Building
+                      return (
+                        <div key={event.id} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 hover:bg-violet-50 transition-colors">
+                          <div className="rounded-lg bg-violet-100 p-2 flex-shrink-0">
+                            <TypeIcon className="h-4 w-4 text-violet-600" />
                           </div>
-                          <div className="text-right">
-                            <span className="text-xs font-semibold text-green-600">{event.soldTickets}</span>
-                            <span className="text-xs text-gray-400"> / {event.availableTickets}</span>
-                            <p className="text-xs text-gray-500">{availableTickets} ingressos</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-gray-800 line-clamp-1">{event.title}</p>
+                            {event.date && (
+                              <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                                <CalendarDays className="h-3 w-3" />
+                                {event.date}{event.start_time ? ` · ${event.start_time}` : ""}
+                              </p>
+                            )}
+                            {event.location && (
+                              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                <MapPin className="h-3 w-3" />
+                                {event.location}
+                              </p>
+                            )}
                           </div>
+                          <Button
+                            size="sm"
+                            onClick={() => setShowEventSaleModal(true)}
+                            className="bg-violet-500 hover:bg-violet-600 text-white text-xs h-7 rounded-lg flex-shrink-0"
+                          >
+                            Vender
+                          </Button>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                          <div className="flex h-full">
-                            <div 
-                              className="bg-green-500 h-full transition-all duration-500"
-                              style={{ width: `${soldPercentage}%` }}
-                            />
-                            <div 
-                              className="bg-[#e8491d] h-full transition-all duration-500"
-                              style={{ width: `${availablePercentage}%` }}
-                            />
-                          </div>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-green-600">✓ {event.soldTickets} vendidos</span>
-                          <span className="text-[#e8491d]">○ {availableTickets} disponíveis</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                      )
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
 
-          {/* MINHAS MATRÍCULAS RECENTES */}
+          {/* MATRÍCULAS RECENTES */}
           <RecentEnrollments />
         </div>
 
         {/* Modals */}
-        <NewEnrollmentDialog 
-          open={showEnrollmentModal} 
-          onOpenChange={setShowEnrollmentModal} 
+        <NewEnrollmentDialog
+          open={showEnrollmentModal}
+          onOpenChange={setShowEnrollmentModal}
         />
-        <EventSaleDialog 
-          open={showEventSaleModal} 
+        <EventSaleDialog
+          open={showEventSaleModal}
           onOpenChange={setShowEventSaleModal}
-          events={availableEvents}
+          events={eventsForDialog}
         />
+      </div>
+    </div>
+  )
+}
+
+// ─── Sub-componentes de card ───────────────────────────────
+
+function CourseCard({ course, onEnroll }: { course: ApiCourse; onEnroll: () => void }) {
+  const Icon = AccessIcon[course.access_type] ?? Monitor
+  const color = accessColor[course.access_type] ?? "bg-gray-100 text-gray-600"
+  const label = accessLabel[course.access_type] ?? course.access_type
+
+  return (
+    <div className="group relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer h-full flex flex-col">
+      {/* Faixa superior colorida */}
+      <div className="h-1.5 w-full bg-gradient-to-r from-[#e8491d] to-[#f97316] rounded-t-2xl" />
+
+      <div className="flex flex-col flex-1 p-4">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="rounded-xl bg-gradient-to-br from-[#e8491d] to-[#f97316] p-2 flex-shrink-0 shadow-sm">
+              <GraduationCap className="h-4 w-4 text-white" />
+            </div>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#e8491d]">Curso</span>
+          </div>
+          <Badge className={`text-[10px] gap-1 flex-shrink-0 border font-medium ${color}`}>
+            <Icon className="h-3 w-3" />
+            {label}
+          </Badge>
+        </div>
+
+        {/* Título */}
+        <h3 className="font-bold text-gray-900 text-sm leading-snug line-clamp-2 mb-1">{course.title}</h3>
+
+        {/* Carreira */}
+        {course.career?.name && (
+          <p className="text-[11px] font-medium text-[#e8491d]/80 mb-3 flex items-center gap-1">
+            <BookOpen className="h-3 w-3" />
+            {course.career.name}
+          </p>
+        )}
+
+        {/* Separador */}
+        <div className="border-t border-dashed border-gray-100 my-2" />
+
+        {/* Detalhes */}
+        <div className="space-y-1.5 mb-3">
+          {course.duration_in_days > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-md bg-orange-50 flex items-center justify-center flex-shrink-0">
+                <Clock className="h-3 w-3 text-[#e8491d]" />
+              </div>
+              <span className="text-xs text-gray-600">{course.duration_in_days} dias de acesso</span>
+            </div>
+          )}
+          {course.start_date && (
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-md bg-orange-50 flex items-center justify-center flex-shrink-0">
+                <CalendarDays className="h-3 w-3 text-[#e8491d]" />
+              </div>
+              <span className="text-xs text-gray-600">Início: {course.start_date}</span>
+            </div>
+          )}
+        </div>
+
+        {course.description && (
+          <p className="text-[11px] text-gray-400 line-clamp-2 mb-3 leading-relaxed">{course.description}</p>
+        )}
+
+        {/* Rodapé */}
+        <div className="mt-auto pt-3 border-t border-gray-100 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] text-gray-400 uppercase tracking-wide">Valor</p>
+            <span className="text-xl font-extrabold text-gray-900 leading-none">
+              R$ {Number(course.price).toFixed(2)}
+            </span>
+          </div>
+          <Button
+            size="sm"
+            onClick={(e) => { e.stopPropagation(); onEnroll() }}
+            className="bg-gradient-to-r from-[#e8491d] to-[#f97316] hover:from-[#d43d15] hover:to-[#e8491d] text-white text-xs h-8 rounded-xl shadow hover:shadow-md transition-all font-semibold"
+          >
+            Matricular
+            <ChevronRight className="ml-1 h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EventCard({ event, onSell }: { event: ApiEvent; onSell: () => void }) {
+  const color = eventTypeColor[event.event_type] ?? "bg-gray-100 text-gray-600"
+  const typeLabel = event.event_type === "online" ? "Online" : "Presencial"
+  const TypeIcon = event.event_type === "online" ? Monitor : Building
+
+  return (
+    <div className="group relative overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer h-full flex flex-col">
+      {/* Faixa superior — roxo para eventos */}
+      <div className="h-1.5 w-full bg-gradient-to-r from-violet-500 to-purple-400 rounded-t-2xl" />
+
+      <div className="flex flex-col flex-1 p-4">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="rounded-xl bg-gradient-to-br from-violet-500 to-purple-400 p-2 flex-shrink-0 shadow-sm">
+              <Ticket className="h-4 w-4 text-white" />
+            </div>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-violet-600">Evento</span>
+          </div>
+          <Badge className={`text-[10px] gap-1 flex-shrink-0 border font-medium ${color}`}>
+            <TypeIcon className="h-3 w-3" />
+            {typeLabel}
+          </Badge>
+        </div>
+
+        {/* Título */}
+        <h3 className="font-bold text-gray-900 text-sm leading-snug line-clamp-2 mb-3">{event.title}</h3>
+
+        {/* Separador */}
+        <div className="border-t border-dashed border-gray-100 my-2" />
+
+        {/* Detalhes */}
+        <div className="space-y-1.5 mb-3">
+          {event.date && (
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-md bg-violet-50 flex items-center justify-center flex-shrink-0">
+                <CalendarDays className="h-3 w-3 text-violet-500" />
+              </div>
+              <span className="text-xs text-gray-600">
+                {event.date}
+                {event.start_time && ` · ${event.start_time}`}
+                {event.end_time && ` às ${event.end_time}`}
+              </span>
+            </div>
+          )}
+          {event.location && (
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-md bg-violet-50 flex items-center justify-center flex-shrink-0">
+                <MapPin className="h-3 w-3 text-violet-500" />
+              </div>
+              <span className="text-xs text-gray-600 line-clamp-1">{event.location}</span>
+            </div>
+          )}
+        </div>
+
+        {event.description && (
+          <p className="text-[11px] text-gray-400 line-clamp-2 mb-3 leading-relaxed">{event.description}</p>
+        )}
+
+        {/* Rodapé */}
+        <div className="mt-auto pt-3 border-t border-gray-100 flex items-center justify-end">
+          <Button
+            size="sm"
+            onClick={(e) => { e.stopPropagation(); onSell() }}
+            className="bg-gradient-to-r from-violet-500 to-purple-400 hover:from-violet-600 hover:to-purple-500 text-white text-xs h-8 rounded-xl shadow hover:shadow-md transition-all font-semibold"
+          >
+            Vender ingresso
+            <ChevronRight className="ml-1 h-3 w-3" />
+          </Button>
+        </div>
       </div>
     </div>
   )

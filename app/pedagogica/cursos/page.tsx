@@ -590,7 +590,7 @@ function NovoCursoForm({ onCreated, onCancel }: {
   const [careerId, setCareerId] = useState("")
   const [careers, setCareers] = useState<import("@/lib/api").ApiCareer[]>([])
   const [status, setStatus] = useState<"draft" | "published">("draft")
-  const [accessType, setAccessType] = useState<"interno" | "externo" | "ambos">("ambos")
+  const [accessType, setAccessType] = useState<"online" | "presencial" | "hibrido">("online")
   const [durationDays, setDurationDays] = useState("")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
@@ -668,12 +668,12 @@ function NovoCursoForm({ onCreated, onCancel }: {
           </select>
         </div>
         <div className="space-y-1">
-          <Label className="text-xs flex items-center gap-1"><Globe className="h-3 w-3" /> Acesso</Label>
-          <select value={accessType} onChange={(e) => setAccessType(e.target.value as "interno" | "externo" | "ambos")}
+          <Label className="text-xs flex items-center gap-1"><Globe className="h-3 w-3" /> Modalidade</Label>
+          <select value={accessType} onChange={(e) => setAccessType(e.target.value as "online" | "presencial" | "hibrido")}
             className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" disabled={saving}>
-            <option value="ambos">Interno e Externo</option>
-            <option value="interno">Apenas Interno</option>
-            <option value="externo">Apenas Externo</option>
+            <option value="online">Online</option>
+            <option value="presencial">Presencial</option>
+            <option value="hibrido">Híbrido</option>
           </select>
         </div>
       </div>
