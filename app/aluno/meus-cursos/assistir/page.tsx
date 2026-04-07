@@ -548,6 +548,31 @@ function AssistirInner() {
   const [duvidaEnviada, setDuvidaEnviada] = useState(false)
   const [minhasDuvidas, setMinhasDuvidas] = useState<ApiQuestion[]>([])
   const [sendingDuvida, setSendingDuvida] = useState(false)
+  const [pdfOpening, setPdfOpening] = useState<number | null>(null)
+
+  const openProtectedPdf = async (pdfId: number, pdfName: string) => {
+    setPdfOpening(pdfId)
+    try {
+      const token = localStorage.getItem("auth_token")
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/aluno/lesson_pdfs/${pdfId}/download`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error ?? "Erro ao abrir o material.")
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      window.open(url, "_blank")
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
+    } catch {
+      alert("Erro de conexão ao abrir o material.")
+    } finally {
+      setPdfOpening(null)
+    }
+  }
 
   useEffect(() => {
     const stored = localStorage.getItem("currentUser")
@@ -880,10 +905,16 @@ function AssistirInner() {
                               </div>
                             </div>
                             {pdf.file_url ? (
-                              <a href={pdf.file_url} target="_blank" rel="noopener noreferrer"
-                                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-400 transition-all hover:border-primary hover:bg-primary/10 hover:text-primary">
-                                <FileText className="h-3.5 w-3.5" /> Abrir
-                              </a>
+                              <button
+                                onClick={() => openProtectedPdf(pdf.id, pdf.name)}
+                                disabled={pdfOpening === pdf.id}
+                                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-400 transition-all hover:border-primary hover:bg-primary/10 hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {pdfOpening === pdf.id
+                                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  : <FileText className="h-3.5 w-3.5" />}
+                                {pdfOpening === pdf.id ? "Abrindo..." : "Abrir"}
+                              </button>
                             ) : (
                               <span className="flex shrink-0 items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-600 opacity-40 cursor-not-allowed">
                                 <Download className="h-3.5 w-3.5" /> Indisponível
@@ -1034,6 +1065,7 @@ function AssistirInner() {
         </aside>
 
       </div>
+
     </div>
   )
 }

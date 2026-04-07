@@ -11,6 +11,10 @@ export const metadata: Metadata = {
   title: 'Federal Cursos - Sistema de Gestao',
   description: 'Sistema administrativo Federal Cursos - Concursos Publicos, CFC e OAB',
   generator: 'v0.app',
+  icons: {
+    icon: '/images/tigre_proporcional.png',
+    apple: '/images/tigre_proporcional.png',
+  },
 }
 
 export default function RootLayout({
