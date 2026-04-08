@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
@@ -9,7 +10,6 @@ import {
   CalendarDays,
   Menu,
   X,
-  ChevronLeft,
   Settings,
   Briefcase,
   FileText,
@@ -41,15 +41,31 @@ export function PedagogicaSidebar() {
     >
       {/* Header */}
       <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
-        {!collapsed && (
-          <span className="text-sm font-bold">Equipe Pedagógica</span>
+        {collapsed ? (
+          <Image
+            src="/images/logofederalsemfundo.jpeg"
+            alt="Federal Cursos"
+            width={32}
+            height={32}
+            className="rounded object-contain"
+            style={{ height: 32, width: 32 }}
+          />
+        ) : (
+          <Image
+            src="/images/logofederalsemfundo.jpeg"
+            alt="Federal Cursos"
+            width={160}
+            height={50}
+            className="rounded"
+            style={{ height: 40, width: "auto" }}
+          />
         )}
 
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-sidebar-accent"
         >
-          {collapsed ? <Menu className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          <Menu className="h-4 w-4" />
         </button>
       </div>
 

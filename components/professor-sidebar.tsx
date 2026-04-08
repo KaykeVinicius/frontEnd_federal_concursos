@@ -2,14 +2,13 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
   BookOpen,
   Users,
   CalendarDays,
-  LogOut,
   Menu,
   ChevronLeft,
   Settings,
@@ -31,9 +30,8 @@ const navItems = [
 
 export function ProfessorSidebar() {
   const pathname = usePathname()
-  const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false) // ✅ ADICIONADO
+  const [collapsed, setCollapsed] = useState(false)
   const [userName, setUserName] = useState("")
 
   useEffect(() => {
@@ -44,11 +42,6 @@ export function ProfessorSidebar() {
     }
   }, [])
 
-  function handleLogout() {
-    localStorage.removeItem("currentUser")
-    router.push("/login")
-  }
-
   const SidebarContent = ({ collapsed }: { collapsed: boolean }) => (
     <div
       className={cn(
@@ -58,9 +51,18 @@ export function ProfessorSidebar() {
     >
       {/* Header */}
       <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
-        {!collapsed && (
+        {collapsed ? (
           <Image
-            src="/images/logo.jpg"
+            src="/images/logofederalsemfundo.jpeg"
+            alt="Federal Cursos"
+            width={32}
+            height={32}
+            className="rounded object-contain"
+            style={{ height: 32, width: 32 }}
+          />
+        ) : (
+          <Image
+            src="/images/logofederalsemfundo.jpeg"
             alt="Federal Cursos"
             width={160}
             height={50}
@@ -75,7 +77,7 @@ export function ProfessorSidebar() {
           onClick={() => setCollapsed(!collapsed)}
           className="flex h-8 w-8 items-center justify-center"
         >
-          {collapsed ? <Menu className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          <Menu className="h-4 w-4" />
         </Button>
       </div>
 
@@ -113,20 +115,6 @@ export function ProfessorSidebar() {
         })}
       </nav>
 
-      {/* Logout */}
-      <div className="border-t border-sidebar-border p-4">
-        <button
-          onClick={handleLogout}
-          className={cn(
-            "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            collapsed ? "justify-center px-2" : ""
-          )}
-          title={collapsed ? "Sair" : undefined}
-        >
-          <LogOut className="h-5 w-5" />
-          {!collapsed && "Sair"}
-        </button>
-      </div>
     </div>
   )
 

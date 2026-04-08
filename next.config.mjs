@@ -6,6 +6,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  allowedDevOrigins: ["*.serveousercontent.com", "*.loca.lt", "*.trycloudflare.com"],
 }
 
 export default nextConfig

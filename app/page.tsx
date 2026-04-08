@@ -116,7 +116,7 @@ export default function LandingPage() {
           {/* Brand */}
           <Image
             src="/images/tigre_sem_fundo.png"
-            alt="Federal Concursos"
+            alt="Federal Cursos"
             width={160}
             height={52}
             className="rounded-md"
@@ -169,7 +169,7 @@ export default function LandingPage() {
             <div className="mb-8 drop-shadow-2xl">
               <Image
                 src="/images/federal_cursos_sem_fundo.png"
-                alt="Federal Concursos"
+                alt="Federal Cursos"
                 width={520}
                 height={200}
                 className="rounded-2xl"
@@ -368,7 +368,7 @@ export default function LandingPage() {
             <span className="mb-2 block text-xs font-bold uppercase tracking-widest text-[#e84a20]">
               Diferenciais
             </span>
-            <h2 className="text-3xl font-black text-white">Por que o Federal Concursos?</h2>
+            <h2 className="text-3xl font-black text-white">Por que o Federal Cursos?</h2>
           </div>
 
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

@@ -9,9 +9,11 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { api, type ApiTurma, type ApiCourse } from "@/lib/api"
+import { useRouter } from "next/navigation"
 import { Plus, Users, BookOpen, Clock, Calendar, UserCheck, Edit3, Search, GraduationCap, Loader2 } from "lucide-react"
 
 export default function CeoTurmasPage() {
+  const router = useRouter()
   const [turmas, setTurmas] = useState<ApiTurma[]>([])
   const [courses, setCourses] = useState<ApiCourse[]>([])
   const [loading, setLoading] = useState(true)
@@ -192,7 +194,7 @@ export default function CeoTurmasPage() {
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {filteredTurmas.map((turma) => (
             <Card key={turma.id} className="group relative overflow-hidden border border-slate-200 hover:border-[#e8491d]/30 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#e8491d]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="absolute inset-0 bg-gradient-to-br from-[#e8491d]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
@@ -248,11 +250,17 @@ export default function CeoTurmasPage() {
                   </div>
                 )}
 
-                <div className="pt-4 border-t border-slate-100">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <div className="pt-4 border-t border-slate-100 space-y-2">
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span>ID: {turma.id}</span>
                     {turma.schedule && <span>Horário: {turma.schedule}</span>}
                   </div>
+                  <Button
+                    className="w-full gap-2 bg-[#e8491d] hover:bg-[#d13a0f] text-white"
+                    onClick={() => router.push(`/ceo/turmas/${turma.id}`)}
+                  >
+                    <Users className="h-4 w-4" /> Ver Alunos da Turma
+                  </Button>
                 </div>
               </div>
             </Card>

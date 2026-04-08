@@ -8,8 +8,6 @@ import {
   Home,
   GraduationCap,
   CalendarDays,
-  PanelLeftClose,
-  PanelLeftOpen,
   SlidersHorizontal,
   MessageCircle,
   X,
@@ -49,9 +47,18 @@ export function AlunoSidebar() {
     >
       {/* Header */}
       <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-3">
-        {!collapsed && (
+        {collapsed ? (
           <Image
-            src="/images/tigre_sem_fundo.png"
+            src="/images/logofederalsemfundo.jpeg"
+            alt="Federal Cursos"
+            width={32}
+            height={32}
+            className="rounded object-contain"
+            style={{ height: 32, width: 32 }}
+          />
+        ) : (
+          <Image
+            src="/images/logofederalsemfundo.jpeg"
             alt="Federal Cursos"
             width={140}
             height={40}
@@ -64,10 +71,7 @@ export function AlunoSidebar() {
           className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
           title={collapsed ? "Expandir menu" : "Recolher menu"}
         >
-          {collapsed
-            ? <PanelLeftOpen  className="h-4 w-4" />
-            : <PanelLeftClose className="h-4 w-4" />
-          }
+          <Menu className="h-4 w-4" />
         </button>
       </div>
 

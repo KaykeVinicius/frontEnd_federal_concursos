@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,10 +16,8 @@ import {
   DollarSign,
   BarChart3,
   Settings,
-  LogOut,
   Menu,
   X,
-  ChevronLeft,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -40,22 +38,25 @@ const navItems = [
 
 export function DiretorSidebar() {
   const pathname = usePathname()
-  const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
-
-  function handleLogout() {
-    localStorage.removeItem("currentUser")
-    router.push("/login")
-  }
 
   const SidebarContent = ({ collapsed }: { collapsed: boolean }) => (
     <div className={cn("flex h-full flex-col bg-sidebar text-sidebar-foreground transition-all duration-300", collapsed ? "w-16" : "w-64")}>
       {/* Header with Logo and Toggle */}
       <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
-        {!collapsed && (
+        {collapsed ? (
           <Image
-            src="/images/logo.jpg"
+            src="/images/logofederalsemfundo.jpeg"
+            alt="Federal Cursos"
+            width={32}
+            height={32}
+            className="rounded object-contain"
+            style={{ height: 32, width: 32 }}
+          />
+        ) : (
+          <Image
+            src="/images/logofederalsemfundo.jpeg"
             alt="Federal Cursos"
             width={160}
             height={50}
@@ -67,10 +68,9 @@ export function DiretorSidebar() {
           variant="ghost"
           size="sm"
           onClick={() => setCollapsed(!collapsed)}
-          className="flex h-8 w-20 items-center justify-center gap-1 rounded-lg p-0 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          className="flex h-8 w-8 items-center justify-center rounded-lg p-0 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         >
-          {collapsed ? <Menu className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          <span className="text-[11px]">{collapsed ? "" : ""}</span>
+          <Menu className="h-4 w-4" />
         </Button>
       </div>
 
@@ -99,21 +99,6 @@ export function DiretorSidebar() {
         })}
       </nav>
 
-      {/* Logout */}
-      <div className="border-t border-sidebar-border p-3">
-        <Button
-          variant="ghost"
-          className={cn(
-            "w-full justify-start gap-3 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            collapsed ? "justify-center px-2" : ""
-          )}
-          onClick={handleLogout}
-          title={collapsed ? "Sair" : undefined}
-        >
-          <LogOut className="h-5 w-5 shrink-0" />
-          {!collapsed && <span>Sair</span>}
-        </Button>
-      </div>
     </div>
   )
 

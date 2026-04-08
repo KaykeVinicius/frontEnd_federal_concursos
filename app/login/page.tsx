@@ -171,7 +171,7 @@ export default function LoginPage() {
             <div className="mb-6 text-center lg:hidden">
               <h1 className="font-extrabold text-primary animate-text-glow leading-tight">
                 <span className="block text-2xl">Seja bem-vindo ao</span>
-                <span className="block text-3xl whitespace-nowrap">Federal Concursos.</span>
+                <span className="block text-3xl whitespace-nowrap">Federal Cursos.</span>
               </h1>
             </div>
 

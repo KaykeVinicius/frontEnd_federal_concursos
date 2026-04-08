@@ -70,6 +70,7 @@ export interface ApiStudent {
   email: string
   whatsapp?: string
   cpf: string
+  instagram?: string
   active: boolean
   address?: string
   address_number?: string
@@ -157,14 +158,29 @@ export interface ApiTurma {
 export interface ApiEvent {
   id: number
   title: string
-  description: string
+  description?: string
   event_type: string
   date: string
   start_time: string
   end_time: string
-  location: string
+  location?: string
   status: string
+  is_free: boolean
+  price?: number
+  max_participants: number
+  registered_count: number
   course_id: number | null
+  created_at: string
+}
+
+export interface ApiEventRegistration {
+  id: number
+  ticket_token: string
+  attended: boolean
+  attended_at?: string
+  created_at: string
+  student?: ApiStudent
+  event?: ApiEvent
 }
 
 export interface ApiEnrollment {
@@ -342,6 +358,7 @@ export const api = {
     get: (id: number) => req<ApiStudent>("GET", `/students/${id}`),
     create: (body: Partial<ApiStudent>) => req<ApiStudent>("POST", "/students", body),
     update: (id: number, body: Partial<ApiStudent>) => req<ApiStudent>("PATCH", `/students/${id}`, body),
+    delete: (id: number) => req<void>("DELETE", `/students/${id}`),
   },
 
   enrollments: {
@@ -366,9 +383,20 @@ export const api = {
 
   events: {
     list: () => req<ApiEvent[]>("GET", "/events"),
+    get: (id: number) => req<ApiEvent>("GET", `/events/${id}`),
     create: (body: Partial<ApiEvent>) => req<ApiEvent>("POST", "/events", body),
     update: (id: number, body: Partial<ApiEvent>) => req<ApiEvent>("PATCH", `/events/${id}`, body),
     delete: (id: number) => req<void>("DELETE", `/events/${id}`),
+    registrations: {
+      list: (eventId: number) => req<ApiEventRegistration[]>("GET", `/events/${eventId}/registrations`),
+      create: (eventId: number, studentId: number) =>
+        req<ApiEventRegistration>("POST", `/events/${eventId}/registrations`, { student_id: studentId }),
+      delete: (eventId: number, regId: number) => req<void>("DELETE", `/events/${eventId}/registrations/${regId}`),
+    },
+    checkin: (token: string) =>
+      req<ApiEventRegistration>("PATCH", "/event_registrations/checkin", { token }),
+    undoCheckin: (regId: number) =>
+      req<ApiEventRegistration>("PATCH", `/event_registrations/${regId}/undo_checkin`),
   },
 
   professor: {

@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import {
   Home,
@@ -36,21 +37,31 @@ export function AssistenteSidebar() {
     >
       {/* Header */}
       <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
-        {!collapsed && (
-          <div className="flex flex-col">
-            <span className="text-sm font-bold">
-              <span className="text-primary">FEDERAL</span>
-              <span className="text-sidebar-foreground">CONCURSOS</span>
-            </span>
-            <span className="text-xs text-sidebar-foreground/50">Assistente</span>
-          </div>
+        {collapsed ? (
+          <Image
+            src="/images/logofederalsemfundo.jpeg"
+            alt="Federal Cursos"
+            width={32}
+            height={32}
+            className="rounded object-contain"
+            style={{ height: 32, width: 32 }}
+          />
+        ) : (
+          <Image
+            src="/images/logofederalsemfundo.jpeg"
+            alt="Federal Cursos"
+            width={160}
+            height={50}
+            className="rounded"
+            style={{ height: 40, width: "auto" }}
+          />
         )}
 
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg hover:bg-sidebar-accent transition-colors"
         >
-          {collapsed ? <Menu className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          <Menu className="h-4 w-4" />
         </button>
       </div>
 
