@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { api, type ApiEvent, type ApiEventLote, type ApiStudent, type ApiEventRegistration } from "@/lib/api"
+import { api, type ApiEvent, type ApiEventLote, type ApiStudent, type ApiEventRegistration, type ApiSubject } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -14,7 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import {
   Plus, Search, Loader2, Calendar, MapPin, Clock, Users,
   Settings2, Pencil, Trash2, Eye, Tag, AlertTriangle, UserPlus,
-  X, Layers, Printer,
+  X, Layers, Printer, BookOpen,
 } from "lucide-react"
 
 const EVENT_TYPE_LABELS: Record<string, string> = { aulao: "Aulão", simulado: "Simulado" }
@@ -31,6 +31,7 @@ export default function EventosPage() {
   const router = useRouter()
   const [events, setEvents] = useState<ApiEvent[]>([])
   const [students, setStudents] = useState<ApiStudent[]>([])
+  const [subjects, setSubjects] = useState<ApiSubject[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
 
@@ -39,6 +40,7 @@ export default function EventosPage() {
   const [editingEvent, setEditingEvent] = useState<ApiEvent | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [formLotes, setFormLotes] = useState<FormLote[]>([])
+  const [formSubjectIds, setFormSubjectIds] = useState<number[]>([])
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState("")
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
@@ -58,21 +60,28 @@ export default function EventosPage() {
   const [enrollError, setEnrollError] = useState("")
 
   useEffect(() => {
-    Promise.all([api.events.list(), api.students.list()])
-      .then(([evs, studs]) => { setEvents(evs); setStudents(studs) })
+    Promise.all([api.events.list(), api.students.list(), api.subjects.list()])
+      .then(([evs, studs, subs]) => { setEvents(evs); setStudents(studs); setSubjects(subs) })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
 
   function openCreate() {
-    setEditingEvent(null); setForm(EMPTY_FORM); setFormLotes([]); setFormError(""); setShowForm(true)
+    setEditingEvent(null); setForm(EMPTY_FORM); setFormLotes([]); setFormSubjectIds([]); setFormError(""); setShowForm(true)
   }
 
   function openEdit(ev: ApiEvent) {
     setEditingEvent(ev)
     setForm({ title: ev.title, description: ev.description ?? "", event_type: ev.event_type, date: ev.date, start_time: ev.start_time, end_time: ev.end_time, location: ev.location ?? "", status: ev.status, is_free: ev.is_free, price: ev.price ? String(ev.price) : "", max_participants: String(ev.max_participants) })
     setFormLotes(ev.event_lotes?.map((l) => ({ id: l.id, name: l.name, price: String(l.price), quantity: String(l.quantity) })) ?? [])
+    setFormSubjectIds(ev.event_subjects?.map((s) => s.subject_id) ?? [])
     setFormError(""); setShowForm(true)
+  }
+
+  function toggleSubject(subjectId: number) {
+    setFormSubjectIds((prev) =>
+      prev.includes(subjectId) ? prev.filter((id) => id !== subjectId) : [...prev, subjectId]
+    )
   }
 
   function setField(key: string, value: string | boolean) { setForm((prev) => ({ ...prev, [key]: value })) }
@@ -128,7 +137,14 @@ export default function EventosPage() {
         ...(editingEvent?.event_lotes?.filter((l) => formLotes.some((fl) => fl.id === l.id)) ?? []),
         ...newLotes,
       ]
-      savedEvent = { ...savedEvent, event_lotes: allLotes }
+
+      // Sincroniza matérias (apenas para aulão)
+      let savedSubjects = savedEvent.event_subjects ?? []
+      if (form.event_type === "aulao") {
+        savedSubjects = await api.events.subjects.sync(savedEvent.id, formSubjectIds)
+      }
+
+      savedEvent = { ...savedEvent, event_lotes: allLotes, event_subjects: savedSubjects }
 
       if (editingEvent) {
         setEvents((prev) => prev.map((e) => e.id === savedEvent.id ? savedEvent : e))
@@ -357,6 +373,32 @@ export default function EventosPage() {
               <div className="space-y-2"><Label>Local</Label><Input value={form.location} onChange={(e) => setField("location", e.target.value)} placeholder="Ex: Auditório Principal" /></div>
               <div className="space-y-2"><Label>Máx. participantes</Label><Input type="number" min="1" value={form.max_participants} onChange={(e) => setField("max_participants", e.target.value)} /></div>
             </div>
+
+            {/* Matérias — somente para aulão */}
+            {form.event_type === "aulao" && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" /> Matérias do aulão</Label>
+                {subjects.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhuma matéria cadastrada.</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1.5 rounded-md border p-3">
+                    {subjects.map((sub) => {
+                      const selected = formSubjectIds.includes(sub.id)
+                      return (
+                        <button key={sub.id} type="button" onClick={() => toggleSubject(sub.id)}
+                          className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-left transition-colors ${selected ? "bg-primary/10 text-primary border border-primary/30" : "bg-muted/30 text-muted-foreground border border-transparent hover:border-primary/20"}`}>
+                          <div className={`h-2 w-2 rounded-full shrink-0 ${selected ? "bg-primary" : "bg-muted-foreground/40"}`} />
+                          <span className="truncate">{sub.name}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+                {formSubjectIds.length > 0 && (
+                  <p className="text-xs text-muted-foreground">{formSubjectIds.length} matéria(s) selecionada(s) — os professores poderão fazer upload dos PDFs</p>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Ingresso</Label>

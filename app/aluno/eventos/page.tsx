@@ -4,8 +4,8 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { CalendarDays, Clock, MapPin, Loader2, BookOpenCheck, FileQuestion, Ticket } from "lucide-react"
-import { api, type ApiEvent, type ApiEventRegistration } from "@/lib/api"
+import { CalendarDays, Clock, MapPin, Loader2, BookOpenCheck, FileQuestion, Ticket, FileText, Download, ChevronDown, ChevronUp } from "lucide-react"
+import { api, type ApiEvent, type ApiEventRegistration, type ApiEventMaterial } from "@/lib/api"
 
 const eventTypeIcons: Record<string, React.ReactNode> = {
   aulao:    <BookOpenCheck className="h-5 w-5" />,
@@ -33,15 +33,43 @@ export default function AlunoEventosPage() {
   const [events, setEvents]               = useState<ApiEvent[]>([])
   const [myRegistrations, setMyRegistrations] = useState<ApiEventRegistration[]>([])
   const [filter, setFilter]               = useState<string>("all")
+  const [materialsMap, setMaterialsMap]   = useState<Map<number, ApiEventMaterial[]>>(new Map())
+  const [loadingMaterials, setLoadingMaterials] = useState<Set<number>>(new Set())
+  const [expandedMaterials, setExpandedMaterials] = useState<Set<number>>(new Set())
 
   useEffect(() => {
-    Promise.allSettled([api.events.list(), api.aluno.eventRegistrations.list()])
-      .then(([evResult, regResult]) => {
-        if (evResult.status === "fulfilled")  setEvents(evResult.value)
-        if (regResult.status === "fulfilled") setMyRegistrations(regResult.value)
+    // Busca apenas as inscrições do aluno; os eventos vêm embutidos nelas
+    api.aluno.eventRegistrations.list()
+      .then((regs) => {
+        setMyRegistrations(regs)
+        // Monta lista de eventos únicos a partir das inscrições
+        const evMap = new Map<number, ApiEvent>()
+        regs.forEach((r) => {
+          if (r.event && r.event.id) evMap.set(r.event.id, r.event)
+        })
+        setEvents(Array.from(evMap.values()))
       })
+      .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  async function toggleMaterials(eventId: number) {
+    if (expandedMaterials.has(eventId)) {
+      setExpandedMaterials((prev) => { const s = new Set(prev); s.delete(eventId); return s })
+      return
+    }
+    setExpandedMaterials((prev) => new Set([...prev, eventId]))
+    if (!materialsMap.has(eventId)) {
+      setLoadingMaterials((prev) => new Set([...prev, eventId]))
+      try {
+        const mats = await api.aluno.eventMaterials.list(eventId)
+        setMaterialsMap((prev) => new Map([...prev, [eventId, mats]]))
+      } catch { /* sem materiais ainda */ }
+      finally {
+        setLoadingMaterials((prev) => { const s = new Set(prev); s.delete(eventId); return s })
+      }
+    }
+  }
 
   function handleSegundaVia(event: ApiEvent, reg: ApiEventRegistration) {
     const win = window.open("", "_blank")
@@ -68,8 +96,8 @@ export default function AlunoEventosPage() {
   return (
     <div className="p-4 pt-16 lg:p-8 lg:pt-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground">Eventos</h1>
-        <p className="text-muted-foreground">Aulões e simulados</p>
+        <h1 className="text-2xl font-bold text-foreground">Meus Eventos</h1>
+        <p className="text-muted-foreground">Aulões e simulados em que você está inscrito</p>
       </div>
 
       <div className="mb-6 flex flex-wrap gap-2">
@@ -90,9 +118,13 @@ export default function AlunoEventosPage() {
       <EventSection
         title={`Próximos Eventos (${upcomingEvents.length})`}
         events={upcomingEvents}
-        emptyMsg="Nenhum evento agendado no momento."
+        emptyMsg="Você não está inscrito em nenhum evento agendado."
         regByEventId={regByEventId}
         onSegundaVia={handleSegundaVia}
+        materialsMap={materialsMap}
+        loadingMaterials={loadingMaterials}
+        expandedMaterials={expandedMaterials}
+        onToggleMaterials={toggleMaterials}
       />
       {pastEvents.length > 0 && (
         <EventSection
@@ -101,6 +133,10 @@ export default function AlunoEventosPage() {
           emptyMsg=""
           regByEventId={regByEventId}
           onSegundaVia={handleSegundaVia}
+          materialsMap={materialsMap}
+          loadingMaterials={loadingMaterials}
+          expandedMaterials={expandedMaterials}
+          onToggleMaterials={toggleMaterials}
         />
       )}
     </div>
@@ -109,12 +145,17 @@ export default function AlunoEventosPage() {
 
 function EventSection({
   title, events, emptyMsg, regByEventId, onSegundaVia,
+  materialsMap, loadingMaterials, expandedMaterials, onToggleMaterials,
 }: {
   title: string
   events: ApiEvent[]
   emptyMsg: string
   regByEventId: Map<number, ApiEventRegistration>
   onSegundaVia: (event: ApiEvent, reg: ApiEventRegistration) => void
+  materialsMap: Map<number, ApiEventMaterial[]>
+  loadingMaterials: Set<number>
+  expandedMaterials: Set<number>
+  onToggleMaterials: (eventId: number) => void
 }) {
   return (
     <div className="mb-8">
@@ -174,6 +215,52 @@ function EventSection({
                     >
                       <Ticket className="h-4 w-4" /> 2ª via do ingresso
                     </Button>
+                  )}
+
+                  {/* PDFs do aulão — só para inscritos */}
+                  {reg && event.event_type === "aulao" && (
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => onToggleMaterials(event.id)}
+                        className="flex w-full items-center justify-between rounded-md border border-dashed px-3 py-2 text-xs font-medium text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <FileText className="h-3.5 w-3.5" /> Materiais do aulão
+                        </span>
+                        {loadingMaterials.has(event.id)
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : expandedMaterials.has(event.id)
+                            ? <ChevronUp className="h-3.5 w-3.5" />
+                            : <ChevronDown className="h-3.5 w-3.5" />
+                        }
+                      </button>
+
+                      {expandedMaterials.has(event.id) && (
+                        <div className="mt-2 space-y-1.5">
+                          {(materialsMap.get(event.id) ?? []).length === 0 ? (
+                            <p className="text-xs text-muted-foreground px-1">Nenhum material disponível ainda.</p>
+                          ) : (
+                            (materialsMap.get(event.id) ?? []).map((mat) => (
+                              <a
+                                key={mat.id}
+                                href={mat.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2 text-xs hover:bg-primary/5 transition-colors"
+                              >
+                                <span className="flex items-center gap-1.5 min-w-0">
+                                  <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
+                                  <span className="truncate font-medium">{mat.subject_name}</span>
+                                  {mat.file_size && <span className="text-muted-foreground shrink-0">· {mat.file_size}</span>}
+                                </span>
+                                <Download className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />
+                              </a>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </CardContent>
               </Card>

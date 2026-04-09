@@ -18,10 +18,10 @@ import { useState, useEffect } from "react"
 
 const navItems = [
   { href: "/aluno",               label: "Painel",          icon: Home },
-  { href: "/aluno/meus-cursos",   label: "Meus Cursos",     icon: GraduationCap },
   { href: "/aluno/ao-vivo",       label: "Ao Vivo",         icon: Radio },
-  { href: "/aluno/eventos",       label: "Eventos",          icon: CalendarDays },
-  { href: "/aluno/configuracoes", label: "Configurações",    icon: SlidersHorizontal },
+  { href: "/aluno/meus-cursos",   label: "Meus Cursos",     icon: GraduationCap },
+  { href: "/aluno/eventos",       label: "Meus Eventos",    icon: CalendarDays },
+  { href: "/aluno/configuracoes", label: "Configurações",   icon: SlidersHorizontal },
 ]
 
 export function AlunoSidebar() {

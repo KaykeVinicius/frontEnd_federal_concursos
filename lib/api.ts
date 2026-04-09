@@ -165,6 +165,41 @@ export interface ApiEventLote {
   available: boolean
 }
 
+export interface ProfessorEventAulaoSubject {
+  subject_id: number
+  subject_name: string
+  material: ApiEventMaterial | null
+}
+
+export interface ProfessorEventAulao {
+  id: number
+  title: string
+  date: string
+  start_time: string
+  end_time: string
+  location?: string
+  subjects: ProfessorEventAulaoSubject[]
+}
+
+export interface ApiEventSubject {
+  id: number
+  subject_id: number
+  subject_name: string
+}
+
+export interface ApiEventMaterial {
+  id: number
+  event_id: number
+  subject_id: number
+  subject_name: string
+  professor_id: number
+  professor_name: string
+  title: string
+  file_url?: string
+  file_size?: string
+  expires_at: string
+}
+
 export interface ApiEvent {
   id: number
   title: string
@@ -184,6 +219,7 @@ export interface ApiEvent {
   is_full?: boolean
   current_lote_price?: number | null
   event_lotes?: ApiEventLote[]
+  event_subjects?: ApiEventSubject[]
 }
 
 export interface ApiEventRegistration {
@@ -243,6 +279,16 @@ export interface ApiMaterial {
   created_at: string
   professor?: ApiUser
   subject?: ApiSubject
+}
+
+export interface ApiNotification {
+  id: number
+  title: string
+  body?: string
+  notifiable_type: "Event" | "Course"
+  notifiable_id: number
+  read_at: string | null
+  created_at: string
 }
 
 export interface AlunoDashboardResponse {
@@ -421,6 +467,11 @@ export const api = {
       req<ApiEventRegistration>("PATCH", "/event_registrations/checkin", { token }),
     undoCheckin: (regId: number) =>
       req<ApiEventRegistration>("PATCH", `/event_registrations/${regId}/undo_checkin`),
+    subjects: {
+      list: (eventId: number) => req<ApiEventSubject[]>("GET", `/events/${eventId}/subjects`),
+      sync: (eventId: number, subjectIds: number[]) =>
+        req<ApiEventSubject[]>("POST", `/events/${eventId}/sync_subjects`, { subject_ids: subjectIds }),
+    },
   },
 
   professor: {
@@ -435,6 +486,24 @@ export const api = {
       create: (body: Partial<ApiMaterial>) => req<ApiMaterial>("POST", "/professor/materials", body),
       delete: (id: number) => req<void>("DELETE", `/professor/materials/${id}`),
     },
+    eventMaterials: {
+      list: () => req<ProfessorEventAulao[]>("GET", "/professor/event_materials"),
+      upload: (eventId: number, subjectId: number, title: string, file: File) => {
+        const form = new FormData()
+        form.append("event_id",   String(eventId))
+        form.append("subject_id", String(subjectId))
+        form.append("title",      title)
+        form.append("file",       file)
+        return req<ApiEventMaterial>("POST", "/professor/event_materials", form)
+      },
+      delete: (id: number) => req<void>("DELETE", `/professor/event_materials/${id}`),
+    },
+  },
+
+  notifications: {
+    list: () => req<ApiNotification[]>("GET", "/notifications"),
+    markAllRead: () => req<void>("PATCH", "/notifications/mark_all_read"),
+    markRead: (id: number) => req<ApiNotification>("PATCH", `/notifications/${id}/mark_read`),
   },
 
   aluno: {
@@ -449,6 +518,9 @@ export const api = {
     }) => req<ApiQuestion>("POST", "/aluno/questions", body),
     eventRegistrations: {
       list: () => req<ApiEventRegistration[]>("GET", "/aluno/event_registrations"),
+    },
+    eventMaterials: {
+      list: (eventId: number) => req<ApiEventMaterial[]>("GET", `/aluno/event_materials?event_id=${eventId}`),
     },
     completions: {
       list: () => req<{ id: number; lesson_id: number }[]>("GET", "/aluno/lesson_completions"),

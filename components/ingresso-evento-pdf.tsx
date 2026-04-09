@@ -67,6 +67,17 @@ const styles = StyleSheet.create({
     fontFamily: "Helvetica-Bold",
     color: C.green,
   },
+  expiredBadge: {
+    alignSelf: "center",
+    marginTop: 10,
+    backgroundColor: "#fee2e2",
+    borderRadius: 99,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    fontSize: 8,
+    fontFamily: "Helvetica-Bold",
+    color: "#dc2626",
+  },
 
   infoBox: { backgroundColor: C.grayLight, borderRadius: 6, padding: 10, marginTop: 14 },
   infoText: { fontSize: 7.5, color: C.gray, lineHeight: 1.6 },
@@ -97,9 +108,12 @@ export default function IngressoEventoPDF({ registration, event, qrCodeUrl, tige
   const now = new Date()
   const dataBR = now.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })
   const horaBR = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-  const eventDate = new Date(event.date + "T00:00:00").toLocaleDateString("pt-BR", {
+  const eventDateObj = new Date(event.date + "T00:00:00")
+  const eventDate = eventDateObj.toLocaleDateString("pt-BR", {
     weekday: "long", day: "2-digit", month: "long", year: "numeric",
   })
+  const validityDate = eventDateObj.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })
+  const isExpired = eventDateObj < new Date(new Date().toDateString())
 
   return (
     <Document title={`Ingresso — ${event.title}`} author="Federal Cursos">
@@ -170,7 +184,11 @@ export default function IngressoEventoPDF({ registration, event, qrCodeUrl, tige
                 <Text style={styles.tokenText}>{registration.ticket_token}</Text>
               </View>
 
-              <Text style={styles.validBadge}>INGRESSO VÁLIDO</Text>
+              {isExpired ? (
+                <Text style={styles.expiredBadge}>INGRESSO EXPIRADO</Text>
+              ) : (
+                <Text style={styles.validBadge}>VÁLIDO ATÉ: {validityDate.toUpperCase()}</Text>
+              )}
 
               <View style={styles.infoBox}>
                 <Text style={styles.infoText}>

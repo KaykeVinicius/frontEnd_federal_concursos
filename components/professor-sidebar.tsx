@@ -25,6 +25,7 @@ const navItems = [
   { href: "/professor/duvidas", label: "Dúvidas", icon: HelpCircle },
   { href: "/professor/materiais", label: "Materiais", icon: FolderOpen },
   { href: "/professor/eventos", label: "Eventos", icon: CalendarDays },
+  { href: "/professor/eventos/auloes", label: "Aulões — PDFs", icon: FolderOpen },
   { href: "/professor/configuracoes", label: "Configurações", icon: Settings },
 ]
 
