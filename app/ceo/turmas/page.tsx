@@ -48,7 +48,7 @@ export default function CeoTurmasPage() {
   }, [])
 
   const availableCourses = courses.filter(
-    (c) => c.access_type === "interno" || c.access_type === "ambos"
+    (c) => c.access_type === "presencial" || c.access_type === "hibrido"
   )
 
   const countByStatus = useMemo(() => ({
@@ -59,11 +59,13 @@ export default function CeoTurmasPage() {
 
   const filteredTurmas = useMemo(() => {
     return turmas.filter((turma) => {
+      const accessType = turma.course?.access_type
+      const isPresencialOrHibrido = accessType === "presencial" || accessType === "hibrido"
       const matchesSearch =
         turma.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         turma.course?.title?.toLowerCase().includes(searchTerm.toLowerCase())
       const matchesStatus = filterStatus === "todos" || turma.status === filterStatus
-      return matchesSearch && matchesStatus
+      return isPresencialOrHibrido && matchesSearch && matchesStatus
     })
   }, [turmas, searchTerm, filterStatus])
 

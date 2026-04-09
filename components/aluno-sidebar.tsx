@@ -16,9 +16,9 @@ import {
 } from "lucide-react"
 import { useState, useEffect } from "react"
 
-const navItems = [
+const BASE_NAV = [
   { href: "/aluno",               label: "Painel",          icon: Home },
-  { href: "/aluno/ao-vivo",       label: "Ao Vivo",         icon: Radio },
+  { href: "/aluno/ao-vivo",       label: "Ao Vivo",         icon: Radio,           onlyPresencial: true },
   { href: "/aluno/meus-cursos",   label: "Meus Cursos",     icon: GraduationCap },
   { href: "/aluno/eventos",       label: "Meus Eventos",    icon: CalendarDays },
   { href: "/aluno/configuracoes", label: "Configurações",   icon: SlidersHorizontal },
@@ -29,14 +29,21 @@ export function AlunoSidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed]   = useState(false)
   const [userName, setUserName]     = useState("")
+  const [situacao, setSituacao]     = useState<string | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem("currentUser")
     if (stored) {
       const user = JSON.parse(stored)
       setUserName(user.name || "Aluno")
+      setSituacao(user.student?.situacao ?? null)
     }
   }, [])
+
+  const navItems = BASE_NAV.filter((item) => {
+    if (item.onlyPresencial) return situacao === "presencial" || situacao === "hibrido"
+    return true
+  })
 
   const SidebarContent = ({ collapsed }: { collapsed: boolean }) => (
     <div

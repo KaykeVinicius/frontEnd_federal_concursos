@@ -5,6 +5,7 @@ import {
   PlusCircle, ChevronRight, ChevronDown, BookOpen, GraduationCap,
   FileText, PlayCircle, Trash2, Check, X, Link2,
   Loader2, DollarSign, Calendar, Clock, Globe, FilePlus, ExternalLink,
+  Monitor, Building2, Users,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -465,8 +466,18 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
   async function handleDelete() {
     if (!confirm(`Excluir o curso "${course.title}"?`)) return
     setDeleting(true)
-    try { await api.courses.delete(course.id); onDelete() }
-    catch (e) { console.error(e) }
+    try {
+      const enrollments = await api.enrollments.list()
+      const active = enrollments.filter(
+        (e) => e.course?.id === course.id && e.status === "active"
+      )
+      if (active.length > 0) {
+        alert(`Este curso possui ${active.length} aluno(s) matriculado(s). Cancele as matrículas antes de excluir.`)
+        return
+      }
+      await api.courses.delete(course.id)
+      onDelete()
+    } catch (e) { console.error(e) }
     finally { setDeleting(false) }
   }
 
@@ -485,11 +496,26 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
             <BookOpen className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-semibold text-foreground">{course.title}</h3>
               <Badge className={cn("text-xs", course.status === "published" ? "bg-green-500/10 text-green-600 border-green-500/20" : "bg-yellow-500/10 text-yellow-600 border-yellow-500/20")} variant="outline">
                 {course.status === "published" ? "publicado" : "rascunho"}
               </Badge>
+              {course.access_type === "presencial" && (
+                <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200 gap-1" variant="outline">
+                  <Building2 className="h-3 w-3" /> Presencial
+                </Badge>
+              )}
+              {course.access_type === "online" && (
+                <Badge className="text-xs bg-green-100 text-green-700 border-green-200 gap-1" variant="outline">
+                  <Monitor className="h-3 w-3" /> Online
+                </Badge>
+              )}
+              {course.access_type === "hibrido" && (
+                <Badge className="text-xs bg-purple-100 text-purple-700 border-purple-200 gap-1" variant="outline">
+                  <Users className="h-3 w-3" /> Híbrido
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
               R$ {Number(course.price).toFixed(2)} · {course.subjects.length} matéria(s) · {totalAulas} aula(s)

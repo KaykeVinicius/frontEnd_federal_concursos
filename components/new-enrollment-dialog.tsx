@@ -28,7 +28,18 @@ import {
 import { format, addDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
-import { api, type ApiStudent, type ApiCourse, type ApiCareer, type ApiTurma, type ApiEnrollment } from "@/lib/api"
+import { api, type ApiStudent, type ApiCourse, type ApiCareer, type ApiTurma, type ApiEnrollment, type ApiCity } from "@/lib/api"
+import { CityCombobox } from "@/components/city-combobox"
+
+// ─── ViaCEP ──────────────────────────────────────────────────
+interface ViaCepResponse {
+  logradouro?: string
+  bairro?: string
+  localidade?: string
+  uf?: string
+  ibge?: string
+  erro?: boolean
+}
 
 import {
   Loader2,
@@ -195,8 +206,11 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
 
   const [rua, setRua] = useState("")
   const [numero, setNumero] = useState("")
+  const [complemento, setComplemento] = useState("")
   const [bairro, setBairro] = useState("")
   const [cep, setCep] = useState("")
+  const [selectedCity, setSelectedCity] = useState<ApiCity | null>(null)
+  const [cepLoading, setCepLoading] = useState(false)
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>("pix")
   const [installments, setInstallments] = useState(1)
@@ -238,6 +252,32 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
     )
   }, [studentSearch, allStudents])
 
+  async function handleCepChange(value: string) {
+    const masked = applyCepMask(value)
+    setCep(masked)
+    const digits = value.replace(/\D/g, "")
+    if (digits.length === 8) {
+      setCepLoading(true)
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`)
+        const data: ViaCepResponse = await res.json()
+        if (!data.erro) {
+          if (data.logradouro) setRua(data.logradouro)
+          if (data.bairro) setBairro(data.bairro)
+          // Busca a cidade no banco pelo nome + UF retornados pelo ViaCEP
+          if (data.localidade && data.uf) {
+            const cities = await api.cities.list({ q: data.localidade, state: data.uf })
+            const found = cities.find(
+              (c) => c.name.toLowerCase() === data.localidade!.toLowerCase() && c.state === data.uf
+            )
+            if (found) setSelectedCity(found)
+          }
+        }
+      } catch { /* ignora erro de rede */ }
+      finally { setCepLoading(false) }
+    }
+  }
+
   const handleModalityChange = (value: string) => {
     setSelectedModality(value)
     setSelectedTurmaId("")
@@ -272,8 +312,10 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
     setNewInstagram("")
     setRua("")
     setNumero("")
+    setComplemento("")
     setBairro("")
     setCep("")
+    setSelectedCity(null)
     setPaymentMethod("pix")
     setInstallments(1)
     setPaymentDeadline(undefined)
@@ -301,15 +343,21 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
       let studentId: number
 
       if (studentType === "novato") {
-        // Criar aluno como usuário com role "aluno"
-        const newUser = await api.users.create({
+        const newStudent = await api.students.create({
           name: newName,
           email: newEmail,
-          cpf: newCpf,
-          password: newCpf.replace(/\D/g, ""),
-          role: "aluno",
+          cpf: newCpf.replace(/\D/g, ""),
+          whatsapp: newWhatsapp.replace(/\D/g, "") || undefined,
+          instagram: newInstagram || undefined,
+          street: rua || undefined,
+          address_number: numero || undefined,
+          address_complement: complemento || undefined,
+          neighborhood: bairro || undefined,
+          cep: cep.replace(/\D/g, "") || undefined,
+          city_id: selectedCity?.id ?? undefined,
+          active: true,
         })
-        studentId = newUser.id
+        studentId = newStudent.id
       } else {
         studentId = selectedStudent!.id
       }
@@ -543,45 +591,77 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-4">
+                  {/* CEP — primeiro para preencher os demais automaticamente */}
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                      CEP
+                      {cepLoading && <Loader2 className="h-3 w-3 animate-spin text-[#e8491d]" />}
+                    </Label>
+                    <Input
+                      placeholder="00000-000"
+                      value={cep}
+                      onChange={(e) => handleCepChange(e.target.value)}
+                      maxLength={9}
+                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                    />
+                    {cep.replace(/\D/g, "").length === 8 && !cepLoading && !selectedCity && (
+                      <p className="text-xs text-amber-600 mt-1">CEP não encontrado. Preencha manualmente.</p>
+                    )}
+                  </div>
+
                   <div>
                     <Label className="text-sm font-medium mb-2 block">Rua</Label>
-                    <Input 
-                      placeholder="Nome da rua" 
-                      value={rua} 
+                    <Input
+                      placeholder="Nome da rua"
+                      value={rua}
                       onChange={(e) => setRua(e.target.value)}
                       className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
-                      required
                     />
                   </div>
+
                   <div>
                     <Label className="text-sm font-medium mb-2 block">Número</Label>
-                    <Input 
-                      placeholder="Número" 
-                      value={numero} 
+                    <Input
+                      placeholder="Número"
+                      value={numero}
                       onChange={(e) => setNumero(e.target.value)}
                       className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
-                      required
                     />
                   </div>
+
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">Complemento</Label>
+                    <Input
+                      placeholder="Apto, bloco, etc."
+                      value={complemento}
+                      onChange={(e) => setComplemento(e.target.value)}
+                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                    />
+                  </div>
+
                   <div>
                     <Label className="text-sm font-medium mb-2 block">Bairro</Label>
-                    <Input 
-                      placeholder="Bairro" 
-                      value={bairro} 
+                    <Input
+                      placeholder="Bairro"
+                      value={bairro}
                       onChange={(e) => setBairro(e.target.value)}
                       className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
-                      required
                     />
                   </div>
-                  <div>
-                    <Label className="text-sm font-medium mb-2 block">CEP</Label>
-                    <Input 
-                      placeholder="00000-000" 
-                      value={cep} 
-                      onChange={(e) => setCep(applyCepMask(e.target.value))}
-                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
-                      required
+
+                  <div className="sm:col-span-2">
+                    <Label className="text-sm font-medium mb-2 block">Cidade</Label>
+                    <CityCombobox
+                      value={selectedCity?.id ?? null}
+                      onChange={(city) => setSelectedCity(city)}
+                      stateFilter={selectedCity?.state}
+                      placeholder="Buscar cidade..."
                     />
+                    {!selectedCity && cep.replace(/\D/g, "").length === 8 && !cepLoading && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        Cidade não encontrada automaticamente. Busque manualmente.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

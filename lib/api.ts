@@ -53,6 +53,23 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 
 // ─── Types ───────────────────────────────────────────────
 
+export interface ApiCity {
+  id: number
+  name: string
+  state: string
+  ibge_code?: string
+}
+
+export interface ApiUserType {
+  id: number
+  name: string
+  slug: string
+  description?: string
+  active: boolean
+  position: number
+  users_count: number
+}
+
 export interface ApiUser {
   id: number
   name: string
@@ -62,6 +79,8 @@ export interface ApiUser {
   commission_percent?: number
   active: boolean
   created_at: string
+  user_type_id?: number | null
+  user_type?: { id: number; name: string; slug: string } | null
 }
 
 export interface ApiStudent {
@@ -72,10 +91,14 @@ export interface ApiStudent {
   cpf: string
   instagram?: string
   active: boolean
-  address?: string
+  situacao?: "online" | "presencial" | "hibrido"
+  street?: string
   address_number?: string
   address_complement?: string
+  neighborhood?: string
   cep?: string
+  city_id?: number | null
+  city?: { id: number; name: string; state: string } | null
   user?: ApiUser
 }
 
@@ -336,12 +359,32 @@ export const api = {
       email: string
       cpf: string
       password: string
-      role: string
+      user_type_id?: number
+      role?: string
       commission_percent?: number
     }) => req<ApiUser>("POST", "/users", body),
-    update: (id: number, body: Partial<ApiUser> & { password?: string }) =>
+    update: (id: number, body: Partial<ApiUser> & { password?: string; user_type_id?: number }) =>
       req<ApiUser>("PATCH", `/users/${id}`, body),
     delete: (id: number) => req<void>("DELETE", `/users/${id}`),
+  },
+
+  cities: {
+    list: (params?: { q?: string; state?: string }) => {
+      const qs = new URLSearchParams()
+      if (params?.q) qs.set("q", params.q)
+      if (params?.state) qs.set("state", params.state)
+      const query = qs.toString()
+      return req<ApiCity[]>("GET", `/cities${query ? `?${query}` : ""}`)
+    },
+  },
+
+  userTypes: {
+    list: () => req<ApiUserType[]>("GET", "/user_types"),
+    create: (body: { name: string; slug: string; description?: string; active?: boolean; position?: number }) =>
+      req<ApiUserType>("POST", "/user_types", body),
+    update: (id: number, body: Partial<ApiUserType>) =>
+      req<ApiUserType>("PATCH", `/user_types/${id}`, body),
+    delete: (id: number) => req<void>("DELETE", `/user_types/${id}`),
   },
 
   careers: {
@@ -418,8 +461,10 @@ export const api = {
   students: {
     list: () => req<ApiStudent[]>("GET", "/students"),
     get: (id: number) => req<ApiStudent>("GET", `/students/${id}`),
-    create: (body: Partial<ApiStudent>) => req<ApiStudent>("POST", "/students", body),
-    update: (id: number, body: Partial<ApiStudent>) => req<ApiStudent>("PATCH", `/students/${id}`, body),
+    create: (body: Partial<ApiStudent> & { city_name?: string; city_state?: string; ibge_code?: string }) =>
+      req<ApiStudent>("POST", "/students", body),
+    update: (id: number, body: Partial<ApiStudent> & { city_name?: string; city_state?: string; ibge_code?: string }) =>
+      req<ApiStudent>("PATCH", `/students/${id}`, body),
     delete: (id: number) => req<void>("DELETE", `/students/${id}`),
   },
 

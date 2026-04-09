@@ -1,133 +1,742 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { Card } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import { useEffect, useState } from "react"
+import {
+  PlusCircle, ChevronRight, ChevronDown, BookOpen, GraduationCap,
+  FileText, PlayCircle, Trash2, Check, X, Link2,
+  Loader2, DollarSign, Calendar, Clock, Globe, FilePlus, ExternalLink,
+  Monitor, Building2, Users,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { api, type ApiCourse } from "@/lib/api"
-import { Plus, BookOpen, Users, Monitor, Building2, Calendar, DollarSign, Edit3, Search, Loader2 } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils"
+import {
+  api,
+  type ApiCourse, type ApiSubject, type ApiTopic, type ApiLesson, type ApiLessonPdf, type ApiUser,
+} from "@/lib/api"
 
-export default function CeoCursosPage() {
-  const [courses, setCourses] = useState<ApiCourse[]>([])
-  const [loading, setLoading] = useState(true)
+// ─── Inline add helper ────────────────────────────────────
+function InlineAdd({ placeholder, onAdd, onCancel }: {
+  placeholder: string; onAdd: (v: string) => void; onCancel: () => void
+}) {
+  const [val, setVal] = useState("")
+  return (
+    <div className="flex items-center gap-2 py-1">
+      <Input autoFocus value={val} onChange={(e) => setVal(e.target.value)} placeholder={placeholder}
+        className="h-8 text-sm"
+        onKeyDown={(e) => { if (e.key === "Enter" && val.trim()) onAdd(val.trim()); if (e.key === "Escape") onCancel() }} />
+      <Button size="sm" className="h-8 px-3" onClick={() => val.trim() && onAdd(val.trim())}><Check className="h-3.5 w-3.5" /></Button>
+      <Button size="sm" variant="ghost" className="h-8 px-2" onClick={onCancel}><X className="h-3.5 w-3.5" /></Button>
+    </div>
+  )
+}
+
+// ─── Lesson Row ───────────────────────────────────────────
+function LessonRow({ lesson, onDelete }: { lesson: ApiLesson; onDelete: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [pdfs, setPdfs] = useState<ApiLessonPdf[]>(lesson.lesson_pdfs ?? [])
+  const [addingPdf, setAddingPdf] = useState(false)
+  const [pdfName, setPdfName] = useState("")
+  const [pdfFile, setPdfFile] = useState<File | null>(null)
+  const [savingPdf, setSavingPdf] = useState(false)
+  const [pdfError, setPdfError] = useState("")
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null
+    setPdfFile(file)
+    if (file && !pdfName) setPdfName(file.name.replace(/\.pdf$/i, ""))
+  }
+
+  async function handleAddPdf() {
+    if (!pdfName.trim()) { setPdfError("Nome é obrigatório."); return }
+    if (!pdfFile) { setPdfError("Selecione um arquivo PDF."); return }
+    setSavingPdf(true); setPdfError("")
+    try {
+      const created = await api.lesson_pdfs.create({
+        lesson_id: lesson.id,
+        name: pdfName.trim(),
+        file: pdfFile,
+      })
+      setPdfs((prev) => [...prev, created])
+      setPdfName(""); setPdfFile(null); setAddingPdf(false)
+    } catch (e) {
+      setPdfError(e instanceof Error ? e.message : "Erro ao salvar PDF")
+    } finally {
+      setSavingPdf(false)
+    }
+  }
+
+  async function handleDeletePdf(pdfId: number) {
+    await api.lesson_pdfs.delete(pdfId)
+    setPdfs((prev) => prev.filter((p) => p.id !== pdfId))
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-background">
+      <button className="flex w-full items-center justify-between px-4 py-2.5 text-left" onClick={() => setOpen(!open)}>
+        <div className="flex items-center gap-2 text-sm">
+          <PlayCircle className="h-4 w-4 text-red-500" />
+          <span className="font-medium">{lesson.title}</span>
+          {lesson.duration && <span className="text-xs text-muted-foreground">{lesson.duration}</span>}
+          {pdfs.length > 0 && <span className="text-xs text-muted-foreground">· {pdfs.length} PDF(s)</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+          {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        </div>
+      </button>
+      {open && (
+        <div className="border-t border-border px-4 py-4 space-y-4">
+          {lesson.youtube_id && (
+            <div className="overflow-hidden rounded-lg border border-border">
+              <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+                <iframe className="absolute inset-0 h-full w-full"
+                  src={`https://www.youtube.com/embed/${lesson.youtube_id}`}
+                  title={lesson.title} allowFullScreen />
+              </div>
+            </div>
+          )}
+
+          {/* PDFs */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">PDFs da Aula</p>
+            {pdfs.map((pdf) => (
+              <div key={pdf.id} className="flex items-center justify-between rounded-md border border-border bg-muted/20 px-3 py-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <FileText className="h-4 w-4 text-primary" />
+                  <span className="font-medium">{pdf.name}</span>
+                  {pdf.file_size && <span className="text-xs text-muted-foreground">({pdf.file_size})</span>}
+                </div>
+                <div className="flex items-center gap-2">
+                  {pdf.file_url && (
+                    <a href={pdf.file_url} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-primary">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                  <button onClick={() => handleDeletePdf(pdf.id)} className="text-muted-foreground hover:text-destructive">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {addingPdf ? (
+              <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 space-y-2">
+                <div>
+                  <label className="block text-xs text-muted-foreground mb-1">Arquivo PDF *</label>
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    onChange={handleFileChange}
+                    disabled={savingPdf}
+                    className="block w-full text-xs text-muted-foreground file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/90 disabled:opacity-50"
+                  />
+                  {pdfFile && <p className="text-[10px] text-muted-foreground mt-1">{pdfFile.name} · {(pdfFile.size / 1024).toFixed(0)} KB</p>}
+                </div>
+                <Input placeholder="Nome do PDF *" value={pdfName} onChange={(e) => setPdfName(e.target.value)} className="h-8 text-sm" disabled={savingPdf} />
+                {pdfError && <p className="text-xs text-destructive">{pdfError}</p>}
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-7 gap-1 text-xs" onClick={handleAddPdf} disabled={savingPdf || !pdfFile}>
+                    {savingPdf && <Loader2 className="h-3 w-3 animate-spin" />} Fazer Upload
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAddingPdf(false); setPdfError(""); setPdfFile(null); setPdfName("") }} disabled={savingPdf}>Cancelar</Button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setAddingPdf(true)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
+                <FilePlus className="h-3.5 w-3.5" /> Adicionar PDF
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Nova Aula Form ───────────────────────────────────────
+function NovaAulaForm({ topicId, currentLessonsCount, onAdded }: { topicId: number; currentLessonsCount: number; onAdded: (l: ApiLesson) => void }) {
+  const [show, setShow] = useState(false)
+  const [titulo, setTitulo] = useState("")
+  const [url, setUrl] = useState("")
+  const [duracao, setDuracao] = useState("")
   const [saving, setSaving] = useState(false)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filterModality, setFilterModality] = useState<"todos" | "interno" | "externo" | "ambos">("todos")
-  const [editingCourse, setEditingCourse] = useState<ApiCourse | null>(null)
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [error, setError] = useState("")
+
+  function extractYoutubeId(input: string): string | null {
+    const regexes = [/youtube\.com\/watch\?v=([^&\s]+)/, /youtu\.be\/([^?\s]+)/, /youtube\.com\/embed\/([^?\s]+)/]
+    for (const re of regexes) { const m = input.match(re); if (m) return m[1] }
+    return null
+  }
+
+  async function submit() {
+    if (!titulo.trim() || !url.trim()) return
+    const youtubeId = extractYoutubeId(url.trim())
+    if (!youtubeId) { setError("Link do YouTube inválido."); return }
+    setSaving(true); setError("")
+    try {
+      const lesson = await api.lessons.create({ topic_id: topicId, title: titulo.trim(), youtube_id: youtubeId, duration: duracao.trim() || "00:00:00", position: currentLessonsCount + 1, available: true })
+      onAdded(lesson)
+      setTitulo(""); setUrl(""); setDuracao(""); setShow(false)
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erro ao salvar") }
+    finally { setSaving(false) }
+  }
+
+  const previewId = extractYoutubeId(url)
+
+  if (!show) return (
+    <button onClick={() => setShow(true)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
+      <PlusCircle className="h-3.5 w-3.5" /> Adicionar aula
+    </button>
+  )
+
+  return (
+    <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nova Aula</p>
+      <Input placeholder="Título da aula" value={titulo} onChange={(e) => setTitulo(e.target.value)} className="h-8 text-sm" disabled={saving} />
+      <div className="relative">
+        <Link2 className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input placeholder="Link do YouTube (https://youtube.com/watch?v=...)" value={url} onChange={(e) => { setUrl(e.target.value); setError("") }} className="h-8 pl-8 text-sm" disabled={saving} />
+      </div>
+      <Input placeholder="Duração (ex: 00:24:00)" value={duracao} onChange={(e) => setDuracao(e.target.value)} className="h-8 text-sm" disabled={saving} />
+      {previewId && (
+        <div className="overflow-hidden rounded-lg border border-border">
+          <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+            <iframe className="absolute inset-0 h-full w-full" src={`https://www.youtube.com/embed/${previewId}`} title="preview" allowFullScreen />
+          </div>
+        </div>
+      )}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <div className="flex gap-2">
+        <Button size="sm" className="h-8 gap-1" onClick={submit} disabled={saving}>
+          {saving && <Loader2 className="h-3 w-3 animate-spin" />} Adicionar Aula
+        </Button>
+        <Button size="sm" variant="ghost" className="h-8" onClick={() => setShow(false)} disabled={saving}>Cancelar</Button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Topic Block ──────────────────────────────────────────
+function TopicBlock({ topic, onDelete, onLessonsChange }: {
+  topic: ApiTopic & { lessons: ApiLesson[] }
+  onDelete: () => void
+  onLessonsChange: (lessons: ApiLesson[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  async function deleteLesson(lessonId: number) {
+    await api.lessons.delete(lessonId)
+    onLessonsChange(topic.lessons.filter((l) => l.id !== lessonId))
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/20">
+      <button className="flex w-full items-center justify-between px-4 py-2.5 text-left" onClick={() => setOpen(!open)}>
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-yellow-500" />
+          <span className="text-sm font-medium">{topic.title}</span>
+          <Badge variant="secondary" className="text-xs">{topic.lessons.length} aula(s)</Badge>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </div>
+      </button>
+      {open && (
+        <div className="border-t border-border px-4 py-3 space-y-2">
+          {topic.lessons.map((lesson) => (
+            <LessonRow key={lesson.id} lesson={lesson} onDelete={() => deleteLesson(lesson.id)} />
+          ))}
+          <NovaAulaForm topicId={topic.id} currentLessonsCount={topic.lessons.length} onAdded={(l) => onLessonsChange([...topic.lessons, l])} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Subject Block ────────────────────────────────────────
+type TopicWithLessons = ApiTopic & { lessons: ApiLesson[] }
+type SubjectWithTopics = ApiSubject & { topics: TopicWithLessons[] }
+
+function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjects }: {
+  subject: SubjectWithTopics; onDelete: () => void; onUpdate: (s: SubjectWithTopics) => void
+  professors: ApiUser[]; allGlobalSubjects: ApiSubject[]
+}) {
+  const [open, setOpen] = useState(false)
+  const [addingTopic, setAddingTopic] = useState(false)
+  const [editingProf, setEditingProf] = useState(false)
+  const [newProfId, setNewProfId] = useState("")
+  const [savingProf, setSavingProf] = useState(false)
+
+  const eligibleProfessorIds = new Set(
+    allGlobalSubjects
+      .filter((s) => s.name.toLowerCase() === subject.name.toLowerCase() && s.professor_id)
+      .map((s) => s.professor_id!)
+  )
+  const eligibleProfessors = eligibleProfessorIds.size > 0
+    ? professors.filter((p) => eligibleProfessorIds.has(p.id))
+    : professors
+
+  const currentProfessor = professors.find((p) => p.id === subject.professor_id)
+
+  async function saveProf() {
+    if (!newProfId) return
+    setSavingProf(true)
+    try {
+      await api.subjects.update(subject.id, { professor_id: parseInt(newProfId) })
+      onUpdate({ ...subject, professor_id: parseInt(newProfId) })
+      setEditingProf(false)
+      setNewProfId("")
+    } catch (e) { console.error(e) }
+    finally { setSavingProf(false) }
+  }
+
+  async function addTopic(title: string) {
+    try {
+      const topic = await api.topics.create({ subject_id: subject.id, title, position: subject.topics.length + 1 })
+      onUpdate({ ...subject, topics: [...subject.topics, { ...topic, lessons: [] }] })
+      setAddingTopic(false)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao criar tópico")
+    }
+  }
+
+  async function deleteTopic(topicId: number) {
+    await api.topics.delete(topicId)
+    onUpdate({ ...subject, topics: subject.topics.filter((t) => t.id !== topicId) })
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-background">
+      <button className="flex w-full items-center justify-between px-4 py-2.5 text-left" onClick={() => setOpen(!open)}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <GraduationCap className="h-4 w-4 text-blue-500" />
+          <span className="text-sm font-medium">{subject.name}</span>
+          <Badge variant="secondary" className="text-xs">{subject.topics.length} tópico(s)</Badge>
+          {currentProfessor ? (
+            <span className="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[11px] text-blue-700">
+              Prof: {currentProfessor.name.split(" ")[0]}
+            </span>
+          ) : (
+            <span className="rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[11px] text-orange-600">
+              Sem professor
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); setEditingProf((v) => !v); setNewProfId("") }}
+            className="text-muted-foreground hover:text-blue-600"
+            title="Alterar professor"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </div>
+      </button>
+
+      {editingProf && (
+        <div className="border-t border-border bg-blue-50/50 px-4 py-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <select
+            value={newProfId}
+            onChange={(e) => setNewProfId(e.target.value)}
+            className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-sm"
+            disabled={savingProf}
+          >
+            <option value="">Selecione o professor...</option>
+            {eligibleProfessors.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <Button size="sm" className="h-7 text-xs px-3" onClick={saveProf} disabled={savingProf || !newProfId}>
+            {savingProf ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => { setEditingProf(false); setNewProfId("") }} disabled={savingProf}>
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+
+      {open && (
+        <div className="border-t border-border px-4 py-3 space-y-2">
+          {subject.topics.map((topic) => (
+            <TopicBlock
+              key={topic.id}
+              topic={topic}
+              onDelete={() => deleteTopic(topic.id)}
+              onLessonsChange={(lessons) =>
+                onUpdate({ ...subject, topics: subject.topics.map((t) => t.id === topic.id ? { ...t, lessons } : t) })
+              }
+            />
+          ))}
+          {addingTopic ? (
+            <InlineAdd placeholder="Nome do tópico" onAdd={addTopic} onCancel={() => setAddingTopic(false)} />
+          ) : (
+            <button onClick={() => setAddingTopic(true)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
+              <PlusCircle className="h-3.5 w-3.5" /> Adicionar tópico
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Course Card ──────────────────────────────────────────
+type CourseWithSubjects = ApiCourse & { subjects: SubjectWithTopics[] }
+
+function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }: {
+  course: CourseWithSubjects; onDelete: () => void; onUpdate: (c: CourseWithSubjects) => void
+  professors: ApiUser[]; allGlobalSubjects: ApiSubject[]
+}) {
+  const [open, setOpen] = useState(false)
+  const [addingSubject, setAddingSubject] = useState(false)
+  const [availableSubjects, setAvailableSubjects] = useState<ApiSubject[]>([])
+  const [selectedSubjectId, setSelectedSubjectId] = useState("")
+  const [linkingSubject, setLinkingSubject] = useState(false)
+  const [toggling, setToggling] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [loadingSubjects, setLoadingSubjects] = useState(false)
+
+  async function loadSubjects() {
+    if (loadingSubjects) return
+    setLoadingSubjects(true)
+    try {
+      const subjects = await api.subjects.list(course.id)
+      const withTopics = await Promise.all(subjects.map(async (s) => {
+        const topics = await api.topics.list(s.id)
+        const withLessons = await Promise.all(topics.map(async (t) => {
+          const lessons = await api.lessons.list(t.id)
+          return { ...t, lessons }
+        }))
+        return { ...s, topics: withLessons }
+      }))
+      onUpdate({ ...course, subjects: withTopics })
+    } catch (e) { console.error(e) }
+    finally { setLoadingSubjects(false) }
+  }
+
+  function handleToggle() {
+    setOpen((prev) => {
+      if (!prev) loadSubjects()
+      return !prev
+    })
+  }
+
+  async function openAddSubject() {
+    setSelectedSubjectId("")
+    const all = await api.subjects.list().catch(() => [])
+    const linkedIds = course.subjects.map((s) => s.id)
+    setAvailableSubjects(all.filter((s) => !linkedIds.includes(s.id) && !s.course_id))
+    setAddingSubject(true)
+  }
+
+  async function linkSubject() {
+    if (!selectedSubjectId) return
+    setLinkingSubject(true)
+    try {
+      const updated = await api.subjects.update(parseInt(selectedSubjectId), { course_id: course.id })
+      onUpdate({ ...course, subjects: [...course.subjects, { ...updated, topics: [] }] })
+      setAddingSubject(false)
+      setSelectedSubjectId("")
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao vincular matéria")
+    } finally {
+      setLinkingSubject(false)
+    }
+  }
+
+  async function toggleStatus() {
+    setToggling(true)
+    try {
+      const updated = await api.courses.update(course.id, { status: course.status === "published" ? "draft" : "published" })
+      onUpdate({ ...course, ...updated })
+    } catch (e) { console.error(e) }
+    finally { setToggling(false) }
+  }
+
+  async function handleDelete() {
+    if (!confirm(`Excluir o curso "${course.title}"?`)) return
+    setDeleting(true)
+    try {
+      const enrollments = await api.enrollments.list()
+      const active = enrollments.filter(
+        (e) => e.course?.id === course.id && e.status === "active"
+      )
+      if (active.length > 0) {
+        alert(`Este curso possui ${active.length} aluno(s) matriculado(s). Cancele as matrículas antes de excluir.`)
+        return
+      }
+      await api.courses.delete(course.id)
+      onDelete()
+    } catch (e) { console.error(e) }
+    finally { setDeleting(false) }
+  }
+
+  async function unlinkSubject(subjectId: number) {
+    await api.subjects.update(subjectId, { course_id: null as unknown as number })
+    onUpdate({ ...course, subjects: course.subjects.filter((s) => s.id !== subjectId) })
+  }
+
+  const totalAulas = course.subjects.flatMap((s) => s.topics).flatMap((t) => t.lessons).length
+
+  return (
+    <div className="rounded-xl border border-border bg-card shadow-sm">
+      <div className="flex items-center justify-between border-b border-border px-5 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+            <BookOpen className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-semibold text-foreground">{course.title}</h3>
+              <Badge className={cn("text-xs", course.status === "published" ? "bg-green-500/10 text-green-600 border-green-500/20" : "bg-yellow-500/10 text-yellow-600 border-yellow-500/20")} variant="outline">
+                {course.status === "published" ? "publicado" : "rascunho"}
+              </Badge>
+              {course.access_type === "presencial" && (
+                <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200 gap-1" variant="outline">
+                  <Building2 className="h-3 w-3" /> Presencial
+                </Badge>
+              )}
+              {course.access_type === "online" && (
+                <Badge className="text-xs bg-green-100 text-green-700 border-green-200 gap-1" variant="outline">
+                  <Monitor className="h-3 w-3" /> Online
+                </Badge>
+              )}
+              {course.access_type === "hibrido" && (
+                <Badge className="text-xs bg-purple-100 text-purple-700 border-purple-200 gap-1" variant="outline">
+                  <Users className="h-3 w-3" /> Híbrido
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              R$ {Number(course.price).toFixed(2)} · {course.subjects.length} matéria(s) · {totalAulas} aula(s)
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={toggleStatus} disabled={toggling}>
+            {toggling ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+            {course.status === "published" ? "Despublicar" : "Publicar"}
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 text-muted-foreground hover:text-destructive" onClick={handleDelete} disabled={deleting}>
+            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+          </Button>
+          <button onClick={handleToggle}>
+            {open ? <ChevronDown className="h-5 w-5 text-muted-foreground" /> : <ChevronRight className="h-5 w-5 text-muted-foreground" />}
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <div className="px-5 py-4 space-y-3">
+          {loadingSubjects ? (
+            <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+          ) : (
+            <>
+              {course.subjects.map((subject) => (
+                <SubjectBlock
+                  key={subject.id}
+                  subject={subject}
+                  onDelete={() => unlinkSubject(subject.id)}
+                  onUpdate={(updated) =>
+                    onUpdate({ ...course, subjects: course.subjects.map((s) => s.id === subject.id ? updated : s) })
+                  }
+                  professors={professors}
+                  allGlobalSubjects={allGlobalSubjects}
+                />
+              ))}
+              {addingSubject ? (
+                <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground">Vincular matéria ao curso</p>
+                  {availableSubjects.length === 0 ? (
+                    <p className="text-xs text-amber-600">Nenhuma matéria disponível. Crie matérias e vincule professores primeiro em Usuários.</p>
+                  ) : (
+                    <>
+                      <select
+                        value={selectedSubjectId}
+                        onChange={(e) => setSelectedSubjectId(e.target.value)}
+                        className="w-full h-8 rounded-md border border-input bg-background px-3 text-sm"
+                        disabled={linkingSubject}
+                      >
+                        <option value="">Selecione uma matéria...</option>
+                        {availableSubjects.map((s) => {
+                          const prof = professors.find((p) => p.id === s.professor_id)
+                          const hasProf = !!prof
+                          return (
+                            <option key={s.id} value={s.id} disabled={!hasProf}>
+                              {s.name}{hasProf ? ` — Prof. ${prof!.name.split(" ")[0]}` : " ⚠ Sem professor"}
+                            </option>
+                          )
+                        })}
+                      </select>
+                      {selectedSubjectId && !availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))?.professor_id && (
+                        <p className="text-xs text-destructive">Esta matéria não tem professor atribuído. Vá em CEO → Usuários e vincule um professor a ela.</p>
+                      )}
+                    </>
+                  )}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm" className="h-7 text-xs gap-1" onClick={linkSubject}
+                      disabled={linkingSubject || !selectedSubjectId || !availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))?.professor_id}
+                    >
+                      {linkingSubject && <Loader2 className="h-3 w-3 animate-spin" />} Vincular
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAddingSubject(false)} disabled={linkingSubject}>Cancelar</Button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={openAddSubject} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary">
+                  <PlusCircle className="h-4 w-4" /> Vincular matéria
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Formulário de criação de curso ───────────────────────
+function NovoCursoForm({ onCreated, onCancel }: {
+  onCreated: (c: CourseWithSubjects) => void; onCancel: () => void
+}) {
+  const [title, setTitle] = useState("")
+  const [description, setDescription] = useState("")
+  const [price, setPrice] = useState("")
+  const [careerId, setCareerId] = useState("")
+  const [careers, setCareers] = useState<import("@/lib/api").ApiCareer[]>([])
+  const [status, setStatus] = useState<"draft" | "published">("draft")
+  const [accessType, setAccessType] = useState<"online" | "presencial" | "hibrido">("online")
+  const [durationDays, setDurationDays] = useState("")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    api.careers.list().then(setCareers).catch(console.error)
+  }, [])
+
+  async function submit() {
+    if (!title.trim()) { setError("Título é obrigatório."); return }
+    setSaving(true); setError("")
+    try {
+      const novo = await api.courses.create({
+        title: title.trim(),
+        description: description.trim(),
+        price: parseFloat(price) || 0,
+        career_id: careerId ? parseInt(careerId) : undefined,
+        status,
+        access_type: accessType,
+        duration_in_days: parseInt(durationDays) || 0,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+      })
+      onCreated({ ...novo, subjects: [] })
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erro ao criar curso") }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="rounded-xl border border-dashed border-primary bg-primary/5 p-5 space-y-4">
+      <p className="text-sm font-semibold text-foreground">Novo Curso</p>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2 space-y-1">
+          <Label className="text-xs">Título *</Label>
+          <Input placeholder="Ex: Reta Final - Assembleia Legislativa RO" value={title} onChange={(e) => setTitle(e.target.value)} disabled={saving} />
+        </div>
+        <div className="sm:col-span-2 space-y-1">
+          <Label className="text-xs">Descrição</Label>
+          <Input placeholder="Descrição do curso" value={description} onChange={(e) => setDescription(e.target.value)} disabled={saving} />
+        </div>
+        <div className="sm:col-span-2 space-y-1">
+          <Label className="text-xs">Carreira *</Label>
+          <select value={careerId} onChange={(e) => setCareerId(e.target.value)}
+            className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" disabled={saving}>
+            <option value="">Selecione uma carreira</option>
+            {careers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          {careers.length === 0 && <p className="text-xs text-amber-600">⚠ Nenhuma carreira cadastrada. Crie carreiras primeiro.</p>}
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs flex items-center gap-1"><DollarSign className="h-3 w-3" /> Preço (R$)</Label>
+          <Input type="number" placeholder="450.00" value={price} onChange={(e) => setPrice(e.target.value)} disabled={saving} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs flex items-center gap-1"><Clock className="h-3 w-3" /> Duração (dias)</Label>
+          <Input type="number" placeholder="30" value={durationDays} onChange={(e) => setDurationDays(e.target.value)} disabled={saving} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Data Início</Label>
+          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} disabled={saving} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Data Fim</Label>
+          <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} disabled={saving} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Status</Label>
+          <select value={status} onChange={(e) => setStatus(e.target.value as "draft" | "published")}
+            className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" disabled={saving}>
+            <option value="draft">Rascunho</option>
+            <option value="published">Publicado</option>
+          </select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs flex items-center gap-1"><Globe className="h-3 w-3" /> Modalidade</Label>
+          <select value={accessType} onChange={(e) => setAccessType(e.target.value as "online" | "presencial" | "hibrido")}
+            className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" disabled={saving}>
+            <option value="online">Online</option>
+            <option value="presencial">Presencial</option>
+            <option value="hibrido">Híbrido</option>
+          </select>
+        </div>
+      </div>
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+
+      <div className="flex gap-2">
+        <Button onClick={submit} disabled={saving} className="gap-2">
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+          Criar Curso
+        </Button>
+        <Button variant="ghost" onClick={onCancel} disabled={saving}>Cancelar</Button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Page ────────────────────────────────────────────
+export default function CeoCursosPage() {
+  const [courses, setCourses] = useState<CourseWithSubjects[]>([])
+  const [professors, setProfessors] = useState<ApiUser[]>([])
+  const [allGlobalSubjects, setAllGlobalSubjects] = useState<ApiSubject[]>([])
+  const [loading, setLoading] = useState(true)
+  const [criando, setCriando] = useState(false)
 
   useEffect(() => {
     api.courses.list()
-      .then(setCourses)
+      .then((data) => setCourses(data.map((c) => ({ ...c, subjects: [] }))))
       .catch(console.error)
       .finally(() => setLoading(false))
+
+    api.users.list()
+      .then((users) => setProfessors(users.filter((u) => u.role === "professor")))
+      .catch(console.error)
+
+    api.subjects.list()
+      .then(setAllGlobalSubjects)
+      .catch(console.error)
   }, [])
-
-  // Form states for create modal
-  const [createTitle, setCreateTitle] = useState("")
-  const [createPrice, setCreatePrice] = useState(0)
-  const [createAccessType, setCreateAccessType] = useState<"interno" | "externo" | "ambos">("ambos")
-  const [createStartDate, setCreateStartDate] = useState("")
-  const [createEndDate, setCreateEndDate] = useState("")
-
-  // Form states for edit modal
-  const [editTitle, setEditTitle] = useState("")
-  const [editPrice, setEditPrice] = useState(0)
-  const [editAccessType, setEditAccessType] = useState<"interno" | "externo" | "ambos">("ambos")
-  const [editStartDate, setEditStartDate] = useState("")
-  const [editEndDate, setEditEndDate] = useState("")
-
-  const handleCreateCourse = async (e: { preventDefault(): void }) => {
-    e.preventDefault()
-    setSaving(true)
-    try {
-      const newCourse = await api.courses.create({
-        title: createTitle,
-        price: createPrice,
-        status: "published",
-        access_type: createAccessType,
-        start_date: createStartDate || undefined,
-        end_date: createEndDate || undefined,
-      })
-      setCourses((prev) => [newCourse, ...prev])
-      resetCreateForm()
-      setIsCreateModalOpen(false)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleEditCourse = (course: ApiCourse) => {
-    setEditingCourse(course)
-    setEditTitle(course.title)
-    setEditPrice(course.price)
-    setEditAccessType(course.access_type as "interno" | "externo" | "ambos")
-    setEditStartDate(course.start_date || "")
-    setEditEndDate(course.end_date || "")
-    setIsEditModalOpen(true)
-  }
-
-  const handleSaveEdit = async (e: { preventDefault(): void }) => {
-    e.preventDefault()
-    if (!editingCourse) return
-    setSaving(true)
-    try {
-      const updated = await api.courses.update(editingCourse.id, {
-        title: editTitle,
-        price: editPrice,
-        access_type: editAccessType,
-        start_date: editStartDate || undefined,
-        end_date: editEndDate || undefined,
-      })
-      setCourses((prev) => prev.map((c) => (c.id === editingCourse.id ? updated : c)))
-      setIsEditModalOpen(false)
-      setEditingCourse(null)
-      resetEditForm()
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const resetCreateForm = () => {
-    setCreateTitle("")
-    setCreatePrice(0)
-    setCreateAccessType("ambos")
-    setCreateStartDate("")
-    setCreateEndDate("")
-  }
-
-  const resetEditForm = () => {
-    setEditTitle("")
-    setEditPrice(0)
-    setEditAccessType("ambos")
-    setEditStartDate("")
-    setEditEndDate("")
-  }
-
-  const stats = useMemo(() => ({
-    totalCourses: courses.length,
-    presencial: courses.filter((c) => c.access_type === "interno").length,
-    online: courses.filter((c) => c.access_type === "externo").length,
-    hibrido: courses.filter((c) => c.access_type === "ambos").length,
-  }), [courses])
-
-  // Filter courses based on search and modality
-  const filteredCourses = useMemo(() => {
-    return courses.filter((course) => {
-      const matchesSearch = course.title.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesModality = filterModality === "todos" || course.access_type === filterModality
-      return matchesSearch && matchesModality
-    })
-  }, [courses, searchTerm, filterModality])
 
   if (loading) {
     return (
@@ -139,491 +748,66 @@ export default function CeoCursosPage() {
 
   return (
     <div className="p-4 lg:p-8">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Cursos</h1>
-          <p className="text-sm text-muted-foreground">Gestão ágil e visual das ofertas de curso. Adicione, localize e monitore performance em poucos cliques.</p>
-        </div>
+      <div className="mx-auto max-w-5xl space-y-6">
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card className="border-green-500/40 bg-gradient-to-b from-green-700/30 to-slate-900/50 p-4 text-white">
-            <p className="text-xs uppercase tracking-wide text-white/70">Total de Cursos</p>
-            <p className="text-3xl font-bold">{stats.totalCourses}</p>
-          </Card>
-          <Card className="border-blue-500/40 bg-gradient-to-b from-blue-700/30 to-slate-900/50 p-4 text-white">
-            <p className="text-xs uppercase tracking-wide text-white/70">Online</p>
-            <p className="text-3xl font-bold">{stats.online}</p>
-          </Card>
-          <Card className="border-orange-500/40 bg-gradient-to-b from-orange-700/30 to-slate-900/50 p-4 text-white">
-            <p className="text-xs uppercase tracking-wide text-white/70">Presencial</p>
-            <p className="text-3xl font-bold">{stats.presencial}</p>
-          </Card>
-          <Card className="border-fuchsia-500/40 bg-gradient-to-b from-fuchsia-700/30 to-slate-900/50 p-4 text-white">
-            <p className="text-xs uppercase tracking-wide text-white/70">Híbrido</p>
-            <p className="text-3xl font-bold">{stats.hibrido}</p>
-          </Card>
-        </div>
-
-        {/* Header with Create Button */}
+        {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-foreground">Gerenciar Cursos</h2>
-            <p className="text-sm text-muted-foreground">Visualize e gerencie todos os cursos disponíveis</p>
+            <h1 className="text-2xl font-bold text-foreground">Cursos</h1>
+            <p className="text-sm text-muted-foreground">Organize cursos, matérias, tópicos e videoaulas</p>
           </div>
-          <Button onClick={() => setIsCreateModalOpen(true)} className="bg-[#e8491d] hover:bg-[#d13a0f] text-white">
-            <Plus className="h-4 w-4 mr-2" />
-            Criar Curso
-          </Button>
+          {!criando && (
+            <Button onClick={() => setCriando(true)} className="gap-2">
+              <PlusCircle className="h-4 w-4" /> Novo Curso
+            </Button>
+          )}
         </div>
 
-        {/* Filters */}
-        <Card className="p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-            <div className="flex-1">
-              <Label className="text-sm font-medium text-muted-foreground mb-2 block">Buscar Cursos</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Digite o nome do curso..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <div className="w-full sm:w-48">
-              <Label className="text-sm font-medium text-muted-foreground mb-2 block">Modalidade</Label>
-              <Select value={filterModality} onValueChange={(value) => setFilterModality(value as "todos" | "interno" | "externo" | "ambos")}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todas</SelectItem>
-                  <SelectItem value="interno">Presencial</SelectItem>
-                  <SelectItem value="externo">Online</SelectItem>
-                  <SelectItem value="ambos">Híbrido</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button variant="outline" onClick={() => { setSearchTerm(""); setFilterModality("todos") }}>
-              Resetar Filtros
-            </Button>
-          </div>
-        </Card>
-
-        {/* Course Cards */}
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {filteredCourses.map((course) => (
-            <Card key={course.id} className="group relative overflow-hidden border border-slate-200 hover:border-[#e8491d]/30 hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-              <div className="absolute inset-0 bg-gradient-to-br from-[#e8491d]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              
-              <div className="p-6">
-                {/* Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-bold text-foreground mb-1 line-clamp-2">{course.title}</h3>
-                    <Badge variant="secondary" className="text-xs">
-                      {course.status === "published" ? "Publicado" : "Rascunho"}
-                    </Badge>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleEditCourse(course)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-[#e8491d]/10 hover:text-[#e8491d]"
-                  >
-                    <Edit3 className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {/* Description */}
-                <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-                  {course.description || "Sem descrição disponível"}
-                </p>
-
-                {/* Modality Badge */}
-                <div className="flex items-center gap-2 mb-4">
-                  {course.access_type === "interno" && (
-                    <>
-                      <Building2 className="h-4 w-4 text-blue-600" />
-                      <Badge className="bg-blue-100 text-blue-800 border-blue-200">Presencial</Badge>
-                    </>
-                  )}
-                  {course.access_type === "externo" && (
-                    <>
-                      <Monitor className="h-4 w-4 text-green-600" />
-                      <Badge className="bg-green-100 text-green-800 border-green-200">Online</Badge>
-                    </>
-                  )}
-                  {course.access_type === "ambos" && (
-                    <>
-                      <Users className="h-4 w-4 text-purple-600" />
-                      <Badge className="bg-purple-100 text-purple-800 border-purple-200">Híbrido</Badge>
-                    </>
-                  )}
-                </div>
-
-                {/* Price */}
-                <div className="flex items-center gap-2 mb-4">
-                  <DollarSign className="h-4 w-4 text-green-600" />
-                  <span className="text-xl font-bold text-green-600">
-                    R$ {course.price.toFixed(2)}
-                  </span>
-                </div>
-
-                {/* Dates */}
-                {(course.start_date || course.end_date) && (
-                  <div className="flex items-center gap-2 mb-4">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <div className="text-xs text-muted-foreground">
-                      {course.start_date && <span>Início: {new Date(course.start_date).toLocaleDateString("pt-BR")}</span>}
-                      {course.start_date && course.end_date && <span> • </span>}
-                      {course.end_date && <span>Fim: {new Date(course.end_date).toLocaleDateString("pt-BR")}</span>}
-                    </div>
-                  </div>
-                )}
-
-                {/* Footer */}
-                <div className="pt-4 border-t border-slate-100">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>ID: {course.id}</span>
-                    <span>Criado em {course.created_at ? new Date(course.created_at).toLocaleDateString("pt-BR") : "—"}</span>
-                  </div>
-                </div>
-              </div>
-            </Card>
+        {/* Legenda hierarquia */}
+        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+          {[
+            { icon: BookOpen, label: "Curso", color: "text-primary" },
+            { icon: GraduationCap, label: "Matéria", color: "text-blue-500" },
+            { icon: FileText, label: "Tópico", color: "text-yellow-500" },
+            { icon: PlayCircle, label: "Aula (YouTube)", color: "text-red-500" },
+          ].map((item, i, arr) => (
+            <span key={item.label} className="flex items-center gap-1">
+              <item.icon className={`h-3.5 w-3.5 ${item.color}`} />
+              <span>{item.label}</span>
+              {i < arr.length - 1 && <ChevronRight className="h-3 w-3" />}
+            </span>
           ))}
         </div>
 
-        {filteredCourses.length === 0 && (
-          <Card className="p-12 text-center">
-            <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">Nenhum curso encontrado</h3>
-            <p className="text-muted-foreground mb-4">
-              {searchTerm || filterModality !== "todos" 
-                ? "Tente ajustar os filtros de busca" 
-                : "Comece criando seu primeiro curso"}
-            </p>
-            {!searchTerm && filterModality === "todos" && (
-              <Button onClick={() => setIsCreateModalOpen(true)} className="bg-[#e8491d] hover:bg-[#d13a0f] text-white">
-                <Plus className="h-4 w-4 mr-2" />
-                Criar Primeiro Curso
-              </Button>
-            )}
-          </Card>
+        {/* Formulário novo curso */}
+        {criando && (
+          <NovoCursoForm
+            onCreated={(c) => { setCourses((prev) => [c, ...prev]); setCriando(false) }}
+            onCancel={() => setCriando(false)}
+          />
         )}
 
-        {/* Create Course Modal */}
-        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-          <DialogContent className="max-w-2xl">
-            <div className="bg-gradient-to-r from-[#e8491d] to-[#f97316] p-6 rounded-t-lg">
-              <DialogHeader>
-                <DialogTitle className="text-2xl font-bold text-white flex items-center gap-2">
-                  <Plus className="h-6 w-6" />
-                  Criar Novo Curso
-                </DialogTitle>
-                <DialogDescription className="text-orange-100">
-                  Preencha as informações do novo curso
-                </DialogDescription>
-              </DialogHeader>
-            </div>
-
-            <form onSubmit={handleCreateCourse} className="p-6 space-y-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <Label htmlFor="create-title" className="text-sm font-medium mb-2 block">
-                    Título do Curso *
-                  </Label>
-                  <Input
-                    id="create-title"
-                    placeholder="Digite o título completo do curso"
-                    value={createTitle}
-                    onChange={(e) => setCreateTitle(e.target.value)}
-                    required
-                    className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="create-price" className="text-sm font-medium mb-2 block">
-                    Preço (R$) *
-                  </Label>
-                  <Input
-                    id="create-price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0,00"
-                    value={createPrice}
-                    onChange={(e) => setCreatePrice(Number(e.target.value))}
-                    required
-                    className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="create-access-type" className="text-sm font-medium mb-2 block">
-                    Modalidade *
-                  </Label>
-                  <Select value={createAccessType} onValueChange={(value) => setCreateAccessType(value as "interno" | "externo" | "ambos")}>
-                    <SelectTrigger className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300">
-                      <SelectValue placeholder="Selecione a modalidade" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="interno">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="h-4 w-4 text-blue-600" />
-                          Presencial
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="externo">
-                        <div className="flex items-center gap-2">
-                          <Monitor className="h-4 w-4 text-green-600" />
-                          Online
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="ambos">
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-purple-600" />
-                          Híbrido
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {(createAccessType === "interno" || createAccessType === "ambos") && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Building2 className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm font-medium text-gray-900">Datas das Aulas Presenciais</span>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label htmlFor="create-start-date" className="text-sm font-medium mb-2 block">
-                        Data de Início *
-                      </Label>
-                      <Input
-                        id="create-start-date"
-                        type="date"
-                        value={createStartDate}
-                        onChange={(e) => setCreateStartDate(e.target.value)}
-                        required
-                        className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="create-end-date" className="text-sm font-medium mb-2 block">
-                        Data de Fim *
-                      </Label>
-                      <Input
-                        id="create-end-date"
-                        type="date"
-                        value={createEndDate}
-                        onChange={(e) => setCreateEndDate(e.target.value)}
-                        required
-                        className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {createAccessType === "externo" && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Monitor className="h-4 w-4 text-green-600" />
-                    <span className="text-sm font-medium text-gray-900">Data de Início do Acesso Online</span>
-                  </div>
-                  <div>
-                    <Label htmlFor="create-online-start" className="text-sm font-medium mb-2 block">
-                      Data de Início *
-                    </Label>
-                    <Input
-                      id="create-online-start"
-                      type="date"
-                      value={createStartDate}
-                      onChange={(e) => setCreateStartDate(e.target.value)}
-                      required
-                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="flex-1"
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={saving} className="flex-1 bg-[#e8491d] hover:bg-[#d13a0f] text-white">
-                  {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Criando...</> : "Criar Curso"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        {/* Edit Course Modal */}
-        <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-          <DialogContent className="max-w-2xl">
-            <div className="bg-gradient-to-r from-[#e8491d] to-[#f97316] p-6 rounded-t-lg">
-              <DialogHeader>
-                <DialogTitle className="text-2xl font-bold text-white flex items-center gap-2">
-                  <Edit3 className="h-6 w-6" />
-                  Editar Curso
-                </DialogTitle>
-                <DialogDescription className="text-orange-100">
-                  Atualize as informações do curso
-                </DialogDescription>
-              </DialogHeader>
-            </div>
-
-            <form onSubmit={handleSaveEdit} className="p-6 space-y-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <Label htmlFor="edit-title" className="text-sm font-medium mb-2 block">
-                    Título do Curso *
-                  </Label>
-                  <Input
-                    id="edit-title"
-                    placeholder="Digite o título completo do curso"
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    required
-                    className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-price" className="text-sm font-medium mb-2 block">
-                    Preço (R$) *
-                  </Label>
-                  <Input
-                    id="edit-price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0,00"
-                    value={editPrice}
-                    onChange={(e) => setEditPrice(Number(e.target.value))}
-                    required
-                    className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="edit-access-type" className="text-sm font-medium mb-2 block">
-                    Modalidade *
-                  </Label>
-                  <Select value={editAccessType} onValueChange={(value) => setEditAccessType(value as "interno" | "externo" | "ambos")}>
-                    <SelectTrigger className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300">
-                      <SelectValue placeholder="Selecione a modalidade" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="interno">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="h-4 w-4 text-blue-600" />
-                          Presencial
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="externo">
-                        <div className="flex items-center gap-2">
-                          <Monitor className="h-4 w-4 text-green-600" />
-                          Online
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="ambos">
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-purple-600" />
-                          Híbrido
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {(editAccessType === "interno" || editAccessType === "ambos") && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Building2 className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm font-medium text-gray-900">Datas das Aulas Presenciais</span>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label htmlFor="edit-start-date" className="text-sm font-medium mb-2 block">
-                        Data de Início *
-                      </Label>
-                      <Input
-                        id="edit-start-date"
-                        type="date"
-                        value={editStartDate}
-                        onChange={(e) => setEditStartDate(e.target.value)}
-                        required
-                        className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="edit-end-date" className="text-sm font-medium mb-2 block">
-                        Data de Fim *
-                      </Label>
-                      <Input
-                        id="edit-end-date"
-                        type="date"
-                        value={editEndDate}
-                        onChange={(e) => setEditEndDate(e.target.value)}
-                        required
-                        className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {editAccessType === "externo" && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Monitor className="h-4 w-4 text-green-600" />
-                    <span className="text-sm font-medium text-gray-900">Data de Início do Acesso Online</span>
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-online-start" className="text-sm font-medium mb-2 block">
-                      Data de Início *
-                    </Label>
-                    <Input
-                      id="edit-online-start"
-                      type="date"
-                      value={editStartDate}
-                      onChange={(e) => setEditStartDate(e.target.value)}
-                      required
-                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="flex-1"
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={saving} className="flex-1 bg-[#e8491d] hover:bg-[#d13a0f] text-white">
-                  {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Salvando...</> : "Salvar Alterações"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+        {/* Lista */}
+        {courses.length === 0 && !criando ? (
+          <div className="flex flex-col items-center gap-3 py-16 text-center">
+            <BookOpen className="h-12 w-12 text-muted-foreground/30" />
+            <p className="text-muted-foreground">Nenhum curso criado ainda.</p>
+            <Button onClick={() => setCriando(true)} variant="outline">Criar primeiro curso</Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {courses.map((course) => (
+              <CursoCard
+                key={course.id}
+                course={course}
+                onDelete={() => setCourses((prev) => prev.filter((c) => c.id !== course.id))}
+                onUpdate={(updated) => setCourses((prev) => prev.map((c) => c.id === course.id ? updated : c))}
+                professors={professors}
+                allGlobalSubjects={allGlobalSubjects}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

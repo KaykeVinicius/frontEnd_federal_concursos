@@ -9,24 +9,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { api, type ApiUser, type ApiSubject } from "@/lib/api"
+import { api, type ApiUser, type ApiSubject, type ApiUserType } from "@/lib/api"
 import {
   Users, Plus, Search, Settings, UserCheck, UserX, Crown, Briefcase,
   GraduationCap, BookOpen, User, Filter, BarChart3, Shield,
-  CheckCircle, XCircle, Percent, Mail, Loader2,
+  CheckCircle, XCircle, Percent, Mail, Loader2, Layers, Pencil, Trash2,
 } from "lucide-react"
-
-type Role = "ceo" | "assistente_comercial" | "equipe_pedagogica" | "professor" | "aluno"
 
 export default function CeoUsuariosPage() {
   const [users, setUsers] = useState<ApiUser[]>([])
   const [subjects, setSubjects] = useState<ApiSubject[]>([])
+  const [userTypes, setUserTypes] = useState<ApiUserType[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [createError, setCreateError] = useState("")
 
   const [searchTerm, setSearchTerm] = useState("")
-  const [filterRole, setFilterRole] = useState<"todos" | Role>("todos")
+  const [filterTypeId, setFilterTypeId] = useState<string>("todos")
   const [filterStatus, setFilterStatus] = useState<"todos" | "ativo" | "inativo">("todos")
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
@@ -35,25 +34,39 @@ export default function CeoUsuariosPage() {
   const [createEmail, setCreateEmail] = useState("")
   const [createCpf, setCreateCpf] = useState("")
   const [createPassword, setCreatePassword] = useState("")
-  const [createRole, setCreateRole] = useState<Role>("aluno")
+  const [createUserTypeId, setCreateUserTypeId] = useState<number | null>(null)
   const [createCommission, setCreateCommission] = useState(10)
   // Matérias selecionadas quando perfil = professor
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<number[]>([])
-  // Nova matéria inline
   const [newSubjectName, setNewSubjectName] = useState("")
   const [addingSubject, setAddingSubject] = useState(false)
   const [savingSubject, setSavingSubject] = useState(false)
 
-  useEffect(() => {
-    api.users.list()
-      .then(setUsers)
-      .catch(console.error)
-      .finally(() => setLoading(false))
+  // Tipos de usuário — CRUD
+  const [isTypeModalOpen, setIsTypeModalOpen] = useState(false)
+  const [editingType, setEditingType] = useState<ApiUserType | null>(null)
+  const [typeName, setTypeName] = useState("")
+  const [typeSlug, setTypeSlug] = useState("")
+  const [typeDescription, setTypeDescription] = useState("")
+  const [savingType, setSavingType] = useState(false)
+  const [typeError, setTypeError] = useState("")
 
-    api.subjects.list()
-      .then(setSubjects)
-      .catch(console.error)
+  useEffect(() => {
+    Promise.all([
+      api.users.list(),
+      api.subjects.list(),
+      api.userTypes.list(),
+    ]).then(([u, s, ut]) => {
+      setUsers(u)
+      setSubjects(s)
+      setUserTypes(ut)
+    }).catch(console.error).finally(() => setLoading(false))
   }, [])
+
+  const selectedUserType = useMemo(
+    () => userTypes.find((ut) => ut.id === createUserTypeId) ?? null,
+    [userTypes, createUserTypeId]
+  )
 
   const filteredUsers = useMemo(() => {
     return users
@@ -61,25 +74,21 @@ export default function CeoUsuariosPage() {
         const matchesSearch =
           user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           user.email.toLowerCase().includes(searchTerm.toLowerCase())
-        const matchesRole = filterRole === "todos" || user.role === filterRole
+        const matchesType =
+          filterTypeId === "todos" || String(user.user_type_id) === filterTypeId
         const matchesStatus =
           filterStatus === "todos" ||
           (filterStatus === "ativo" && user.active) ||
           (filterStatus === "inativo" && !user.active)
-        return matchesSearch && matchesRole && matchesStatus
+        return matchesSearch && matchesType && matchesStatus
       })
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [users, searchTerm, filterRole, filterStatus])
+  }, [users, searchTerm, filterTypeId, filterStatus])
 
   const stats = useMemo(() => ({
     total: users.length,
     active: users.filter((u) => u.active).length,
     inactive: users.filter((u) => !u.active).length,
-    ceo: users.filter((u) => u.role === "ceo").length,
-    assistentes: users.filter((u) => u.role === "assistente_comercial").length,
-    pedagogos: users.filter((u) => u.role === "equipe_pedagogica").length,
-    professores: users.filter((u) => u.role === "professor").length,
-    alunos: users.filter((u) => u.role === "aluno").length,
   }), [users])
 
   function toggleSubject(id: number) {
@@ -106,7 +115,7 @@ export default function CeoUsuariosPage() {
 
   async function handleCreateUser(e: { preventDefault(): void }) {
     e.preventDefault()
-    if (!createName || !createEmail || !createCpf || !createPassword) return
+    if (!createName || !createEmail || !createCpf || !createPassword || !createUserTypeId) return
     setSaving(true)
     setCreateError("")
     try {
@@ -115,19 +124,17 @@ export default function CeoUsuariosPage() {
         email: createEmail,
         cpf: createCpf,
         password: createPassword,
-        role: createRole,
-        commission_percent: createRole === "assistente_comercial" ? createCommission : undefined,
+        user_type_id: createUserTypeId,
+        commission_percent: selectedUserType?.slug === "assistente_comercial" ? createCommission : undefined,
       })
       setUsers((prev) => [newUser, ...prev])
 
-      // Vincular matérias ao professor
-      if (createRole === "professor" && selectedSubjectIds.length > 0) {
+      if (selectedUserType?.slug === "professor" && selectedSubjectIds.length > 0) {
         await Promise.all(
           selectedSubjectIds.map((sid) =>
             api.subjects.update(sid, { professor_id: newUser.id })
           )
         )
-        // Atualiza subjects localmente
         setSubjects((prev) =>
           prev.map((s) =>
             selectedSubjectIds.includes(s.id) ? { ...s, professor_id: newUser.id } : s
@@ -158,7 +165,7 @@ export default function CeoUsuariosPage() {
     setCreateEmail("")
     setCreateCpf("")
     setCreatePassword("")
-    setCreateRole("aluno")
+    setCreateUserTypeId(null)
     setCreateCommission(10)
     setSelectedSubjectIds([])
     setCreateError("")
@@ -166,33 +173,70 @@ export default function CeoUsuariosPage() {
     setAddingSubject(false)
   }
 
-  const getRoleIcon = (role: string) => {
-    switch (role) {
-      case "ceo": return Crown
-      case "assistente_comercial": return Briefcase
-      case "equipe_pedagogica": return GraduationCap
-      case "professor": return BookOpen
-      default: return User
+  // ── User Type CRUD ────────────────────────────────────────
+  function openCreateType() {
+    setEditingType(null)
+    setTypeName("")
+    setTypeSlug("")
+    setTypeDescription("")
+    setTypeError("")
+    setIsTypeModalOpen(true)
+  }
+
+  function openEditType(ut: ApiUserType) {
+    setEditingType(ut)
+    setTypeName(ut.name)
+    setTypeSlug(ut.slug)
+    setTypeDescription(ut.description ?? "")
+    setTypeError("")
+    setIsTypeModalOpen(true)
+  }
+
+  async function handleSaveType(e: { preventDefault(): void }) {
+    e.preventDefault()
+    if (!typeName.trim() || !typeSlug.trim()) return
+    setSavingType(true)
+    setTypeError("")
+    try {
+      if (editingType) {
+        const updated = await api.userTypes.update(editingType.id, {
+          name: typeName.trim(),
+          description: typeDescription.trim() || undefined,
+        })
+        setUserTypes((prev) => prev.map((ut) => (ut.id === updated.id ? updated : ut)))
+      } else {
+        const created = await api.userTypes.create({
+          name: typeName.trim(),
+          slug: typeSlug.trim(),
+          description: typeDescription.trim() || undefined,
+        })
+        setUserTypes((prev) => [...prev, created])
+      }
+      setIsTypeModalOpen(false)
+    } catch (err) {
+      setTypeError(err instanceof Error ? err.message : "Erro ao salvar")
+    } finally {
+      setSavingType(false)
     }
   }
 
-  const getRoleColor = (role: string) => {
-    switch (role) {
+  async function handleDeleteType(ut: ApiUserType) {
+    if (!confirm(`Excluir tipo "${ut.name}"? Isso não é permitido se houver usuários vinculados.`)) return
+    try {
+      await api.userTypes.delete(ut.id)
+      setUserTypes((prev) => prev.filter((t) => t.id !== ut.id))
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao excluir")
+    }
+  }
+
+  const getRoleColor = (slug: string) => {
+    switch (slug) {
       case "ceo": return "bg-yellow-100 text-yellow-800 border-yellow-200"
       case "assistente_comercial": return "bg-blue-100 text-blue-800 border-blue-200"
       case "equipe_pedagogica": return "bg-purple-100 text-purple-800 border-purple-200"
       case "professor": return "bg-green-100 text-green-800 border-green-200"
       default: return "bg-gray-100 text-gray-800 border-gray-200"
-    }
-  }
-
-  const getRoleLabel = (role: string) => {
-    switch (role) {
-      case "ceo": return "CEO"
-      case "assistente_comercial": return "Assistente"
-      case "equipe_pedagogica": return "Pedagógico"
-      case "professor": return "Professor"
-      default: return "Aluno"
     }
   }
 
@@ -220,7 +264,7 @@ export default function CeoUsuariosPage() {
           {/* Main Content */}
           <div className="lg:col-span-3 space-y-6">
             {/* Statistics Cards */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-3">
               <Card className="border-green-500/40 bg-gradient-to-b from-green-700/30 to-slate-900/50 p-4 text-white">
                 <p className="text-xs uppercase tracking-wide text-white/70">Total de Usuários</p>
                 <p className="text-3xl font-bold">{loading ? "—" : stats.total}</p>
@@ -232,10 +276,6 @@ export default function CeoUsuariosPage() {
               <Card className="border-red-500/40 bg-gradient-to-b from-red-700/30 to-slate-900/50 p-4 text-white">
                 <p className="text-xs uppercase tracking-wide text-white/70">Inativos</p>
                 <p className="text-3xl font-bold">{loading ? "—" : stats.inactive}</p>
-              </Card>
-              <Card className="border-purple-500/40 bg-gradient-to-b from-purple-700/30 to-slate-900/50 p-4 text-white">
-                <p className="text-xs uppercase tracking-wide text-white/70">Perfis</p>
-                <p className="text-3xl font-bold">5</p>
               </Card>
             </div>
 
@@ -261,17 +301,15 @@ export default function CeoUsuariosPage() {
                     <Input placeholder="Nome ou email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
                   </div>
                 </div>
-                <div className="w-full sm:w-40">
-                  <Label className="text-sm font-medium text-muted-foreground mb-2 block">Perfil</Label>
-                  <Select value={filterRole} onValueChange={(v) => setFilterRole(v as typeof filterRole)}>
+                <div className="w-full sm:w-48">
+                  <Label className="text-sm font-medium text-muted-foreground mb-2 block">Tipo de Usuário</Label>
+                  <Select value={filterTypeId} onValueChange={setFilterTypeId}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos</SelectItem>
-                      <SelectItem value="ceo">CEO</SelectItem>
-                      <SelectItem value="assistente_comercial">Assistente</SelectItem>
-                      <SelectItem value="equipe_pedagogica">Pedagógico</SelectItem>
-                      <SelectItem value="professor">Professor</SelectItem>
-                      <SelectItem value="aluno">Aluno</SelectItem>
+                      {userTypes.map((ut) => (
+                        <SelectItem key={ut.id} value={String(ut.id)}>{ut.name}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -286,7 +324,7 @@ export default function CeoUsuariosPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button variant="outline" onClick={() => { setSearchTerm(""); setFilterRole("todos"); setFilterStatus("todos") }}>
+                <Button variant="outline" onClick={() => { setSearchTerm(""); setFilterTypeId("todos"); setFilterStatus("todos") }}>
                   <Filter className="h-4 w-4 mr-2" />
                   Limpar
                 </Button>
@@ -311,9 +349,8 @@ export default function CeoUsuariosPage() {
               ) : filteredUsers.length > 0 ? (
                 <div className="divide-y">
                   {filteredUsers.map((user) => {
-                    const RoleIcon = getRoleIcon(user.role)
-                    // Matérias vinculadas a este professor
                     const userSubjects = subjects.filter((s) => s.professor_id === user.id)
+                    const utSlug = user.user_type?.slug ?? user.role
                     return (
                       <div key={user.id} className="flex items-center justify-between p-4 hover:bg-gray-50/50 transition-colors">
                         <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -326,9 +363,8 @@ export default function CeoUsuariosPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 mb-1 flex-wrap">
                               <h4 className="font-semibold text-foreground truncate">{user.name}</h4>
-                              <Badge className={`text-xs ${getRoleColor(user.role)} flex-shrink-0`}>
-                                <RoleIcon className="h-3 w-3 mr-1" />
-                                {getRoleLabel(user.role)}
+                              <Badge className={`text-xs ${getRoleColor(utSlug)} flex-shrink-0`}>
+                                {user.user_type?.name ?? user.role}
                               </Badge>
                               {user.active ? (
                                 <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex-shrink-0">
@@ -349,15 +385,14 @@ export default function CeoUsuariosPage() {
                                 <Shield className="h-3 w-3" />
                                 <span>{user.cpf}</span>
                               </div>
-                              {user.role === "assistente_comercial" && user.commission_percent != null && (
+                              {utSlug === "assistente_comercial" && user.commission_percent != null && (
                                 <div className="flex items-center gap-1">
                                   <Percent className="h-3 w-3" />
                                   <span>{user.commission_percent}%</span>
                                 </div>
                               )}
                             </div>
-                            {/* Matérias do professor */}
-                            {user.role === "professor" && userSubjects.length > 0 && (
+                            {utSlug === "professor" && userSubjects.length > 0 && (
                               <div className="mt-1.5 flex flex-wrap gap-1">
                                 {userSubjects.map((s) => (
                                   <span key={s.id} className="rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-[11px] text-green-700">
@@ -376,9 +411,6 @@ export default function CeoUsuariosPage() {
                               <><UserCheck className="h-3 w-3 mr-1" />Ativar</>
                             )}
                           </Button>
-                          <Button variant="ghost" size="sm" className="hover:bg-[#e8491d]/10 hover:text-[#e8491d]">
-                            <Settings className="h-4 w-4" />
-                          </Button>
                         </div>
                       </div>
                     )
@@ -389,15 +421,64 @@ export default function CeoUsuariosPage() {
                   <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-foreground mb-2">Nenhum usuário encontrado</h3>
                   <p className="text-muted-foreground mb-4">
-                    {searchTerm || filterRole !== "todos" || filterStatus !== "todos"
+                    {searchTerm || filterTypeId !== "todos" || filterStatus !== "todos"
                       ? "Tente ajustar os filtros de busca"
                       : "Comece criando seu primeiro usuário"}
                   </p>
-                  {!searchTerm && filterRole === "todos" && filterStatus === "todos" && (
+                  {!searchTerm && filterTypeId === "todos" && filterStatus === "todos" && (
                     <Button onClick={() => setIsCreateModalOpen(true)} className="bg-[#e8491d] hover:bg-[#d13a0f] text-white">
                       <Plus className="h-4 w-4 mr-2" />Criar Primeiro Usuário
                     </Button>
                   )}
+                </div>
+              )}
+            </Card>
+
+            {/* Tipos de Usuário Table */}
+            <Card className="overflow-hidden">
+              <div className="border-b bg-gray-50/50 px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg bg-indigo-100 p-2">
+                    <Layers className="h-5 w-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground">Tipos de Usuário</h3>
+                    <p className="text-sm text-muted-foreground">Perfis de acesso vinculados aos usuários</p>
+                  </div>
+                </div>
+                <Button size="sm" onClick={openCreateType} className="bg-[#e8491d] hover:bg-[#d13a0f] text-white">
+                  <Plus className="h-4 w-4 mr-2" />Novo Tipo
+                </Button>
+              </div>
+
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {userTypes.map((ut) => (
+                    <div key={ut.id} className="flex items-center justify-between p-4 hover:bg-gray-50/50">
+                      <div className="flex items-center gap-4">
+                        <Badge className={`text-xs ${getRoleColor(ut.slug)}`}>{ut.slug}</Badge>
+                        <div>
+                          <p className="font-medium text-foreground">{ut.name}</p>
+                          {ut.description && (
+                            <p className="text-sm text-muted-foreground">{ut.description}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-muted-foreground">{ut.users_count} usuário{ut.users_count !== 1 ? "s" : ""}</span>
+                        <Button variant="ghost" size="sm" onClick={() => openEditType(ut)} className="hover:text-[#e8491d]">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteType(ut)} className="hover:text-red-600" disabled={ut.users_count > 0}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </Card>
@@ -411,27 +492,18 @@ export default function CeoUsuariosPage() {
                   <div className="rounded-lg bg-indigo-100 p-2">
                     <BarChart3 className="h-5 w-5 text-indigo-600" />
                   </div>
-                  <CardTitle className="text-lg">Distribuição por Perfil</CardTitle>
+                  <CardTitle className="text-lg">Por Tipo de Usuário</CardTitle>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  {[
-                    { label: "CEO", icon: Crown, color: "bg-yellow-50", iconColor: "text-yellow-600", count: stats.ceo },
-                    { label: "Assistentes", icon: Briefcase, color: "bg-blue-50", iconColor: "text-blue-600", count: stats.assistentes },
-                    { label: "Pedagógicos", icon: GraduationCap, color: "bg-purple-50", iconColor: "text-purple-600", count: stats.pedagogos },
-                    { label: "Professores", icon: BookOpen, color: "bg-green-50", iconColor: "text-green-600", count: stats.professores },
-                    { label: "Alunos", icon: User, color: "bg-gray-50", iconColor: "text-gray-600", count: stats.alunos },
-                  ].map(({ label, icon: Icon, color, iconColor, count }) => (
-                    <div key={label} className={`flex items-center justify-between p-3 rounded-lg ${color}`}>
-                      <div className="flex items-center gap-2">
-                        <Icon className={`h-4 w-4 ${iconColor}`} />
-                        <span className="text-sm font-medium">{label}</span>
-                      </div>
-                      <Badge variant="outline">{loading ? "—" : count}</Badge>
+              <CardContent className="space-y-3">
+                {userTypes.map((ut) => (
+                  <div key={ut.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{ut.name}</span>
                     </div>
-                  ))}
-                </div>
+                    <Badge variant="outline">{loading ? "—" : ut.users_count}</Badge>
+                  </div>
+                ))}
               </CardContent>
             </Card>
 
@@ -453,9 +525,6 @@ export default function CeoUsuariosPage() {
                 </Button>
                 <Button variant="outline" className="w-full justify-start" size="sm">
                   <Mail className="h-4 w-4 mr-2" />Enviar Comunicado
-                </Button>
-                <Button variant="outline" className="w-full justify-start" size="sm">
-                  <Shield className="h-4 w-4 mr-2" />Resetar Senhas
                 </Button>
               </CardContent>
             </Card>
@@ -508,24 +577,30 @@ export default function CeoUsuariosPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="create-role" className="text-sm font-medium mb-2 block">
-                    <Crown className="h-4 w-4 inline mr-2" />Perfil de Acesso *
+                  <Label htmlFor="create-type" className="text-sm font-medium mb-2 block">
+                    <Crown className="h-4 w-4 inline mr-2" />Tipo de Usuário *
                   </Label>
-                  <Select value={createRole} onValueChange={(v) => { setCreateRole(v as Role); setSelectedSubjectIds([]) }}>
-                    <SelectTrigger className="border-gray-200"><SelectValue placeholder="Selecione o perfil" /></SelectTrigger>
+                  <Select
+                    value={createUserTypeId ? String(createUserTypeId) : ""}
+                    onValueChange={(v) => { setCreateUserTypeId(Number(v)); setSelectedSubjectIds([]) }}
+                  >
+                    <SelectTrigger className="border-gray-200"><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ceo"><div className="flex items-center gap-2"><Crown className="h-4 w-4 text-yellow-600" />CEO - Acesso Total</div></SelectItem>
-                      <SelectItem value="assistente_comercial"><div className="flex items-center gap-2"><Briefcase className="h-4 w-4 text-blue-600" />Assistente Comercial</div></SelectItem>
-                      <SelectItem value="equipe_pedagogica"><div className="flex items-center gap-2"><GraduationCap className="h-4 w-4 text-purple-600" />Equipe Pedagógica</div></SelectItem>
-                      <SelectItem value="professor"><div className="flex items-center gap-2"><BookOpen className="h-4 w-4 text-green-600" />Professor</div></SelectItem>
-                      <SelectItem value="aluno"><div className="flex items-center gap-2"><User className="h-4 w-4 text-gray-600" />Aluno</div></SelectItem>
+                      {userTypes.filter((ut) => ut.active).map((ut) => (
+                        <SelectItem key={ut.id} value={String(ut.id)}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-mono">{ut.slug}</span>
+                            {ut.name}
+                          </div>
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               {/* Comissão — assistente comercial */}
-              {createRole === "assistente_comercial" && (
+              {selectedUserType?.slug === "assistente_comercial" && (
                 <div>
                   <Label htmlFor="create-commission" className="text-sm font-medium mb-2 block">
                     <Percent className="h-4 w-4 inline mr-2" />Percentual de Comissão (%)
@@ -535,13 +610,12 @@ export default function CeoUsuariosPage() {
               )}
 
               {/* Matérias — professor */}
-              {createRole === "professor" && (
+              {selectedUserType?.slug === "professor" && (
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">
                     <BookOpen className="h-4 w-4 inline mr-2" />Matérias que vai ministrar
                   </Label>
 
-                  {/* Select para adicionar matéria existente */}
                   <div className="flex gap-2">
                     <select
                       className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
@@ -565,7 +639,6 @@ export default function CeoUsuariosPage() {
                     </select>
                   </div>
 
-                  {/* Matérias já selecionadas */}
                   {selectedSubjectIds.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {selectedSubjectIds.map((id) => {
@@ -583,7 +656,6 @@ export default function CeoUsuariosPage() {
                     </div>
                   )}
 
-                  {/* Criar nova matéria inline */}
                   {addingSubject ? (
                     <div className="flex gap-2">
                       <Input
@@ -625,8 +697,63 @@ export default function CeoUsuariosPage() {
                 <Button type="button" variant="outline" onClick={() => { resetCreateForm(); setIsCreateModalOpen(false) }} className="flex-1">
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={saving} className="flex-1 bg-[#e8491d] hover:bg-[#d13a0f] text-white">
+                <Button type="submit" disabled={saving || !createUserTypeId} className="flex-1 bg-[#e8491d] hover:bg-[#d13a0f] text-white">
                   {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Criando...</> : "Criar Usuário"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* User Type Modal */}
+        <Dialog open={isTypeModalOpen} onOpenChange={(open) => { if (!open) { setEditingType(null); setTypeError("") }; setIsTypeModalOpen(open) }}>
+          <DialogContent className="max-w-md">
+            <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 p-6 rounded-t-lg">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
+                  <Layers className="h-5 w-5" />
+                  {editingType ? "Editar Tipo de Usuário" : "Novo Tipo de Usuário"}
+                </DialogTitle>
+                <DialogDescription className="text-indigo-100">
+                  {editingType ? "Altere o nome ou descrição" : "Crie um novo tipo vinculado a um perfil de acesso"}
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+
+            <form onSubmit={handleSaveType} className="p-6 space-y-4">
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Nome *</Label>
+                <Input placeholder="Ex: Equipe Pedagógica" value={typeName} onChange={(e) => setTypeName(e.target.value)} required />
+              </div>
+
+              {!editingType && (
+                <div>
+                  <Label className="text-sm font-medium mb-2 block">Slug (perfil de acesso) *</Label>
+                  <Select value={typeSlug} onValueChange={setTypeSlug}>
+                    <SelectTrigger><SelectValue placeholder="Selecione o perfil" /></SelectTrigger>
+                    <SelectContent>
+                      {["ceo", "assistente_comercial", "equipe_pedagogica", "professor", "aluno", "diretor"].map((s) => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">Define quais telas e permissões esse tipo terá.</p>
+                </div>
+              )}
+
+              <div>
+                <Label className="text-sm font-medium mb-2 block">Descrição</Label>
+                <Input placeholder="Descrição opcional" value={typeDescription} onChange={(e) => setTypeDescription(e.target.value)} />
+              </div>
+
+              {typeError && <p className="text-sm text-destructive">{typeError}</p>}
+
+              <div className="flex gap-3 pt-2">
+                <Button type="button" variant="outline" onClick={() => setIsTypeModalOpen(false)} className="flex-1">
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={savingType} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white">
+                  {savingType ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Salvando...</> : "Salvar"}
                 </Button>
               </div>
             </form>

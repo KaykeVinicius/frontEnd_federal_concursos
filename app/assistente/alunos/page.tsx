@@ -5,124 +5,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Search, Eye, FileText, Loader2 } from "lucide-react"
-import { api, type ApiStudent, type ApiEnrollment, type ApiCourse, type ApiTurma } from "@/lib/api"
+import { api, type ApiStudent, type ApiEnrollment } from "@/lib/api"
 import { ContractViewDialog } from "@/components/contract-view-dialog"
+import { NewEnrollmentDialog } from "@/components/new-enrollment-dialog"
 
 export default function AlunosPage() {
   const [students, setStudents] = useState<ApiStudent[]>([])
   const [enrollments, setEnrollments] = useState<ApiEnrollment[]>([])
-  const [courses, setCourses] = useState<ApiCourse[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
-
-  // Nova matrícula
   const [showNewEnrollment, setShowNewEnrollment] = useState(false)
-  const [eStudentId, setEStudentId] = useState("")
-  const [eCourseId, setECourseId] = useState("")
-  const [eTurmaId, setETurmaId] = useState("")
-  const [eEnrollmentType, setEEnrollmentType] = useState("interno")
-  const [eStartedAt, setEStartedAt] = useState("")
-  const [eExpiresAt, setEExpiresAt] = useState("")
-  const [ePaymentMethod, setEPaymentMethod] = useState("")
-  const [eTotalPaid, setETotalPaid] = useState("")
-  const [eIsNewStudent, setEIsNewStudent] = useState(true)
-  const [turmasForCourse, setTurmasForCourse] = useState<ApiTurma[]>([])
-  const [loadingTurmas, setLoadingTurmas] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [enrollError, setEnrollError] = useState("")
-
-  // Campos novo aluno
-  const [eNewName, setENewName] = useState("")
-  const [eNewEmail, setENewEmail] = useState("")
-  const [eNewCpf, setENewCpf] = useState("")
-  const [eNewWhatsapp, setENewWhatsapp] = useState("")
-
   const [contractEnrollmentId, setContractEnrollmentId] = useState<number | null>(null)
 
-  useEffect(() => {
-    Promise.all([api.students.list(), api.enrollments.list(), api.courses.list()])
-      .then(([s, e, c]) => { setStudents(s); setEnrollments(e); setCourses(c) })
+  function loadData() {
+    Promise.all([api.students.list(), api.enrollments.list()])
+      .then(([s, e]) => { setStudents(s); setEnrollments(e) })
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
-
-  async function handleCourseChange(courseId: string) {
-    setECourseId(courseId)
-    setETurmaId("")
-    if (!courseId) { setTurmasForCourse([]); return }
-    setLoadingTurmas(true)
-    try {
-      const turmas = await api.turmas.list(parseInt(courseId))
-      setTurmasForCourse(turmas.filter((t) => t.status === "aberta"))
-      const course = courses.find((c) => c.id === parseInt(courseId))
-      if (course) {
-        if (course.start_date) setEStartedAt(course.start_date.slice(0, 10))
-        if (course.end_date) setEExpiresAt(course.end_date.slice(0, 10))
-        setETotalPaid(String(course.price ?? ""))
-      }
-    } catch { setTurmasForCourse([]) }
-    finally { setLoadingTurmas(false) }
   }
 
-  function resetEnrollForm() {
-    setEStudentId(""); setECourseId(""); setETurmaId(""); setEStartedAt(""); setEExpiresAt("")
-    setEPaymentMethod(""); setETotalPaid(""); setTurmasForCourse([]); setEIsNewStudent(true); setEEnrollmentType("interno")
-    setENewName(""); setENewEmail(""); setENewCpf(""); setENewWhatsapp("")
-  }
-
-  async function handleNewEnrollment(e: { preventDefault(): void }) {
-    e.preventDefault()
-    if (!eCourseId || !eStartedAt) {
-      setEnrollError("Preencha os campos obrigatórios."); return
-    }
-    setSaving(true); setEnrollError("")
-    try {
-      let studentId = parseInt(eStudentId)
-
-      if (eIsNewStudent) {
-        if (!eNewName || !eNewEmail || !eNewCpf) {
-          setEnrollError("Preencha nome, email e CPF do novo aluno."); setSaving(false); return
-        }
-        const newStudent = await api.students.create({
-          name: eNewName,
-          email: eNewEmail,
-          cpf: eNewCpf,
-          whatsapp: eNewWhatsapp || undefined,
-          active: true,
-        })
-        setStudents((prev) => [newStudent, ...prev])
-        studentId = newStudent.id
-      }
-
-      const duplicate = enrollments.find(
-        (en) => en.student?.id === studentId && en.course?.id === parseInt(eCourseId) && en.status === "active"
-      )
-      if (duplicate) {
-        setEnrollError("Este aluno já possui uma matrícula ativa neste curso."); setSaving(false); return
-      }
-
-      const created = await api.enrollments.create({
-        student_id: studentId,
-        course_id: parseInt(eCourseId),
-        turma_id: eTurmaId ? parseInt(eTurmaId) : undefined,
-        enrollment_type: eEnrollmentType as "interno" | "externo",
-        status: "active",
-        started_at: eStartedAt,
-        expires_at: eExpiresAt || undefined,
-        payment_method: ePaymentMethod || undefined,
-        total_paid: eTotalPaid ? parseFloat(eTotalPaid) : undefined,
-      })
-      setEnrollments((prev) => [created, ...prev])
-      setShowNewEnrollment(false)
-      resetEnrollForm()
-    } catch (err: unknown) {
-      setEnrollError(err instanceof Error ? err.message : "Erro ao criar matrícula")
-    } finally { setSaving(false) }
-  }
+  useEffect(() => { loadData() }, [])
 
   const filtered = students.filter(
     (s) =>
@@ -142,7 +45,10 @@ export default function AlunosPage() {
           <h1 className="text-3xl font-bold text-foreground">Alunos</h1>
           <p className="mt-1 text-muted-foreground">Gerencie alunos e matrículas</p>
         </div>
-        <Button onClick={() => setShowNewEnrollment(true)} className="bg-primary text-primary-foreground hover:bg-primary/90">
+        <Button
+          onClick={() => setShowNewEnrollment(true)}
+          className="bg-[#e8491d] hover:bg-[#d43d15] text-white shadow-md hover:shadow-lg transition-all duration-300"
+        >
           <Plus className="mr-2 h-4 w-4" />
           Nova Matrícula
         </Button>
@@ -167,7 +73,7 @@ export default function AlunosPage() {
         <CardContent>
           {loading ? (
             <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <Loader2 className="h-8 w-8 animate-spin text-[#e8491d]" />
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -192,7 +98,7 @@ export default function AlunosPage() {
                       <tr key={student.id} className="border-b last:border-0">
                         <td className="py-4">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e8491d]/10 text-sm font-bold text-[#e8491d]">
                               {student.name.charAt(0)}
                             </div>
                             <span className="font-medium text-foreground">{student.name}</span>
@@ -245,135 +151,11 @@ export default function AlunosPage() {
         </CardContent>
       </Card>
 
-      {/* Nova Matrícula Dialog */}
-      <Dialog open={showNewEnrollment} onOpenChange={(open) => { if (!open) resetEnrollForm(); setShowNewEnrollment(open) }}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">Nova Matrícula</DialogTitle>
-            <DialogDescription>Vincule um aluno a um curso e turma.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleNewEnrollment} className="space-y-4">
-
-            {/* Tipo de aluno */}
-            <div className="space-y-2">
-              <Label>Tipo de Aluno *</Label>
-              <div className="flex gap-2">
-                {[{ val: true, label: "Aluno Novo" }, { val: false, label: "Ex-Aluno / Rematrícula" }].map(({ val, label }) => (
-                  <button key={label} type="button"
-                    onClick={() => setEIsNewStudent(val)}
-                    className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${eIsNewStudent === val ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40"}`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {eIsNewStudent ? (
-              <>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Nome Completo *</Label>
-                    <Input placeholder="Nome do aluno" value={eNewName} onChange={(e) => setENewName(e.target.value)} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>CPF *</Label>
-                    <Input placeholder="000.000.000-00" value={eNewCpf} onChange={(e) => setENewCpf(e.target.value)} required />
-                  </div>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Email *</Label>
-                    <Input type="email" placeholder="email@exemplo.com" value={eNewEmail} onChange={(e) => setENewEmail(e.target.value)} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>WhatsApp</Label>
-                    <Input placeholder="(00) 00000-0000" value={eNewWhatsapp} onChange={(e) => setENewWhatsapp(e.target.value)} />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="space-y-2">
-                <Label>Aluno *</Label>
-                <Select value={eStudentId} onValueChange={setEStudentId}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o aluno" /></SelectTrigger>
-                  <SelectContent>
-                    {students.map((s) => (
-                      <SelectItem key={s.id} value={String(s.id)}>{s.name} — {s.cpf}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label>Curso *</Label>
-              <Select value={eCourseId} onValueChange={handleCourseChange}>
-                <SelectTrigger><SelectValue placeholder="Selecione o curso" /></SelectTrigger>
-                <SelectContent>
-                  {courses.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.title}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Turma</Label>
-              <Select value={eTurmaId} onValueChange={setETurmaId} disabled={!eCourseId || loadingTurmas}>
-                <SelectTrigger>
-                  <SelectValue placeholder={loadingTurmas ? "Carregando..." : !eCourseId ? "Selecione o curso primeiro" : turmasForCourse.length === 0 ? "Nenhuma turma aberta" : "Selecione a turma"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {turmasForCourse.map((t) => (
-                    <SelectItem key={t.id} value={String(t.id)}>
-                      {t.name} · {t.modalidade === "presencial" ? "Presencial" : "Híbrido"} · {t.enrolled_count}/{t.max_students} alunos
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Data de Início *</Label>
-                <Input type="date" value={eStartedAt} onChange={(e) => setEStartedAt(e.target.value)} required />
-              </div>
-              <div className="space-y-2">
-                <Label>Data de Término</Label>
-                <Input type="date" value={eExpiresAt} onChange={(e) => setEExpiresAt(e.target.value)} />
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Forma de Pagamento</Label>
-                <Select value={ePaymentMethod} onValueChange={setEPaymentMethod}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pix">PIX</SelectItem>
-                    <SelectItem value="boleto">Boleto</SelectItem>
-                    <SelectItem value="credito_vista">Cartão de Crédito à Vista</SelectItem>
-                    <SelectItem value="credito_parcelado">Cartão de Crédito Parcelado</SelectItem>
-                    <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Valor (R$)</Label>
-                <Input type="number" step="0.01" placeholder="0.00" value={eTotalPaid} onChange={(e) => setETotalPaid(e.target.value)} />
-              </div>
-            </div>
-
-            {enrollError && <p className="text-sm text-destructive">{enrollError}</p>}
-            <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="outline" onClick={() => { resetEnrollForm(); setShowNewEnrollment(false) }}>Cancelar</Button>
-              <Button type="submit" disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando...</> : "Criar Matrícula"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <NewEnrollmentDialog
+        open={showNewEnrollment}
+        onOpenChange={setShowNewEnrollment}
+        onSuccess={loadData}
+      />
 
       <ContractViewDialog
         enrollmentId={contractEnrollmentId}
