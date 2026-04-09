@@ -155,6 +155,16 @@ export interface ApiTurma {
   professor?: ApiUser
 }
 
+export interface ApiEventLote {
+  id: number
+  name: string
+  price: number
+  quantity: number
+  position: number
+  sold_count: number
+  available: boolean
+}
+
 export interface ApiEvent {
   id: number
   title: string
@@ -171,14 +181,20 @@ export interface ApiEvent {
   registered_count: number
   course_id: number | null
   created_at: string
+  is_full?: boolean
+  current_lote_price?: number | null
+  event_lotes?: ApiEventLote[]
 }
 
 export interface ApiEventRegistration {
   id: number
+  event_id?: number
   ticket_token: string
   attended: boolean
   attended_at?: string
   created_at: string
+  lote_name?: string | null
+  lote_price?: number | null
   student?: ApiStudent
   event?: ApiEvent
 }
@@ -393,6 +409,14 @@ export const api = {
         req<ApiEventRegistration>("POST", `/events/${eventId}/registrations`, { student_id: studentId }),
       delete: (eventId: number, regId: number) => req<void>("DELETE", `/events/${eventId}/registrations/${regId}`),
     },
+    lotes: {
+      list: (eventId: number) => req<ApiEventLote[]>("GET", `/events/${eventId}/lotes`),
+      create: (eventId: number, body: Omit<ApiEventLote, "id" | "sold_count" | "available">) =>
+        req<ApiEventLote>("POST", `/events/${eventId}/lotes`, { event_lote: body }),
+      update: (eventId: number, loteId: number, body: Partial<ApiEventLote>) =>
+        req<ApiEventLote>("PATCH", `/events/${eventId}/lotes/${loteId}`, { event_lote: body }),
+      delete: (eventId: number, loteId: number) => req<void>("DELETE", `/events/${eventId}/lotes/${loteId}`),
+    },
     checkin: (token: string) =>
       req<ApiEventRegistration>("PATCH", "/event_registrations/checkin", { token }),
     undoCheckin: (regId: number) =>
@@ -423,6 +447,9 @@ export const api = {
       text: string
       video_moment?: string
     }) => req<ApiQuestion>("POST", "/aluno/questions", body),
+    eventRegistrations: {
+      list: () => req<ApiEventRegistration[]>("GET", "/aluno/event_registrations"),
+    },
     completions: {
       list: () => req<{ id: number; lesson_id: number }[]>("GET", "/aluno/lesson_completions"),
       create: (lessonId: number) =>

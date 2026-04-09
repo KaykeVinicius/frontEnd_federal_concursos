@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { api, type ApiEvent, type ApiEventRegistration, type ApiStudent } from "@/lib/api"
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   ArrowLeft, Users, CheckCircle2, XCircle, Loader2,
-  UserPlus, QrCode, Printer, Tag, Calendar, Clock, MapPin,
+  UserPlus, QrCode, Printer, Tag, Calendar, Clock, MapPin, FileSpreadsheet,
 } from "lucide-react"
 
 const QrScanner = dynamic(() => import("@/components/qr-scanner"), { ssr: false })
@@ -34,6 +34,7 @@ export default function EventoDetailPage() {
   const [error, setError] = useState("")
 
   // Check-in por token/câmera
+  const checkinInputRef = useRef<HTMLInputElement>(null)
   const [checkinToken, setCheckinToken] = useState("")
   const [checkingIn, setCheckingIn] = useState(false)
   const [checkinResult, setCheckinResult] = useState<{ ok: boolean; msg: string; name?: string } | null>(null)
@@ -55,7 +56,7 @@ export default function EventoDetailPage() {
     Promise.all([api.events.get(eventId), api.events.registrations.list(eventId), api.students.list()])
       .then(([ev, regs, studs]) => { setEvent(ev); setRegistrations(regs); setStudents(studs) })
       .catch((err) => setError(err?.message ?? "Erro ao carregar dados."))
-      .finally(() => setLoading(false))
+      .finally(() => { setLoading(false); setTimeout(() => checkinInputRef.current?.focus(), 200) })
   }, [eventId])
 
   const doCheckin = useCallback(async (token: string) => {
@@ -70,7 +71,10 @@ export default function EventoDetailPage() {
       setShowScanner(false)
     } catch (err: unknown) {
       setCheckinResult({ ok: false, msg: err instanceof Error ? err.message : "Token inválido." })
-    } finally { setCheckingIn(false) }
+    } finally {
+      setCheckingIn(false)
+      setTimeout(() => checkinInputRef.current?.focus(), 100)
+    }
   }, [checkingIn])
 
   async function handleAddStudent(e: { preventDefault(): void }) {
@@ -122,6 +126,39 @@ export default function EventoDetailPage() {
     } catch (err) { console.error(err) }
   }
 
+  function handleSegundaVia(reg: ApiEventRegistration) {
+    if (!event) return
+    const win = window.open("", "_blank")
+    if (win) {
+      localStorage.setItem(`ingresso_${reg.ticket_token}`, JSON.stringify({ registration: reg, event }))
+      win.location.href = `/imprimir/ingresso/${reg.ticket_token}`
+    }
+  }
+
+  function handleExportCSV() {
+    if (!event) return
+    const rows = [
+      ["#", "Nome", "Email", "CPF", "WhatsApp", "Presença", "Hora do Check-in"],
+      ...registrations.map((reg, i) => [
+        String(i + 1),
+        reg.student?.name ?? "—",
+        reg.student?.email ?? "—",
+        reg.student?.cpf ?? "—",
+        reg.student?.whatsapp ?? "—",
+        reg.attended ? "Presente" : "Ausente",
+        reg.attended_at ? new Date(reg.attended_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—",
+      ]),
+    ]
+    const csv = rows.map((r) => r.map((c) => `"${c}"`).join(";")).join("\n")
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `inscritos_${event.title.replace(/\s+/g, "_")}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   function handleExportPDF() {
     const token = localStorage.getItem("auth_token") ?? ""
     window.open(`/api/pdf/eventos/${eventId}?token=${token}`, "_blank")
@@ -149,9 +186,14 @@ export default function EventoDetailPage() {
           <Button variant="outline" onClick={() => router.back()} className="gap-2">
             <ArrowLeft className="h-4 w-4" /> Voltar
           </Button>
-          <Button onClick={handleExportPDF} className="gap-2 bg-[#e8491d] hover:bg-[#d13a0f] text-white">
-            <Printer className="h-4 w-4" /> Exportar PDF
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleExportCSV} className="gap-2">
+              <FileSpreadsheet className="h-4 w-4" /> Excel
+            </Button>
+            <Button onClick={handleExportPDF} className="gap-2 bg-[#e8491d] hover:bg-[#d13a0f] text-white">
+              <Printer className="h-4 w-4" /> Exportar PDF
+            </Button>
+          </div>
         </div>
 
         {/* Info do evento */}
@@ -166,7 +208,15 @@ export default function EventoDetailPage() {
               <div className="flex gap-2 flex-wrap">
                 <Badge className="bg-blue-100 text-blue-700">{STATUS_LABELS[event.status] ?? event.status}</Badge>
                 <Badge className={event.is_free ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}>
-                  <Tag className="mr-1 h-3 w-3" />{event.is_free ? "Gratuito" : `R$ ${Number(event.price ?? 0).toFixed(2)}`}
+                  <Tag className="mr-1 h-3 w-3" />
+                  {event.is_free
+                    ? "Gratuito"
+                    : event.event_lotes && event.event_lotes.length > 0
+                      ? event.current_lote_price != null
+                        ? `R$ ${Number(event.current_lote_price).toFixed(2)}`
+                        : "Lotes esgotados"
+                      : `R$ ${Number(event.price ?? 0).toFixed(2)}`
+                  }
                 </Badge>
               </div>
             </div>
@@ -228,6 +278,7 @@ export default function EventoDetailPage() {
 
             <form onSubmit={(e) => { e.preventDefault(); doCheckin(checkinToken) }} className="flex gap-3">
               <Input
+                ref={checkinInputRef}
                 placeholder="Cole o token do ingresso aqui..."
                 value={checkinToken}
                 onChange={(e) => setCheckinToken(e.target.value)}
@@ -302,6 +353,13 @@ export default function EventoDetailPage() {
                           Desfazer check-in
                         </button>
                       )}
+                      <button
+                        onClick={() => handleSegundaVia(reg)}
+                        className="rounded px-2 py-1 text-xs text-muted-foreground hover:text-blue-700 hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-200"
+                        title="Reimprimir ingresso"
+                      >
+                        2ª via
+                      </button>
                       {confirmRemoveId === reg.id ? (
                         <div className="flex items-center gap-1">
                           <button

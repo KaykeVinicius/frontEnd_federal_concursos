@@ -4,30 +4,17 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  CalendarDays,
-  Clock,
-  MapPin,
-  Loader2,
-  Mic,
-  BookOpenCheck,
-  FileQuestion,
-  Presentation,
-} from "lucide-react"
+import { CalendarDays, Clock, MapPin, Loader2, BookOpenCheck, FileQuestion } from "lucide-react"
 import { api, type ApiEvent } from "@/lib/api"
 
 const eventTypeIcons: Record<string, React.ReactNode> = {
   aulao: <BookOpenCheck className="h-5 w-5" />,
   simulado: <FileQuestion className="h-5 w-5" />,
-  workshop: <Presentation className="h-5 w-5" />,
-  palestra: <Mic className="h-5 w-5" />,
 }
 
 const eventTypeColors: Record<string, string> = {
   aulao: "bg-blue-500/10 text-blue-600",
   simulado: "bg-purple-500/10 text-purple-600",
-  workshop: "bg-green-500/10 text-green-600",
-  palestra: "bg-orange-500/10 text-orange-600",
 }
 
 const statusColors: Record<string, string> = {
@@ -73,19 +60,15 @@ export default function ProfessorEventosPage() {
     <div className="p-4 pt-16 lg:p-8 lg:pt-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-foreground">Eventos</h1>
-        <p className="text-muted-foreground">
-          Auloes, simulados, workshops e palestras
-        </p>
+        <p className="text-muted-foreground">Aulões e simulados</p>
       </div>
 
       {/* Filtros */}
       <div className="mb-6 flex flex-wrap gap-2">
         {[
           { value: "all", label: "Todos" },
-          { value: "aulao", label: "Auloes" },
+          { value: "aulao", label: "Aulões" },
           { value: "simulado", label: "Simulados" },
-          { value: "workshop", label: "Workshops" },
-          { value: "palestra", label: "Palestras" },
         ].map((f) => (
           <Button
             key={f.value}

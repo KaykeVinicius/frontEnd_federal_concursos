@@ -178,7 +178,7 @@ export function EventSaleDialog({ open, onOpenChange, events }: Props) {
               Venda de Ingresso para Evento
             </DialogTitle>
             <DialogDescription className="text-orange-100">
-              Venda ingressos para eventos e workshops
+              Venda ingressos para aulões e simulados
             </DialogDescription>
           </DialogHeader>
         </div>

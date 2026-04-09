@@ -411,7 +411,7 @@ export default function AlunoDashboard() {
                       <p className="line-clamp-1 text-xs text-muted-foreground">{event.description}</p>
                       <div className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
                         <Clock className="h-3 w-3" />
-                        {event.date} · {event.start_time}–{event.end_time}
+                        {new Date(event.date + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })} · {event.start_time}–{event.end_time}
                       </div>
                     </div>
                   </div>

@@ -141,7 +141,12 @@ export default function IngressoEventoPDF({ registration, event, qrCodeUrl, tige
                 ) : null}
                 <Text style={styles.ticketMeta}>
                   <Text style={styles.ticketMetaBold}>Ingresso: </Text>
-                  {event.is_free ? "Gratuito" : `R$ ${Number(event.price ?? 0).toFixed(2)}`}
+                  {event.is_free
+                    ? "Gratuito"
+                    : registration.lote_name
+                      ? `${registration.lote_name} — R$ ${Number(registration.lote_price ?? 0).toFixed(2)}`
+                      : `R$ ${Number(event.price ?? 0).toFixed(2)}`
+                  }
                 </Text>
               </View>
             </View>

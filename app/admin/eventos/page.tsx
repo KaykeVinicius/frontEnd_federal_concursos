@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Plus, Search, Loader2, Calendar, MapPin, Clock, Users, Settings2, Pencil, Trash2, Eye, Tag, AlertTriangle } from "lucide-react"
 
-const EVENT_TYPE_LABELS: Record<string, string> = { aulao: "Aulão", simulado: "Simulado", workshop: "Workshop", palestra: "Palestra" }
+const EVENT_TYPE_LABELS: Record<string, string> = { aulao: "Aulão", simulado: "Simulado" }
 const STATUS_LABELS: Record<string, string> = { agendado: "Agendado", em_andamento: "Em Andamento", concluido: "Concluído", cancelado: "Cancelado" }
 const STATUS_COLORS: Record<string, string> = {
   agendado: "bg-blue-100 text-blue-700", em_andamento: "bg-yellow-100 text-yellow-700",
