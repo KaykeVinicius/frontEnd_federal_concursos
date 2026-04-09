@@ -18,6 +18,7 @@ import {
   BarChart,
   ShieldCheck,
   Phone,
+  Calculator,
 } from "lucide-react"
 
 const cursos = [
@@ -426,7 +427,7 @@ export default function LandingPage() {
             {[
               { label: "Concursos Públicos", sub: "Federal, Estadual e Municipal", icon: Award },
               { label: "OAB", sub: "1ª e 2ª fases", icon: BookOpen },
-              { label: "CFC", sub: "Certificação de Condutores", icon: CheckCircle },
+              { label: "CFC", sub: "Conselho Federal de Contabilidade", icon: Calculator },
               { label: "Bancários", sub: "BB, Caixa e outros", icon: BarChart },
             ].map((area) => (
               <div
