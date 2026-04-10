@@ -115,7 +115,7 @@ export interface ApiCourse {
   description: string
   price: number
   status: string
-  access_type: string
+  access_type: "presencial" | "online" | "hibrido"
   duration_in_days: number
   start_date: string
   end_date: string
@@ -124,13 +124,26 @@ export interface ApiCourse {
   career?: ApiCareer
 }
 
+export interface ApiTurmaClassDay {
+  id: number
+  turma_id: number
+  subject_id: number
+  date: string
+  title?: string
+  description?: string
+  subject_name?: string
+  professor_name?: string
+  professor_id?: number
+  created_at: string
+}
+
 export interface ApiSubject {
   id: number
   name: string
-  description: string
-  position: number
-  course_id: number
-  professor_id: number
+  description?: string
+  position?: number
+  course_id?: number
+  professor_id?: number | null
   professor?: ApiUser
   created_at?: string
 }
@@ -456,6 +469,16 @@ export const api = {
     create: (body: Partial<ApiTurma>) => req<ApiTurma>("POST", "/turmas", body),
     update: (id: number, body: Partial<ApiTurma>) => req<ApiTurma>("PATCH", `/turmas/${id}`, body),
     delete: (id: number) => req<void>("DELETE", `/turmas/${id}`),
+    classDays: {
+      list: (turmaId: number) =>
+        req<ApiTurmaClassDay[]>("GET", `/turmas/${turmaId}/class_days`),
+      create: (turmaId: number, body: { subject_id: number; date: string; title?: string; description?: string }) =>
+        req<ApiTurmaClassDay>("POST", `/turmas/${turmaId}/class_days`, body),
+      update: (turmaId: number, id: number, body: Partial<ApiTurmaClassDay>) =>
+        req<ApiTurmaClassDay>("PATCH", `/turmas/${turmaId}/class_days/${id}`, body),
+      delete: (turmaId: number, id: number) =>
+        req<void>("DELETE", `/turmas/${turmaId}/class_days/${id}`),
+    },
   },
 
   students: {
@@ -528,7 +551,19 @@ export const api = {
       req<ApiQuestion>("PATCH", `/professor/questions/${id}/answer`, { answer }),
     materials: {
       list: () => req<ApiMaterial[]>("GET", "/professor/materials"),
-      create: (body: Partial<ApiMaterial>) => req<ApiMaterial>("POST", "/professor/materials", body),
+      create: (body: Partial<ApiMaterial> & { file?: File }) => {
+        if (body.file) {
+          const form = new FormData()
+          form.append("title", body.title ?? "")
+          form.append("material_type", body.material_type ?? "pdf")
+          if (body.subject_id) form.append("subject_id", String(body.subject_id))
+          if (body.turma_id)   form.append("turma_id",   String(body.turma_id))
+          if (body.file_name)  form.append("file_name",  body.file_name)
+          form.append("file", body.file)
+          return req<ApiMaterial>("POST", "/professor/materials", form)
+        }
+        return req<ApiMaterial>("POST", "/professor/materials", body)
+      },
       delete: (id: number) => req<void>("DELETE", `/professor/materials/${id}`),
     },
     eventMaterials: {
@@ -567,11 +602,17 @@ export const api = {
     eventMaterials: {
       list: (eventId: number) => req<ApiEventMaterial[]>("GET", `/aluno/event_materials?event_id=${eventId}`),
     },
+    materials: {
+      list: (courseId: number) => req<ApiMaterial[]>("GET", `/aluno/materials?course_id=${courseId}`),
+    },
     completions: {
       list: () => req<{ id: number; lesson_id: number }[]>("GET", "/aluno/lesson_completions"),
       create: (lessonId: number) =>
         req<{ id: number; lesson_id: number }>("POST", "/aluno/lesson_completions", { lesson_id: lessonId }),
       delete: (id: number) => req<void>("DELETE", `/aluno/lesson_completions/${id}`),
+    },
+    lessons: {
+      list: (topicId: number) => req<ApiLesson[]>("GET", `/aluno/lessons?topic_id=${topicId}`),
     },
   },
 }

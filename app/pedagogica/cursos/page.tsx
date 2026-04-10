@@ -433,9 +433,8 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
   async function openAddSubject() {
     setSelectedSubjectId("")
     const all = await api.subjects.list().catch(() => [])
-    const linkedIds = course.subjects.map((s) => s.id)
-    // Apenas matérias não vinculadas a outro curso e que já têm professor atribuído
-    setAvailableSubjects(all.filter((s) => !linkedIds.includes(s.id) && !s.course_id))
+    const linkedNames = course.subjects.map((s) => s.name.toLowerCase())
+    setAvailableSubjects(all.filter((s) => !s.course_id && !linkedNames.includes(s.name.toLowerCase())))
     setAddingSubject(true)
   }
 
@@ -443,8 +442,15 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
     if (!selectedSubjectId) return
     setLinkingSubject(true)
     try {
-      const updated = await api.subjects.update(parseInt(selectedSubjectId), { course_id: course.id })
-      onUpdate({ ...course, subjects: [...course.subjects, { ...updated, topics: [] }] })
+      const template = availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))
+      if (!template) return
+      const created = await api.subjects.create({
+        course_id:    course.id,
+        name:         template.name,
+        description:  template.description,
+        professor_id: template.professor_id,
+      })
+      onUpdate({ ...course, subjects: [...course.subjects, { ...created, topics: [] }] })
       setAddingSubject(false)
       setSelectedSubjectId("")
     } catch (e) {
@@ -482,7 +488,7 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
   }
 
   async function unlinkSubject(subjectId: number) {
-    await api.subjects.update(subjectId, { course_id: null as unknown as number })
+    await api.subjects.delete(subjectId)
     onUpdate({ ...course, subjects: course.subjects.filter((s) => s.id !== subjectId) })
   }
 
@@ -558,7 +564,7 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
                 <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground">Vincular matéria ao curso</p>
                   {availableSubjects.length === 0 ? (
-                    <p className="text-xs text-amber-600">Nenhuma matéria disponível. Crie matérias e vincule professores primeiro em Usuários.</p>
+                    <p className="text-xs text-amber-600">Nenhuma matéria disponível. Crie matérias primeiro em <strong>CEO → Matérias</strong>.</p>
                   ) : (
                     <>
                       <select
@@ -568,25 +574,25 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
                         disabled={linkingSubject}
                       >
                         <option value="">Selecione uma matéria...</option>
-                        {availableSubjects.map((s) => {
-                          const prof = professors.find((p) => p.id === s.professor_id)
-                          const hasProf = !!prof
-                          return (
-                            <option key={s.id} value={s.id} disabled={!hasProf}>
-                              {s.name}{hasProf ? ` — Prof. ${prof!.name.split(" ")[0]}` : " ⚠ Sem professor"}
-                            </option>
-                          )
-                        })}
+                        {availableSubjects.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
                       </select>
-                      {selectedSubjectId && !availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))?.professor_id && (
-                        <p className="text-xs text-destructive">Esta matéria não tem professor atribuído. Vá em CEO → Usuários e vincule um professor a ela.</p>
-                      )}
+                      {selectedSubjectId && (() => {
+                        const sel = availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))
+                        const prof = sel?.professor_id ? professors.find((p) => p.id === sel.professor_id) : null
+                        return prof ? (
+                          <p className="text-xs text-muted-foreground">Professor: <span className="font-medium text-foreground">{prof.name}</span></p>
+                        ) : (
+                          <p className="text-xs text-amber-600">Esta matéria não tem professor vinculado.</p>
+                        )
+                      })()}
                     </>
                   )}
                   <div className="flex gap-2">
                     <Button
                       size="sm" className="h-7 text-xs gap-1" onClick={linkSubject}
-                      disabled={linkingSubject || !selectedSubjectId || !availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))?.professor_id}
+                      disabled={linkingSubject || !selectedSubjectId}
                     >
                       {linkingSubject && <Loader2 className="h-3 w-3 animate-spin" />} Vincular
                     </Button>

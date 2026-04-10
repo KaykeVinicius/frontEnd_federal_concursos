@@ -109,8 +109,8 @@ export default function PedagogicaMateriasPage() {
                   {sub.description && (
                     <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{sub.description}</p>
                   )}
-                  {sub.course_id ? (
-                    <p className="mt-2 text-xs text-green-600">Vinculada ao curso #{sub.course_id}</p>
+                  {false ? (
+                    <p className="mt-2 text-xs text-green-600">Vinculada</p>
                   ) : (
                     <p className="mt-2 text-xs text-amber-600">Ainda não vinculada a um curso</p>
                   )}

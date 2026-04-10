@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { ChevronLeft, BookOpen, PlayCircle, ChevronRight, Loader2, Clock, FileText } from "lucide-react"
-import { api, type ApiSubject, type ApiTopic, type ApiLesson } from "@/lib/api"
+import { api, type ApiSubject, type ApiTopic, type ApiLesson, type ApiEnrollment } from "@/lib/api"
 
 type TopicComAulas = ApiTopic & { aulas: ApiLesson[] }
 
@@ -15,6 +15,7 @@ export default function TopicosPage() {
   const subjectId = Number(params.subject_id)
 
   const [loading, setLoading] = useState(true)
+  const [enrollment, setEnrollment] = useState<ApiEnrollment | null>(null)
   const [subject, setSubject] = useState<ApiSubject | null>(null)
   const [topicos, setTopicos] = useState<TopicComAulas[]>([])
 
@@ -22,18 +23,19 @@ export default function TopicosPage() {
     async function load() {
       try {
         const dashboard = await api.aluno.dashboard()
-        const enrollment = (dashboard.enrollments ?? []).find((e) => String(e.id) === enrollmentId)
-        if (!enrollment?.course) { router.push(`/aluno/meus-cursos/${enrollmentId}`); return }
+        const found = (dashboard.enrollments ?? []).find((e) => String(e.id) === enrollmentId)
+        if (!found?.course) { router.push(`/aluno/meus-cursos/${enrollmentId}`); return }
+        setEnrollment(found)
 
-        const subjects = await api.subjects.list(enrollment.course.id)
-        const found = subjects.find((s) => s.id === subjectId)
-        if (!found) { router.push(`/aluno/meus-cursos/${enrollmentId}`); return }
-        setSubject(found)
+        const subjects = await api.subjects.list(found.course.id)
+        const foundSubject = subjects.find((s) => s.id === subjectId)
+        if (!foundSubject) { router.push(`/aluno/meus-cursos/${enrollmentId}`); return }
+        setSubject(foundSubject)
 
         const topics = await api.topics.list(subjectId)
         const topicsComAulas = await Promise.all(
           topics.map(async (t) => {
-            const aulas = await api.lessons.list(t.id)
+            const aulas = await api.aluno.lessons.list(t.id)
             return { ...t, aulas }
           })
         )
@@ -56,6 +58,8 @@ export default function TopicosPage() {
     )
   }
 
+  const isPresencial = enrollment?.enrollment_type === "presencial" || enrollment?.enrollment_type === 0
+
   const totalAulas = topicos.reduce((acc, t) => acc + t.aulas.length, 0)
 
   return (
@@ -73,6 +77,7 @@ export default function TopicosPage() {
         <h1 className="text-2xl font-bold text-foreground">{subject?.name ?? "Disciplina"}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {topicos.length} tópico{topicos.length !== 1 ? "s" : ""} · {totalAulas} aula{totalAulas !== 1 ? "s" : ""}
+          {isPresencial && " · somente materiais"}
         </p>
       </div>
 
@@ -88,6 +93,8 @@ export default function TopicosPage() {
         <div className="space-y-3">
           {topicos.map((topico, idx) => {
             const primeiraAula = topico.aulas[0]
+            const totalPdfs = topico.aulas.reduce((acc, a) => acc + (a.lesson_pdfs?.length ?? 0), 0)
+
             const href = primeiraAula
               ? `/aluno/meus-cursos/assistir?enrollment_id=${enrollmentId}&subject_id=${subjectId}&topic_id=${topico.id}`
               : "#"
@@ -109,15 +116,17 @@ export default function TopicosPage() {
                     {topico.title}
                   </h3>
                   <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <FileText className="h-3.5 w-3.5 text-primary" />
-                      {topico.aulas.length} aula{topico.aulas.length !== 1 ? "s" : ""}
-                    </span>
-                    {topico.aulas.length > 0 && (
+                    {!isPresencial && (
                       <span className="flex items-center gap-1">
                         <Clock className="h-3.5 w-3.5 text-primary" />
-                        {topico.aulas[0].duration}
-                        {topico.aulas.length > 1 && " ..."}
+                        {topico.aulas.length} aula{topico.aulas.length !== 1 ? "s" : ""}
+                        {topico.aulas[0]?.duration && ` · ${topico.aulas[0].duration}`}
+                      </span>
+                    )}
+                    {totalPdfs > 0 && (
+                      <span className="flex items-center gap-1">
+                        <FileText className="h-3.5 w-3.5 text-primary" />
+                        {totalPdfs} material{totalPdfs !== 1 ? "is" : ""}
                       </span>
                     )}
                   </div>
@@ -126,8 +135,10 @@ export default function TopicosPage() {
                 {/* Ação */}
                 {primeiraAula ? (
                   <span className="shrink-0 flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-[11px] font-semibold text-primary transition-all group-hover:bg-primary group-hover:text-white">
-                    <PlayCircle className="h-3.5 w-3.5" />
-                    Assistir
+                    {isPresencial
+                      ? <><FileText className="h-3.5 w-3.5" /> Materiais</>
+                      : <><PlayCircle className="h-3.5 w-3.5" /> Assistir</>
+                    }
                   </span>
                 ) : (
                   <span className="shrink-0 rounded-full bg-muted px-3 py-1.5 text-[11px] font-semibold text-muted-foreground">

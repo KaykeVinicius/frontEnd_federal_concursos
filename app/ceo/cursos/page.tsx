@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import {
   PlusCircle, ChevronRight, ChevronDown, BookOpen, GraduationCap,
-  FileText, PlayCircle, Trash2, Check, X, Link2,
+  FileText, Trash2, Check, X,
   Loader2, DollarSign, Calendar, Clock, Globe, FilePlus, ExternalLink,
   Monitor, Building2, Users,
 } from "lucide-react"
@@ -77,9 +77,8 @@ function LessonRow({ lesson, onDelete }: { lesson: ApiLesson; onDelete: () => vo
     <div className="rounded-lg border border-border bg-background">
       <button className="flex w-full items-center justify-between px-4 py-2.5 text-left" onClick={() => setOpen(!open)}>
         <div className="flex items-center gap-2 text-sm">
-          <PlayCircle className="h-4 w-4 text-red-500" />
+          <FileText className="h-4 w-4 text-primary" />
           <span className="font-medium">{lesson.title}</span>
-          {lesson.duration && <span className="text-xs text-muted-foreground">{lesson.duration}</span>}
           {pdfs.length > 0 && <span className="text-xs text-muted-foreground">· {pdfs.length} PDF(s)</span>}
         </div>
         <div className="flex items-center gap-2">
@@ -89,15 +88,6 @@ function LessonRow({ lesson, onDelete }: { lesson: ApiLesson; onDelete: () => vo
       </button>
       {open && (
         <div className="border-t border-border px-4 py-4 space-y-4">
-          {lesson.youtube_id && (
-            <div className="overflow-hidden rounded-lg border border-border">
-              <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-                <iframe className="absolute inset-0 h-full w-full"
-                  src={`https://www.youtube.com/embed/${lesson.youtube_id}`}
-                  title={lesson.title} allowFullScreen />
-              </div>
-            </div>
-          )}
 
           {/* PDFs */}
           <div className="space-y-2">
@@ -160,31 +150,19 @@ function LessonRow({ lesson, onDelete }: { lesson: ApiLesson; onDelete: () => vo
 function NovaAulaForm({ topicId, currentLessonsCount, onAdded }: { topicId: number; currentLessonsCount: number; onAdded: (l: ApiLesson) => void }) {
   const [show, setShow] = useState(false)
   const [titulo, setTitulo] = useState("")
-  const [url, setUrl] = useState("")
-  const [duracao, setDuracao] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
-  function extractYoutubeId(input: string): string | null {
-    const regexes = [/youtube\.com\/watch\?v=([^&\s]+)/, /youtu\.be\/([^?\s]+)/, /youtube\.com\/embed\/([^?\s]+)/]
-    for (const re of regexes) { const m = input.match(re); if (m) return m[1] }
-    return null
-  }
-
   async function submit() {
-    if (!titulo.trim() || !url.trim()) return
-    const youtubeId = extractYoutubeId(url.trim())
-    if (!youtubeId) { setError("Link do YouTube inválido."); return }
+    if (!titulo.trim()) return
     setSaving(true); setError("")
     try {
-      const lesson = await api.lessons.create({ topic_id: topicId, title: titulo.trim(), youtube_id: youtubeId, duration: duracao.trim() || "00:00:00", position: currentLessonsCount + 1, available: true })
+      const lesson = await api.lessons.create({ topic_id: topicId, title: titulo.trim(), position: currentLessonsCount + 1, available: true })
       onAdded(lesson)
-      setTitulo(""); setUrl(""); setDuracao(""); setShow(false)
+      setTitulo(""); setShow(false)
     } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erro ao salvar") }
     finally { setSaving(false) }
   }
-
-  const previewId = extractYoutubeId(url)
 
   if (!show) return (
     <button onClick={() => setShow(true)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
@@ -195,22 +173,11 @@ function NovaAulaForm({ topicId, currentLessonsCount, onAdded }: { topicId: numb
   return (
     <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 space-y-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nova Aula</p>
-      <Input placeholder="Título da aula" value={titulo} onChange={(e) => setTitulo(e.target.value)} className="h-8 text-sm" disabled={saving} />
-      <div className="relative">
-        <Link2 className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Link do YouTube (https://youtube.com/watch?v=...)" value={url} onChange={(e) => { setUrl(e.target.value); setError("") }} className="h-8 pl-8 text-sm" disabled={saving} />
-      </div>
-      <Input placeholder="Duração (ex: 00:24:00)" value={duracao} onChange={(e) => setDuracao(e.target.value)} className="h-8 text-sm" disabled={saving} />
-      {previewId && (
-        <div className="overflow-hidden rounded-lg border border-border">
-          <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-            <iframe className="absolute inset-0 h-full w-full" src={`https://www.youtube.com/embed/${previewId}`} title="preview" allowFullScreen />
-          </div>
-        </div>
-      )}
+      <Input placeholder="Título da aula" value={titulo} onChange={(e) => setTitulo(e.target.value)} className="h-8 text-sm" disabled={saving}
+        onKeyDown={(e) => { if (e.key === "Enter" && titulo.trim()) submit() }} />
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex gap-2">
-        <Button size="sm" className="h-8 gap-1" onClick={submit} disabled={saving}>
+        <Button size="sm" className="h-8 gap-1" onClick={submit} disabled={saving || !titulo.trim()}>
           {saving && <Loader2 className="h-3 w-3 animate-spin" />} Adicionar Aula
         </Button>
         <Button size="sm" variant="ghost" className="h-8" onClick={() => setShow(false)} disabled={saving}>Cancelar</Button>
@@ -311,9 +278,9 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
 
   return (
     <div className="rounded-lg border border-border bg-background">
-      <button className="flex w-full items-center justify-between px-4 py-2.5 text-left" onClick={() => setOpen(!open)}>
-        <div className="flex items-center gap-2 flex-wrap">
-          <GraduationCap className="h-4 w-4 text-blue-500" />
+      <div className="flex w-full items-center justify-between px-4 py-2.5">
+        <button className="flex flex-1 items-center gap-2 flex-wrap text-left min-w-0" onClick={() => setOpen(!open)}>
+          <GraduationCap className="h-4 w-4 shrink-0 text-blue-500" />
           <span className="text-sm font-medium">{subject.name}</span>
           <Badge variant="secondary" className="text-xs">{subject.topics.length} tópico(s)</Badge>
           {currentProfessor ? (
@@ -325,10 +292,10 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
               Sem professor
             </span>
           )}
-        </div>
-        <div className="flex items-center gap-2">
+        </button>
+        <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={(e) => { e.stopPropagation(); setEditingProf((v) => !v); setNewProfId("") }}
+            onClick={() => { setEditingProf((v) => !v); setNewProfId("") }}
             className="text-muted-foreground hover:text-blue-600"
             title="Alterar professor"
           >
@@ -336,10 +303,10 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
           </button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+          <button onClick={() => onDelete()} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </div>
-      </button>
+      </div>
 
       {editingProf && (
         <div className="border-t border-border bg-blue-50/50 px-4 py-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -431,9 +398,10 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
 
   async function openAddSubject() {
     setSelectedSubjectId("")
+    // Mostra apenas templates (sem course_id) e exclui nomes já adicionados ao curso
     const all = await api.subjects.list().catch(() => [])
-    const linkedIds = course.subjects.map((s) => s.id)
-    setAvailableSubjects(all.filter((s) => !linkedIds.includes(s.id) && !s.course_id))
+    const linkedNames = course.subjects.map((s) => s.name.toLowerCase())
+    setAvailableSubjects(all.filter((s) => !s.course_id && !linkedNames.includes(s.name.toLowerCase())))
     setAddingSubject(true)
   }
 
@@ -441,8 +409,16 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
     if (!selectedSubjectId) return
     setLinkingSubject(true)
     try {
-      const updated = await api.subjects.update(parseInt(selectedSubjectId), { course_id: course.id })
-      onUpdate({ ...course, subjects: [...course.subjects, { ...updated, topics: [] }] })
+      const template = availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))
+      if (!template) return
+      // Cria uma cópia da matéria template para este curso específico
+      const created = await api.subjects.create({
+        course_id:    course.id,
+        name:         template.name,
+        description:  template.description,
+        professor_id: template.professor_id,
+      })
+      onUpdate({ ...course, subjects: [...course.subjects, { ...created, topics: [] }] })
       setAddingSubject(false)
       setSelectedSubjectId("")
     } catch (e) {
@@ -480,7 +456,7 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
   }
 
   async function unlinkSubject(subjectId: number) {
-    await api.subjects.update(subjectId, { course_id: null as unknown as number })
+    await api.subjects.delete(subjectId)
     onUpdate({ ...course, subjects: course.subjects.filter((s) => s.id !== subjectId) })
   }
 
@@ -556,7 +532,7 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
                 <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground">Vincular matéria ao curso</p>
                   {availableSubjects.length === 0 ? (
-                    <p className="text-xs text-amber-600">Nenhuma matéria disponível. Crie matérias e vincule professores primeiro em Usuários.</p>
+                    <p className="text-xs text-amber-600">Nenhuma matéria disponível. Crie matérias primeiro em <strong>CEO → Matérias</strong>.</p>
                   ) : (
                     <>
                       <select
@@ -566,25 +542,25 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
                         disabled={linkingSubject}
                       >
                         <option value="">Selecione uma matéria...</option>
-                        {availableSubjects.map((s) => {
-                          const prof = professors.find((p) => p.id === s.professor_id)
-                          const hasProf = !!prof
-                          return (
-                            <option key={s.id} value={s.id} disabled={!hasProf}>
-                              {s.name}{hasProf ? ` — Prof. ${prof!.name.split(" ")[0]}` : " ⚠ Sem professor"}
-                            </option>
-                          )
-                        })}
+                        {availableSubjects.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
                       </select>
-                      {selectedSubjectId && !availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))?.professor_id && (
-                        <p className="text-xs text-destructive">Esta matéria não tem professor atribuído. Vá em CEO → Usuários e vincule um professor a ela.</p>
-                      )}
+                      {selectedSubjectId && (() => {
+                        const sel = availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))
+                        const prof = sel?.professor_id ? professors.find((p) => p.id === sel.professor_id) : null
+                        return prof ? (
+                          <p className="text-xs text-muted-foreground">Professor: <span className="font-medium text-foreground">{prof.name}</span></p>
+                        ) : (
+                          <p className="text-xs text-amber-600">Esta matéria não tem professor vinculado.</p>
+                        )
+                      })()}
                     </>
                   )}
                   <div className="flex gap-2">
                     <Button
                       size="sm" className="h-7 text-xs gap-1" onClick={linkSubject}
-                      disabled={linkingSubject || !selectedSubjectId || !availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))?.professor_id}
+                      disabled={linkingSubject || !selectedSubjectId}
                     >
                       {linkingSubject && <Loader2 className="h-3 w-3 animate-spin" />} Vincular
                     </Button>
@@ -769,7 +745,7 @@ export default function CeoCursosPage() {
             { icon: BookOpen, label: "Curso", color: "text-primary" },
             { icon: GraduationCap, label: "Matéria", color: "text-blue-500" },
             { icon: FileText, label: "Tópico", color: "text-yellow-500" },
-            { icon: PlayCircle, label: "Aula (YouTube)", color: "text-red-500" },
+            { icon: FileText, label: "Aula", color: "text-primary" },
           ].map((item, i, arr) => (
             <span key={item.label} className="flex items-center gap-1">
               <item.icon className={`h-3.5 w-3.5 ${item.color}`} />

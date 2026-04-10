@@ -2,8 +2,20 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { BookOpen, PlayCircle, Loader2, GraduationCap, Clock, ChevronRight } from "lucide-react"
+import { BookOpen, PlayCircle, Loader2, GraduationCap, Clock, ChevronRight, Monitor, FileText } from "lucide-react"
 import { api, type ApiEnrollment } from "@/lib/api"
+
+function modalityLabel(type: string | number) {
+  if (type === "online"   || type === 1) return { text: "Online",    color: "bg-blue-500/10 text-blue-500" }
+  if (type === "hibrido"  || type === 2) return { text: "Híbrido",   color: "bg-violet-500/10 text-violet-500" }
+  return { text: "Presencial", color: "bg-amber-500/10 text-amber-600" }
+}
+
+function ctaLabel(type: string | number) {
+  if (type === "online"  || type === 1) return { text: "Assistir aulas",   icon: PlayCircle }
+  if (type === "hibrido" || type === 2) return { text: "Ver conteúdo",     icon: Monitor }
+  return { text: "Ver materiais", icon: FileText }
+}
 
 export default function MeusCursosPage() {
   const [loading, setLoading] = useState(true)
@@ -94,7 +106,7 @@ function CourseCard({
       <div className={`h-1.5 w-full ${inactive ? "bg-muted-foreground/30" : "bg-primary"}`} />
 
       <div className="flex flex-1 flex-col p-5">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between gap-2">
           <span
             className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
               enrollment.status === "active"
@@ -105,6 +117,9 @@ function CourseCard({
             }`}
           >
             {enrollment.status === "active" ? "Ativo" : enrollment.status === "expired" ? "Expirado" : "Cancelado"}
+          </span>
+          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${modalityLabel(enrollment.enrollment_type).color}`}>
+            {modalityLabel(enrollment.enrollment_type).text}
           </span>
         </div>
 
@@ -129,15 +144,18 @@ function CourseCard({
         </div>
       </div>
 
-      {!inactive && (
-        <div className="flex items-center justify-between border-t border-border bg-muted/30 px-5 py-3">
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-primary">
-            <PlayCircle className="h-4 w-4" />
-            Continuar assistindo
-          </span>
-          <ChevronRight className="h-4 w-4 text-primary transition-transform group-hover:translate-x-0.5" />
-        </div>
-      )}
+      {!inactive && (() => {
+        const cta = ctaLabel(enrollment.enrollment_type)
+        return (
+          <div className="flex items-center justify-between border-t border-border bg-muted/30 px-5 py-3">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+              <cta.icon className="h-4 w-4" />
+              {cta.text}
+            </span>
+            <ChevronRight className="h-4 w-4 text-primary transition-transform group-hover:translate-x-0.5" />
+          </div>
+        )
+      })()}
     </Link>
   )
 }

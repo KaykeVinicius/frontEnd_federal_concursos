@@ -42,6 +42,46 @@ export default function CeoUsuariosPage() {
   const [addingSubject, setAddingSubject] = useState(false)
   const [savingSubject, setSavingSubject] = useState(false)
 
+  // Gerenciar matérias de professor existente
+  const [editingProfessor, setEditingProfessor] = useState<ApiUser | null>(null)
+  const [profSubjectIds, setProfSubjectIds] = useState<number[]>([])
+  const [savingProfSubjects, setSavingProfSubjects] = useState(false)
+
+  function openEditSubjects(user: ApiUser) {
+    setEditingProfessor(user)
+    setProfSubjectIds(subjects.filter((s) => s.professor_id === user.id).map((s) => s.id))
+  }
+
+  async function handleSaveProfSubjects() {
+    if (!editingProfessor) return
+    setSavingProfSubjects(true)
+    try {
+      const original = subjects.filter((s) => s.professor_id === editingProfessor.id).map((s) => s.id)
+      const toAdd    = profSubjectIds.filter((id) => !original.includes(id))
+      const toRemove = original.filter((id) => !profSubjectIds.includes(id))
+      await Promise.all([
+        ...toAdd.map((id) => api.subjects.update(id, { professor_id: editingProfessor.id })),
+        ...toRemove.map((id) => api.subjects.update(id, { professor_id: null })),
+      ])
+      setSubjects((prev) =>
+        prev.map((s) => {
+          if (toAdd.includes(s.id)) return { ...s, professor_id: editingProfessor.id }
+          if (toRemove.includes(s.id)) return { ...s, professor_id: null }
+          return s
+        })
+      )
+      setEditingProfessor(null)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao salvar matérias")
+    } finally {
+      setSavingProfSubjects(false)
+    }
+  }
+
+  function toggleProfSubject(id: number) {
+    setProfSubjectIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
+  }
+
   // Tipos de usuário — CRUD
   const [isTypeModalOpen, setIsTypeModalOpen] = useState(false)
   const [editingType, setEditingType] = useState<ApiUserType | null>(null)
@@ -404,6 +444,11 @@ export default function CeoUsuariosPage() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
+                          {utSlug === "professor" && (
+                            <Button variant="outline" size="sm" onClick={() => openEditSubjects(user)} className="border-green-200 text-green-700 hover:border-green-500 hover:bg-green-50">
+                              <BookOpen className="h-3 w-3 mr-1" />Matérias
+                            </Button>
+                          )}
                           <Button variant="outline" size="sm" onClick={() => toggleUserStatus(user)} className="border-gray-200 hover:border-[#e8491d] hover:text-[#e8491d]">
                             {user.active ? (
                               <><UserX className="h-3 w-3 mr-1" />Desativar</>
@@ -702,6 +747,64 @@ export default function CeoUsuariosPage() {
                 </Button>
               </div>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Gerenciar Matérias do Professor */}
+        <Dialog open={!!editingProfessor} onOpenChange={(open) => { if (!open) setEditingProfessor(null) }}>
+          <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-green-600 to-emerald-500 p-6 rounded-t-lg">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
+                  <BookOpen className="h-5 w-5" />
+                  Matérias — {editingProfessor?.name}
+                </DialogTitle>
+                <DialogDescription className="text-green-100">
+                  Vincule ou desvincule matérias a este professor
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Lista de todas as matérias template (sem course_id) */}
+              <p className="text-sm font-medium text-muted-foreground">Selecione as matérias que este professor irá ministrar:</p>
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {subjects.filter((s) => !s.course_id).length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Nenhuma matéria cadastrada. Crie em CEO → Matérias.</p>
+                ) : (
+                  subjects.filter((s) => !s.course_id).map((s) => {
+                    const checked = profSubjectIds.includes(s.id)
+                    const otherProf = s.professor_id && s.professor_id !== editingProfessor?.id
+                    return (
+                      <label key={s.id} className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${checked ? "border-green-300 bg-green-50" : "border-border hover:bg-muted/50"}`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleProfSubject(s.id)}
+                          className="h-4 w-4 accent-green-600"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground">{s.name}</p>
+                          {otherProf && (
+                            <p className="text-[11px] text-amber-600">Vinculada a outro professor</p>
+                          )}
+                        </div>
+                        {checked && <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />}
+                      </label>
+                    )
+                  })
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button type="button" variant="outline" onClick={() => setEditingProfessor(null)} className="flex-1">
+                  Cancelar
+                </Button>
+                <Button type="button" onClick={handleSaveProfSubjects} disabled={savingProfSubjects} className="flex-1 bg-green-600 hover:bg-green-700 text-white">
+                  {savingProfSubjects ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Salvando...</> : "Salvar"}
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 

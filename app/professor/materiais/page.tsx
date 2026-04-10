@@ -25,10 +25,12 @@ export default function MateriaisPage() {
     title: "",
     material_type: "pdf" as TipoMaterial,
     file_name: "",
+    file_url: "",
     file_size: "",
     subject_id: "",
     turma_id: "",
   })
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -57,20 +59,24 @@ export default function MateriaisPage() {
   }
 
   async function adicionarMaterial() {
-    if (!form.title.trim() || !form.file_name.trim()) return
+    if (!form.title.trim()) return
+    if (form.material_type !== "link" && !selectedFile && !form.file_name.trim()) return
+    if (form.material_type === "link" && !form.file_url.trim()) return
     setSaving(true)
     try {
       const created = await api.professor.materials.create({
         title: form.title.trim(),
         material_type: form.material_type,
-        file_name: form.file_name.trim(),
-        file_size: form.file_size.trim() || undefined,
+        file_name: selectedFile ? selectedFile.name : form.file_name.trim() || undefined,
+        file_url: form.material_type === "link" ? form.file_url.trim() : undefined,
         subject_id: form.subject_id ? parseInt(form.subject_id) : undefined,
         turma_id: form.turma_id ? parseInt(form.turma_id) : undefined,
+        file: selectedFile ?? undefined,
       })
       setMateriais((m) => [created, ...m])
       setModalAberto(false)
-      setForm({ title: "", material_type: "pdf", file_name: "", file_size: "", subject_id: "", turma_id: "" })
+      setForm({ title: "", material_type: "pdf", file_name: "", file_url: "", file_size: "", subject_id: "", turma_id: "" })
+      setSelectedFile(null)
       setSubjects([])
     } catch (err) {
       console.error("Erro ao adicionar material:", err)
@@ -230,22 +236,32 @@ export default function MateriaisPage() {
                   </select>
                 </div>
               )}
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-foreground">
-                  {form.material_type === "link" ? "URL *" : "Nome do arquivo *"}
-                </label>
-                <input value={form.file_name} onChange={(e) => setForm((f) => ({ ...f, file_name: e.target.value }))}
-                  placeholder={form.material_type === "link" ? "https://..." : "documento.pdf"}
-                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50"
-                />
-              </div>
-              {form.material_type !== "link" && (
+              {form.material_type === "link" ? (
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-foreground">Tamanho (opcional)</label>
-                  <input value={form.file_size} onChange={(e) => setForm((f) => ({ ...f, file_size: e.target.value }))}
-                    placeholder="Ex: 2.1 MB"
+                  <label className="mb-1 block text-xs font-semibold text-foreground">URL *</label>
+                  <input value={form.file_url} onChange={(e) => setForm((f) => ({ ...f, file_url: e.target.value }))}
+                    placeholder="https://drive.google.com/..."
                     className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50"
                   />
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-foreground">Arquivo (PDF/Slide) *</label>
+                  <input
+                    type="file"
+                    accept=".pdf,.ppt,.pptx,.doc,.docx"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null
+                      setSelectedFile(f)
+                      if (f) setForm((fm) => ({ ...fm, file_name: f.name }))
+                    }}
+                    className="block w-full text-xs text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-white hover:file:opacity-90"
+                  />
+                  {selectedFile && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {selectedFile.name} · {(selectedFile.size / 1024).toFixed(0)} KB
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -253,7 +269,7 @@ export default function MateriaisPage() {
               <button onClick={() => setModalAberto(false)} className="flex-1 rounded-xl border border-border py-2.5 text-sm font-semibold text-muted-foreground transition hover:bg-muted">
                 Cancelar
               </button>
-              <button onClick={adicionarMaterial} disabled={!form.title.trim() || !form.file_name.trim() || saving}
+              <button onClick={adicionarMaterial} disabled={!form.title.trim() || saving || (form.material_type === "link" ? !form.file_url.trim() : !selectedFile)}
                 className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {saving ? <><Loader2 className="h-4 w-4 animate-spin" />Salvando...</> : "Adicionar"}

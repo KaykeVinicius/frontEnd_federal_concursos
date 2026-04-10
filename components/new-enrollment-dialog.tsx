@@ -292,8 +292,14 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
 
   const handleCourseChange = (value: string) => {
     setSelectedCourseId(value)
-    setSelectedModality("")
     setSelectedTurmaId("")
+    // Trava a modalidade automaticamente pelo access_type do curso
+    const course = allCourses.find((c) => c.id === Number(value))
+    if (course?.access_type) {
+      setSelectedModality(course.access_type)
+    } else {
+      setSelectedModality("")
+    }
   }
 
   function resetAll() {
@@ -720,8 +726,8 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                       <BookOpen className="h-4 w-4 text-[#e8491d]" />
                       Curso
                     </Label>
-                    <Select 
-                      value={selectedCourseId} 
+                    <Select
+                      value={selectedCourseId}
                       onValueChange={handleCourseChange}
                       disabled={!selectedCareerId}
                     >
@@ -730,11 +736,26 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                       </SelectTrigger>
                       <SelectContent>
                         {coursesByCareer.length > 0 ? (
-                          coursesByCareer.map((c) => (
-                            <SelectItem key={c.id} value={String(c.id)} className="cursor-pointer">
-                              {c.title}
-                            </SelectItem>
-                          ))
+                          coursesByCareer.map((c) => {
+                            const modalityBadge: Record<string, { label: string; cls: string }> = {
+                              presencial: { label: "Presencial", cls: "bg-amber-100 text-amber-700" },
+                              online:     { label: "Online",    cls: "bg-blue-100 text-blue-700" },
+                              hibrido:    { label: "Híbrido",   cls: "bg-violet-100 text-violet-700" },
+                            }
+                            const badge = modalityBadge[c.access_type]
+                            return (
+                              <SelectItem key={c.id} value={String(c.id)} className="cursor-pointer">
+                                <div className="flex items-center gap-2">
+                                  <span>{c.title}</span>
+                                  {badge && (
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badge.cls}`}>
+                                      {badge.label}
+                                    </span>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            )
+                          })
                         ) : (
                           <div className="p-2 text-center text-gray-500 text-sm">
                             Nenhum curso disponível
@@ -749,39 +770,36 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                       <Monitor className="h-4 w-4 text-[#e8491d]" />
                       Modalidade
                     </Label>
-                    <Select 
-                      value={selectedModality} 
-                      onValueChange={handleModalityChange}
-                      disabled={!selectedCourseId}
-                    >
-                      <SelectTrigger className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300 cursor-pointer disabled:opacity-50">
-                        <SelectValue placeholder={selectedCourseId ? "Selecione a modalidade" : "Selecione um curso primeiro"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="presencial" className="cursor-pointer">
-                          <div className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4" />
-                            Presencial
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="hibrido" className="cursor-pointer">
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4" />
-                            Híbrido
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="online" className="cursor-pointer">
-                          <div className="flex items-center gap-2">
-                            <Monitor className="h-4 w-4" />
-                            Online
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {/* Travada — definida automaticamente pelo access_type do curso */}
+                    <div className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm ${
+                      selectedModality
+                        ? selectedModality === "presencial"
+                          ? "border-amber-300 bg-amber-50 text-amber-700"
+                          : selectedModality === "online"
+                          ? "border-blue-300 bg-blue-50 text-blue-700"
+                          : "border-violet-300 bg-violet-50 text-violet-700"
+                        : "border-gray-200 bg-gray-50 text-gray-400"
+                    }`}>
+                      {selectedModality === "presencial" && <Building2 className="h-4 w-4 shrink-0" />}
+                      {selectedModality === "online"     && <Monitor   className="h-4 w-4 shrink-0" />}
+                      {selectedModality === "hibrido"    && <Users     className="h-4 w-4 shrink-0" />}
+                      {!selectedModality                 && <Monitor   className="h-4 w-4 shrink-0 opacity-40" />}
+                      <span className="font-medium">
+                        {selectedModality === "presencial" ? "Presencial" :
+                         selectedModality === "online"     ? "Online" :
+                         selectedModality === "hibrido"    ? "Híbrido" :
+                         "Definido pelo curso"}
+                      </span>
+                      {selectedModality && (
+                        <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide opacity-60">
+                          automático
+                        </span>
+                      )}
+                    </div>
                     {selectedModality === "online" && (
-                      <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                      <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
                         <CheckCircle2 className="h-3 w-3" />
-                        Cursos online não possuem turmas específicas
+                        Cursos online não possuem turmas
                       </p>
                     )}
                   </div>

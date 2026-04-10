@@ -550,7 +550,7 @@ function AssistirInner() {
   const [sendingDuvida, setSendingDuvida] = useState(false)
   const [pdfOpening, setPdfOpening] = useState<number | null>(null)
 
-  const openProtectedPdf = async (pdfId: number, pdfName: string) => {
+  const openProtectedPdf = async (pdfId: number, _pdfName: string) => {
     setPdfOpening(pdfId)
     try {
       const token = localStorage.getItem("auth_token")
@@ -601,6 +601,12 @@ function AssistirInner() {
         if (!activeEnrollment?.course) { setLoading(false); return }
         setEnrollment(activeEnrollment)
 
+        // For presencial, default to materials tab
+        const type = activeEnrollment.enrollment_type
+        if (type === "presencial" || type === 0) {
+          setRightTab("materiais")
+        }
+
         // Build completion maps
         const completedIds = completions.map((c) => c.lesson_id)
         const completionMap: Record<number, number> = {}
@@ -612,7 +618,7 @@ function AssistirInner() {
         console.log("[assistir] enrollment_id buscado:", enrollmentId)
         console.log("[assistir] enrollment encontrado:", activeEnrollment?.id, "curso:", activeEnrollment?.course?.id, activeEnrollment?.course?.title)
         const subjects = await api.subjects.list(activeEnrollment.course.id)
-        console.log("[assistir] subjects carregados:", subjects.length, subjects.map(s => ({ id: s.id, name: s.name, course_id: s.course_id })))
+        console.log("[assistir] subjects carregados:", subjects.length, subjects.map(s => ({ id: s.id, name: s.name })))
 
         // Load topics + lessons for all subjects in parallel
         const disciplinasComConteudo = await Promise.all(
@@ -620,7 +626,7 @@ function AssistirInner() {
             const topics = await api.topics.list(subject.id)
             const topicsComAulas = await Promise.all(
               topics.map(async (topic) => {
-                const aulas = await api.lessons.list(topic.id)
+                const aulas = await api.aluno.lessons.list(topic.id)
                 return { ...topic, aulas }
               })
             )
@@ -712,8 +718,12 @@ function AssistirInner() {
     }
   }
 
+  const hasVideo = !!aulaAtiva?.youtube_id
+  const isPresencial = enrollment?.enrollment_type === "presencial" || enrollment?.enrollment_type === 0
+  const isHibrido   = enrollment?.enrollment_type === "hibrido"    || enrollment?.enrollment_type === 2
+
   const rightTabs = [
-    { key: "video" as RightTab, label: "Vídeo", icon: PlayCircle },
+    ...(!isPresencial && hasVideo ? [{ key: "video" as RightTab, label: "Vídeo", icon: PlayCircle }] : []),
     { key: "materiais" as RightTab, label: "Materiais", icon: FileText },
     { key: "anotacoes" as RightTab, label: "Anotações", icon: PenLine },
     { key: "duvidas" as RightTab, label: "Dúvidas", icon: HelpCircle },
@@ -765,7 +775,7 @@ function AssistirInner() {
               <p className="text-xs font-bold text-zinc-300">Selecione o conteúdo</p>
               <button onClick={() => setMobileSidebarOpen(false)}><X className="h-4 w-4 text-zinc-500" /></button>
             </div>
-            <CourseSidebar disciplinas={disciplinas} aulaAtiva={aulaAtiva} concluidas={concluidas} initialSubjectId={initialSubjectId} initialTopicId={initialTopicId} onSelect={(a) => { setAulaAtiva(a); setRightTab("video"); setMobileSidebarOpen(false) }} />
+            <CourseSidebar disciplinas={disciplinas} aulaAtiva={aulaAtiva} concluidas={concluidas} initialSubjectId={initialSubjectId} initialTopicId={initialTopicId} onSelect={(a) => { setAulaAtiva(a); if (!isPresencial) setRightTab("video"); setMobileSidebarOpen(false) }} />
           </aside>
         </div>
       )}
@@ -779,38 +789,46 @@ function AssistirInner() {
           {!aulaAtiva ? (
             <div className="flex flex-1 items-center justify-center gap-4 text-center px-6">
               <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-zinc-900 border border-zinc-800">
-                <PlayCircle className="h-10 w-10 text-zinc-700" />
+                {isPresencial ? <FileText className="h-10 w-10 text-zinc-700" /> : <PlayCircle className="h-10 w-10 text-zinc-700" />}
               </div>
               <div>
                 <p className="text-base font-bold text-zinc-300">{enrollment?.course?.title}</p>
-                <p className="mt-1 text-sm text-zinc-500">Selecione uma disciplina na barra lateral para começar</p>
+                <p className="mt-1 text-sm text-zinc-500">
+                  {isPresencial
+                    ? "Selecione uma disciplina para acessar os materiais"
+                    : "Selecione uma disciplina na barra lateral para começar"}
+                </p>
               </div>
             </div>
           ) : (
             <>
-              {/* Vídeo — fullscreen via CSS (sem remount do player) */}
-              <div ref={videoRef} className={cn(
-                "shrink-0 bg-black w-full",
-                fullscreen && "fixed inset-0 z-50 flex items-center justify-center"
-              )}>
-                <div
-                  className="w-full"
-                  style={fullscreen ? { width: "min(100vw, calc(100vh * 16 / 9))" } : {}}
-                >
-                  <YoutubePlayer
-                    key={aulaAtiva.id}
-                    videoId={aulaAtiva.youtube_id}
-                    cpf={cpf}
-                    isFullscreen={fullscreen}
-                    onFullscreen={() => setFullscreen(!fullscreen)}
-                    isTheater={theaterMode}
-                    onTheater={() => setTheaterMode(!theaterMode)}
-                    onPrev={anterior ? () => setAulaAtiva(anterior) : undefined}
-                    onNext={proxima ? () => setAulaAtiva(proxima) : undefined}
-                    onEnded={() => { if (proxima) { setAulaAtiva(proxima); setRightTab("video") } }}
-                  />
+              {/* Vídeo — oculto para presencial */}
+              {!isPresencial && (
+                <div ref={videoRef} className={cn(
+                  "shrink-0 bg-black w-full",
+                  fullscreen && "fixed inset-0 z-50 flex items-center justify-center"
+                )}>
+                  <div
+                    className="w-full"
+                    style={fullscreen ? { width: "min(100vw, calc(100vh * 16 / 9))" } : {}}
+                  >
+                    {hasVideo ? (
+                      <YoutubePlayer
+                        key={aulaAtiva.id}
+                        videoId={aulaAtiva.youtube_id}
+                        cpf={cpf}
+                        isFullscreen={fullscreen}
+                        onFullscreen={() => setFullscreen(!fullscreen)}
+                        isTheater={theaterMode}
+                        onTheater={() => setTheaterMode(!theaterMode)}
+                        onPrev={anterior ? () => setAulaAtiva(anterior) : undefined}
+                        onNext={proxima ? () => setAulaAtiva(proxima) : undefined}
+                        onEnded={() => { if (proxima) { setAulaAtiva(proxima); setRightTab("video") } }}
+                      />
+                    ) : null}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Info da aula */}
               <div className="shrink-0 border-b border-zinc-800 px-4 py-3 space-y-2">
@@ -1042,24 +1060,55 @@ function AssistirInner() {
           "sticky top-11 h-[calc(100vh-44px)] overflow-hidden"
         )}>
           <div className="flex shrink-0 border-b border-zinc-800">
-            {(["aulas", "cronograma"] as const).map((tab) => (
-              <button key={tab} onClick={() => setSidebarTab(tab)}
+            <button onClick={() => setSidebarTab("aulas")}
+              className={cn("flex-1 py-2.5 text-[11px] font-semibold uppercase tracking-wide transition-colors",
+                sidebarTab === "aulas" ? "border-b-2 border-primary text-primary" : "text-zinc-600 hover:text-zinc-400"
+              )}
+            >
+              {isPresencial ? "Materiais" : "Aulas"}
+            </button>
+            {isHibrido && (
+              <button onClick={() => setSidebarTab("cronograma")}
                 className={cn("flex-1 py-2.5 text-[11px] font-semibold uppercase tracking-wide transition-colors",
-                  sidebarTab === tab ? "border-b-2 border-primary text-primary" : "text-zinc-600 hover:text-zinc-400"
+                  sidebarTab === "cronograma" ? "border-b-2 border-primary text-primary" : "text-zinc-600 hover:text-zinc-400"
                 )}
               >
-                {tab === "aulas" ? "Aulas Curso" : "Cronograma"}
+                Presencial
               </button>
-            ))}
+            )}
           </div>
           <div className="flex-1 overflow-y-auto">
             {sidebarTab === "aulas" ? (
-              <CourseSidebar disciplinas={disciplinas} aulaAtiva={aulaAtiva} concluidas={concluidas} onSelect={(a) => { setAulaAtiva(a); setRightTab("video") }} />
+              <CourseSidebar disciplinas={disciplinas} aulaAtiva={aulaAtiva} concluidas={concluidas} onSelect={(a) => { setAulaAtiva(a); if (!isPresencial) setRightTab("video") }} />
             ) : (
-              <div className="flex flex-col items-center gap-3 py-16 text-center px-4">
-                <BarChart2 className="h-8 w-8 text-zinc-700" />
-                <p className="text-xs text-zinc-600">Cronograma em breve</p>
-              </div>
+              enrollment?.turma ? (
+                <div className="p-4 space-y-4">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Turma</p>
+                    <p className="text-sm font-semibold text-zinc-200">{enrollment.turma.name}</p>
+                  </div>
+                  {enrollment.turma.schedule && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Horário</p>
+                      <p className="text-xs text-zinc-300">{enrollment.turma.schedule}</p>
+                    </div>
+                  )}
+                  {enrollment.turma.start_date && (
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Período</p>
+                      <p className="text-xs text-zinc-300">{enrollment.turma.start_date} — {enrollment.turma.end_date}</p>
+                    </div>
+                  )}
+                  <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-3">
+                    <p className="text-[10px] text-violet-400">As aulas presenciais seguem o cronograma acima. Verifique com seu instrutor para mais detalhes.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-3 py-16 text-center px-4">
+                  <BarChart2 className="h-8 w-8 text-zinc-700" />
+                  <p className="text-xs text-zinc-600">Sem turma vinculada</p>
+                </div>
+              )
             )}
           </div>
         </aside>
