@@ -19,6 +19,8 @@ import {
   Menu,
   X,
   ShieldCheck,
+  Megaphone,
+  CalendarRange,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -35,6 +37,8 @@ const navItems = [
   { href: "/ceo/usuarios", label: "Usuários", icon: Users },
   { href: "/ceo/carreiras", label: "Carreiras", icon: GraduationCap },
   { href: "/ceo/logs-acesso", label: "Logs de Acesso", icon: ShieldCheck },
+  { href: "/ceo/avisos", label: "Central de Avisos", icon: Megaphone },
+  { href: "/ceo/agenda", label: "Agenda", icon: CalendarRange },
   { href: "/ceo/configuracoes", label: "Configuracoes", icon: Settings },
 ]
 

@@ -11,6 +11,8 @@ import {
   ShoppingBag,
   Menu,
   ChevronLeft,
+  CalendarRange,
+  Megaphone,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
@@ -21,6 +23,8 @@ const navItems = [
   { href: "/assistente/cursos-disponiveis", label: "Cursos Disponíveis", icon: BookOpen },
   { href: "/assistente/eventos", label: "Eventos", icon: CalendarDays },
   { href: "/assistente/vendas-eventos", label: "Venda de Eventos", icon: ShoppingBag },
+  { href: "/assistente/agenda",         label: "Agenda",           icon: CalendarRange },
+  { href: "/assistente/avisos",         label: "Avisos",           icon: Megaphone },
 ]
 
 export function AssistenteSidebar() {

@@ -17,6 +17,12 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [sessionMsg, setSessionMsg] = useState("")
+
+  useEffect(() => {
+    const msg = sessionStorage.getItem("session_msg")
+    if (msg) { setSessionMsg(msg); sessionStorage.removeItem("session_msg") }
+  }, [])
 
   async function handleLogin(e: { preventDefault(): void }) {
     e.preventDefault()
@@ -239,6 +245,11 @@ export default function LoginPage() {
                     </div>
                   </div>
 
+                  {sessionMsg && (
+                    <p className="rounded-md bg-orange-500/20 px-3 py-2 text-sm text-orange-300 flex items-center gap-2">
+                      <span>⚠</span> {sessionMsg}
+                    </p>
+                  )}
                   {error && (
                     <p className="rounded-md bg-red-500/20 px-3 py-2 text-sm text-red-300">
                       {error}

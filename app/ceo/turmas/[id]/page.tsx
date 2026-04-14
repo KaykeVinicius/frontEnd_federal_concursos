@@ -33,13 +33,17 @@ export default function TurmaDetailPage() {
   const [error,       setError      ] = useState("")
 
   // form novo dia letivo
-  const [showForm,     setShowForm   ] = useState(false)
-  const [formDate,     setFormDate   ] = useState("")
-  const [formSubject,  setFormSubject] = useState("")
-  const [formTitle,    setFormTitle  ] = useState("")
-  const [formDesc,     setFormDesc   ] = useState("")
-  const [formSaving,   setFormSaving ] = useState(false)
-  const [formError,    setFormError  ] = useState("")
+  const [showForm,        setShowForm       ] = useState(false)
+  const [formDate,        setFormDate       ] = useState("")
+  const [formSubject,     setFormSubject    ] = useState("")
+  const [formProfessor,   setFormProfessor  ] = useState("")
+  const [formStartTime,   setFormStartTime  ] = useState("")
+  const [formEndTime,     setFormEndTime    ] = useState("")
+  const [formTitle,       setFormTitle      ] = useState("")
+  const [formDesc,        setFormDesc       ] = useState("")
+  const [formSaving,      setFormSaving     ] = useState(false)
+  const [formError,       setFormError      ] = useState("")
+  const [professors,      setProfessors     ] = useState<{ id: number; name: string }[]>([])
 
   // agrupar dias por mês
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set())
@@ -48,14 +52,16 @@ export default function TurmaDetailPage() {
     try {
       const t = await api.turmas.get(turmaId)
       setTurma(t)
-      const [all, days, subs] = await Promise.all([
+      const [all, days, subs, users] = await Promise.all([
         api.enrollments.list(),
         api.turmas.classDays.list(turmaId),
         t.course ? api.subjects.list(t.course.id) : Promise.resolve([]),
+        api.users.list(),
       ])
       setEnrollments(all.filter((e) => Number(e.turma?.id) === turmaId))
       setClassDays(days)
       setSubjects(subs)
+      setProfessors(users.filter((u) => u.role === "professor").map((u) => ({ id: u.id, name: u.name })))
       // expande mês atual por padrão
       const thisMonth = new Date().toISOString().slice(0, 7)
       setExpandedMonths(new Set([thisMonth]))
@@ -91,15 +97,18 @@ export default function TurmaDetailPage() {
     setFormSaving(true); setFormError("")
     try {
       const day = await api.turmas.classDays.create(turmaId, {
-        subject_id:  Number(formSubject),
-        date:        formDate,
-        title:       formTitle.trim() || undefined,
-        description: formDesc.trim()  || undefined,
+        subject_id:   Number(formSubject),
+        professor_id: formProfessor ? Number(formProfessor) : null,
+        date:         formDate,
+        start_time:   formStartTime || undefined,
+        end_time:     formEndTime   || undefined,
+        title:        formTitle.trim() || undefined,
+        description:  formDesc.trim()  || undefined,
       })
       setClassDays((prev) => [...prev, day].sort((a, b) => a.date.localeCompare(b.date)))
       setExpandedMonths((prev) => new Set([...prev, day.date.slice(0, 7)]))
       setShowForm(false)
-      setFormDate(""); setFormSubject(""); setFormTitle(""); setFormDesc("")
+      setFormDate(""); setFormSubject(""); setFormProfessor(""); setFormStartTime(""); setFormEndTime(""); setFormTitle(""); setFormDesc("")
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Erro ao adicionar aula.")
     } finally { setFormSaving(false) }
@@ -324,6 +333,19 @@ export default function TurmaDetailPage() {
                         </select>
                       </div>
                       <div>
+                        <label className="mb-1 block text-xs font-semibold text-foreground">Professor da aula</label>
+                        <select
+                          value={formProfessor}
+                          onChange={(e) => setFormProfessor(e.target.value)}
+                          className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
+                        >
+                          <option value="">Usar professor da turma</option>
+                          {professors.map((p) => (
+                            <option key={p.id} value={String(p.id)}>{p.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
                         <label className="mb-1 block text-xs font-semibold text-foreground">Título / Assunto</label>
                         <input
                           type="text"
@@ -334,6 +356,24 @@ export default function TurmaDetailPage() {
                         />
                       </div>
                       <div>
+                        <label className="mb-1 block text-xs font-semibold text-foreground">Horário início</label>
+                        <input
+                          type="time"
+                          value={formStartTime}
+                          onChange={(e) => setFormStartTime(e.target.value)}
+                          className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-foreground">Horário término</label>
+                        <input
+                          type="time"
+                          value={formEndTime}
+                          onChange={(e) => setFormEndTime(e.target.value)}
+                          className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
                         <label className="mb-1 block text-xs font-semibold text-foreground">Descrição (opcional)</label>
                         <input
                           type="text"
@@ -406,6 +446,11 @@ export default function TurmaDetailPage() {
                                     </span>
                                     {day.professor_name && (
                                       <span className="text-xs text-muted-foreground">Prof. {day.professor_name.split(" ")[0]}</span>
+                                    )}
+                                    {day.start_time && (
+                                      <span className="text-xs text-muted-foreground">
+                                        {day.start_time}{day.end_time ? ` – ${day.end_time}` : ""}
+                                      </span>
                                     )}
                                   </div>
                                   {day.title && <p className="text-sm font-medium text-foreground mt-0.5">{day.title}</p>}

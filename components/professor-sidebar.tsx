@@ -14,6 +14,8 @@ import {
   Settings,
   HelpCircle,
   FolderOpen,
+  CalendarRange,
+  Megaphone,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
@@ -26,6 +28,8 @@ const navItems = [
   { href: "/professor/materiais", label: "Materiais", icon: FolderOpen },
   { href: "/professor/eventos", label: "Eventos", icon: CalendarDays },
   { href: "/professor/eventos/auloes", label: "Aulões — PDFs", icon: FolderOpen },
+  { href: "/professor/agenda",        label: "Agenda",        icon: CalendarRange },
+  { href: "/professor/avisos",        label: "Avisos",        icon: Megaphone },
   { href: "/professor/configuracoes", label: "Configurações", icon: Settings },
 ]
 

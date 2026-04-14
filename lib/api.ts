@@ -34,10 +34,15 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 
   if (!res.ok) {
     if (res.status === 401) {
-      // Token expirado ou inválido — limpa sessão e redireciona para login
       if (typeof window !== "undefined") {
+        const errBody = await res.json().catch(() => ({}))
+        const msg = errBody?.error ?? "Sessão expirada. Faça login novamente."
         localStorage.removeItem("auth_token")
         localStorage.removeItem("currentUser")
+        // Mostra mensagem antes de redirecionar se for sessão encerrada por outro dispositivo
+        if (msg.includes("encerrada")) {
+          sessionStorage.setItem("session_msg", msg)
+        }
         window.location.href = "/login"
       }
       throw new Error("Sessão expirada. Faça login novamente.")
@@ -128,12 +133,14 @@ export interface ApiTurmaClassDay {
   id: number
   turma_id: number
   subject_id: number
+  professor_id?: number | null
   date: string
+  start_time?: string | null
+  end_time?: string | null
   title?: string
   description?: string
   subject_name?: string
   professor_name?: string
-  professor_id?: number
   created_at: string
 }
 
@@ -327,9 +334,23 @@ export interface ApiMaterial {
   professor_id: number
   subject_id?: number
   turma_id?: number
+  notes?: string | null
   created_at: string
   professor?: ApiUser
   subject?: ApiSubject
+}
+
+export interface ApiAnnouncement {
+  id: number
+  title: string
+  body: string
+  category: "geral" | "urgente" | "evento" | "financeiro" | "pedagogico"
+  audience: "todos" | "alunos" | "professores" | "equipe"
+  pinned: boolean
+  active: boolean
+  expires_at?: string | null
+  created_at: string
+  author: ApiUser
 }
 
 export interface ApiNotification {
@@ -398,6 +419,7 @@ export const api = {
     login: (email: string, password: string) =>
       req<{ token: string; user: ApiUser }>("POST", "/auth/login", { email, password }),
     me: () => req<ApiUser>("GET", "/auth/me"),
+    logout: () => req<void>("DELETE", "/auth/logout").catch(() => {}),
   },
 
   users: {
@@ -511,7 +533,7 @@ export const api = {
     classDays: {
       list: (turmaId: number) =>
         req<ApiTurmaClassDay[]>("GET", `/turmas/${turmaId}/class_days`),
-      create: (turmaId: number, body: { subject_id: number; date: string; title?: string; description?: string }) =>
+      create: (turmaId: number, body: { subject_id: number; professor_id?: number | null; date: string; start_time?: string; end_time?: string; title?: string; description?: string }) =>
         req<ApiTurmaClassDay>("POST", `/turmas/${turmaId}/class_days`, body),
       update: (turmaId: number, id: number, body: Partial<ApiTurmaClassDay>) =>
         req<ApiTurmaClassDay>("PATCH", `/turmas/${turmaId}/class_days/${id}`, body),
@@ -605,6 +627,7 @@ export const api = {
           if (body.subject_id) form.append("subject_id", String(body.subject_id))
           if (body.turma_id)   form.append("turma_id",   String(body.turma_id))
           if (body.file_name)  form.append("file_name",  body.file_name)
+          if (body.notes)      form.append("notes",      body.notes)
           form.append("file", body.file)
           return req<ApiMaterial>("POST", "/professor/materials", form)
         }
@@ -624,6 +647,16 @@ export const api = {
       },
       delete: (id: number) => req<void>("DELETE", `/professor/event_materials/${id}`),
     },
+  },
+
+  announcements: {
+    list: (q?: RansackQ) => req<ApiAnnouncement[]>("GET", `/announcements${buildRansackQuery(q)}`),
+    get: (id: number) => req<ApiAnnouncement>("GET", `/announcements/${id}`),
+    create: (body: Omit<ApiAnnouncement, "id" | "created_at" | "author">) =>
+      req<ApiAnnouncement>("POST", "/announcements", body),
+    update: (id: number, body: Partial<Omit<ApiAnnouncement, "id" | "created_at" | "author">>) =>
+      req<ApiAnnouncement>("PATCH", `/announcements/${id}`, body),
+    delete: (id: number) => req<void>("DELETE", `/announcements/${id}`),
   },
 
   notifications: {

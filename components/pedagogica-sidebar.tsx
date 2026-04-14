@@ -13,6 +13,8 @@ import {
   Settings,
   Briefcase,
   FileText,
+  CalendarRange,
+  Megaphone,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
@@ -23,7 +25,9 @@ const navItems = [
   { href: "/pedagogica/materias", label: "2. Matérias", icon: FileText },
   { href: "/pedagogica/cursos", label: "3. Cursos", icon: BookOpen },
   { href: "/pedagogica/turmas", label: "4. Turmas", icon: Layers },
-  { href: "/pedagogica/eventos", label: "Eventos", icon: CalendarDays },
+  { href: "/pedagogica/eventos",       label: "Eventos",       icon: CalendarDays },
+  { href: "/pedagogica/agenda",        label: "Agenda",        icon: CalendarRange },
+  { href: "/pedagogica/avisos",        label: "Avisos",        icon: Megaphone },
   { href: "/pedagogica/configuracoes", label: "Configurações", icon: Settings },
 ]
 

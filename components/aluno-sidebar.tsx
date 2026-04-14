@@ -13,6 +13,8 @@ import {
   X,
   Menu,
   Radio,
+  CalendarRange,
+  Megaphone,
 } from "lucide-react"
 import { useState, useEffect } from "react"
 
@@ -21,6 +23,8 @@ const BASE_NAV = [
   { href: "/aluno/ao-vivo",       label: "Ao Vivo",         icon: Radio,           onlyPresencial: true },
   { href: "/aluno/meus-cursos",   label: "Meus Cursos",     icon: GraduationCap },
   { href: "/aluno/eventos",       label: "Meus Eventos",    icon: CalendarDays },
+  { href: "/aluno/agenda",        label: "Agenda",          icon: CalendarRange },
+  { href: "/aluno/avisos",        label: "Avisos",          icon: Megaphone },
   { href: "/aluno/configuracoes", label: "Configurações",   icon: SlidersHorizontal },
 ]
 

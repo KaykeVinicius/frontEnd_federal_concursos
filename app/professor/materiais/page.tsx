@@ -29,6 +29,7 @@ export default function MateriaisPage() {
     file_size: "",
     subject_id: "",
     turma_id: "",
+    notes: "",
   })
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
@@ -71,11 +72,12 @@ export default function MateriaisPage() {
         file_url: form.material_type === "link" ? form.file_url.trim() : undefined,
         subject_id: form.subject_id ? parseInt(form.subject_id) : undefined,
         turma_id: form.turma_id ? parseInt(form.turma_id) : undefined,
+        notes: form.notes.trim() || undefined,
         file: selectedFile ?? undefined,
       })
       setMateriais((m) => [created, ...m])
       setModalAberto(false)
-      setForm({ title: "", material_type: "pdf", file_name: "", file_url: "", file_size: "", subject_id: "", turma_id: "" })
+      setForm({ title: "", material_type: "pdf", file_name: "", file_url: "", file_size: "", subject_id: "", turma_id: "", notes: "" })
       setSelectedFile(null)
       setSubjects([])
     } catch (err) {
@@ -164,6 +166,9 @@ export default function MateriaisPage() {
                     {m.file_size && <span>{m.file_size}</span>}
                     <span>{formatDate(m.created_at)}</span>
                   </div>
+                  {m.notes && (
+                    <p className="mt-1 text-xs text-muted-foreground/80 italic line-clamp-2">{m.notes}</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   {m.file_url && (
@@ -236,6 +241,20 @@ export default function MateriaisPage() {
                   </select>
                 </div>
               )}
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-foreground">Observação <span className="font-normal text-muted-foreground">(opcional, máx. 1000 caracteres)</span></label>
+                <textarea
+                  value={form.notes}
+                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder="Ex: Material referente à aula do dia 14/04, capítulo 3..."
+                  maxLength={1000}
+                  rows={3}
+                  className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 resize-none"
+                />
+                {form.notes.length > 0 && (
+                  <p className="mt-0.5 text-right text-[10px] text-muted-foreground">{form.notes.length}/1000</p>
+                )}
+              </div>
               {form.material_type === "link" ? (
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-foreground">URL *</label>
