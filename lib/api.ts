@@ -160,7 +160,7 @@ export interface ApiLesson {
   id: number
   title: string
   duration: string
-  youtube_id: string
+  youtube_id: string | null
   position: number
   available: boolean
   topic_id: number
@@ -271,6 +271,21 @@ export interface ApiEventRegistration {
   event?: ApiEvent
 }
 
+export interface ApiContract {
+  id: number
+  status: "pending" | "signed" | "expired"
+  version: string
+  contract_text?: string
+  signed_at?: string | null
+  pdf_url?: string | null
+  created_at: string
+  enrollment_id: number
+  student_id: number
+  course_id: number
+  student?: ApiStudent
+  course?: ApiCourse
+}
+
 export interface ApiEnrollment {
   id: number
   status: string
@@ -356,6 +371,26 @@ export async function fakeApiDelete(delayMs = 500): Promise<{ success: boolean }
   return new Promise((resolve) => setTimeout(() => resolve({ success: true }), delayMs))
 }
 
+// ─── Ransack helpers ──────────────────────────────────────
+
+/** Generic Ransack query object: keys are predicates like "name_cont", "status_eq", "s" */
+export type RansackQ = Record<string, string | number | boolean | undefined>
+
+/**
+ * Serialises a Ransack `q` object into URLSearchParams.
+ * e.g. { name_cont: "João", status_eq: "active" }
+ *  →  "q[name_cont]=João&q[status_eq]=active"
+ */
+export function buildRansackQuery(q?: RansackQ): string {
+  if (!q) return ""
+  const p = new URLSearchParams()
+  for (const [key, val] of Object.entries(q)) {
+    if (val !== undefined && val !== "") p.append(`q[${key}]`, String(val))
+  }
+  const s = p.toString()
+  return s ? `?${s}` : ""
+}
+
 // ─── API Methods ─────────────────────────────────────────
 
 export const api = {
@@ -366,7 +401,7 @@ export const api = {
   },
 
   users: {
-    list: () => req<ApiUser[]>("GET", "/users"),
+    list: (q?: RansackQ) => req<ApiUser[]>("GET", `/users${buildRansackQuery(q)}`),
     create: (body: {
       name: string
       email: string
@@ -401,14 +436,14 @@ export const api = {
   },
 
   careers: {
-    list: () => req<ApiCareer[]>("GET", "/careers"),
+    list: (q?: RansackQ) => req<ApiCareer[]>("GET", `/careers${buildRansackQuery(q)}`),
     create: (body: { name: string; description?: string }) => req<ApiCareer>("POST", "/careers", body),
     update: (id: number, body: Partial<ApiCareer>) => req<ApiCareer>("PATCH", `/careers/${id}`, body),
     delete: (id: number) => req<void>("DELETE", `/careers/${id}`),
   },
 
   courses: {
-    list: () => req<ApiCourse[]>("GET", "/courses"),
+    list: (q?: RansackQ) => req<ApiCourse[]>("GET", `/courses${buildRansackQuery(q)}`),
     get: (id: number) => req<ApiCourse>("GET", `/courses/${id}`),
     create: (body: Partial<ApiCourse>) => req<ApiCourse>("POST", "/courses", body),
     update: (id: number, body: Partial<ApiCourse>) => req<ApiCourse>("PATCH", `/courses/${id}`, body),
@@ -416,10 +451,10 @@ export const api = {
   },
 
   subjects: {
-    list: (courseId?: number) =>
-      courseId
-        ? req<ApiSubject[]>("GET", `/courses/${courseId}/subjects`)
-        : req<ApiSubject[]>("GET", `/subjects`),
+    list: (courseId?: number, q?: RansackQ) => {
+      if (courseId) return req<ApiSubject[]>("GET", `/courses/${courseId}/subjects`)
+      return req<ApiSubject[]>("GET", `/subjects${buildRansackQuery(q)}`)
+    },
     create: (body: Partial<ApiSubject>) =>
       body.course_id
         ? req<ApiSubject>("POST", `/courses/${body.course_id}/subjects`, body)
@@ -463,8 +498,12 @@ export const api = {
   },
 
   turmas: {
-    list: (courseId?: number) =>
-      req<ApiTurma[]>("GET", `/turmas${courseId ? `?course_id=${courseId}` : ""}`),
+    list: (courseId?: number, q?: RansackQ) => {
+      const qs = buildRansackQuery(q)
+      const sep = qs ? "&" : "?"
+      const base = `/turmas${qs}`
+      return req<ApiTurma[]>("GET", courseId ? `${base}${sep}course_id=${courseId}` : base)
+    },
     get: (id: number) => req<ApiTurma>("GET", `/turmas/${id}`),
     create: (body: Partial<ApiTurma>) => req<ApiTurma>("POST", "/turmas", body),
     update: (id: number, body: Partial<ApiTurma>) => req<ApiTurma>("PATCH", `/turmas/${id}`, body),
@@ -482,7 +521,7 @@ export const api = {
   },
 
   students: {
-    list: () => req<ApiStudent[]>("GET", "/students"),
+    list: (q?: RansackQ) => req<ApiStudent[]>("GET", `/students${buildRansackQuery(q)}`),
     get: (id: number) => req<ApiStudent>("GET", `/students/${id}`),
     create: (body: Partial<ApiStudent> & { city_name?: string; city_state?: string; ibge_code?: string }) =>
       req<ApiStudent>("POST", "/students", body),
@@ -491,8 +530,15 @@ export const api = {
     delete: (id: number) => req<void>("DELETE", `/students/${id}`),
   },
 
+  contracts: {
+    list: (q?: RansackQ) => req<ApiContract[]>("GET", `/contracts${buildRansackQuery(q)}`),
+    get: (id: number) => req<ApiContract>("GET", `/contracts/${id}`),
+    create: (body: Partial<ApiContract>) => req<ApiContract>("POST", "/contracts", body),
+    update: (id: number, body: Partial<ApiContract>) => req<ApiContract>("PATCH", `/contracts/${id}`, body),
+  },
+
   enrollments: {
-    list: () => req<ApiEnrollment[]>("GET", "/enrollments"),
+    list: (q?: RansackQ) => req<ApiEnrollment[]>("GET", `/enrollments${buildRansackQuery(q)}`),
     create: (body: {
       student_id: number
       course_id: number
@@ -512,7 +558,7 @@ export const api = {
   },
 
   events: {
-    list: () => req<ApiEvent[]>("GET", "/events"),
+    list: (q?: RansackQ) => req<ApiEvent[]>("GET", `/events${buildRansackQuery(q)}`),
     get: (id: number) => req<ApiEvent>("GET", `/events/${id}`),
     create: (body: Partial<ApiEvent>) => req<ApiEvent>("POST", "/events", body),
     update: (id: number, body: Partial<ApiEvent>) => req<ApiEvent>("PATCH", `/events/${id}`, body),

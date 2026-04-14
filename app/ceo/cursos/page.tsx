@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import {
   PlusCircle, ChevronRight, ChevronDown, BookOpen, GraduationCap,
-  FileText, Trash2, Check, X,
+  FileText, Trash2, Check, X, Link2, PlayCircle,
   Loader2, DollarSign, Calendar, Clock, Globe, FilePlus, ExternalLink,
   Monitor, Building2, Users,
 } from "lucide-react"
@@ -36,12 +36,39 @@ function InlineAdd({ placeholder, onAdd, onCancel }: {
 // ─── Lesson Row ───────────────────────────────────────────
 function LessonRow({ lesson, onDelete }: { lesson: ApiLesson; onDelete: () => void }) {
   const [open, setOpen] = useState(false)
+  const [youtubeId, setYoutubeId] = useState(lesson.youtube_id ?? "")
+  const [editingVideo, setEditingVideo] = useState(false)
+  const [videoUrl, setVideoUrl] = useState("")
+  const [videoDuracao, setVideoDuracao] = useState(lesson.duration ?? "")
+  const [savingVideo, setSavingVideo] = useState(false)
+  const [videoError, setVideoError] = useState("")
   const [pdfs, setPdfs] = useState<ApiLessonPdf[]>(lesson.lesson_pdfs ?? [])
   const [addingPdf, setAddingPdf] = useState(false)
   const [pdfName, setPdfName] = useState("")
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [savingPdf, setSavingPdf] = useState(false)
   const [pdfError, setPdfError] = useState("")
+
+  function extractYoutubeId(input: string): string | null {
+    const regexes = [/youtube\.com\/watch\?v=([^&\s]+)/, /youtu\.be\/([^?\s]+)/, /youtube\.com\/embed\/([^?\s]+)/, /youtube\.com\/shorts\/([^?\s]+)/]
+    for (const re of regexes) { const m = input.match(re); if (m) return m[1] }
+    return null
+  }
+
+  async function handleSaveVideo() {
+    const newId = extractYoutubeId(videoUrl.trim())
+    if (!newId) { setVideoError("Link do YouTube inválido."); return }
+    setSavingVideo(true); setVideoError("")
+    try {
+      await api.lessons.update(lesson.id, { youtube_id: newId, duration: videoDuracao.trim() || lesson.duration })
+      setYoutubeId(newId)
+      setEditingVideo(false); setVideoUrl("")
+    } catch (e) {
+      setVideoError(e instanceof Error ? e.message : "Erro ao salvar vídeo")
+    } finally {
+      setSavingVideo(false)
+    }
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null
@@ -54,11 +81,7 @@ function LessonRow({ lesson, onDelete }: { lesson: ApiLesson; onDelete: () => vo
     if (!pdfFile) { setPdfError("Selecione um arquivo PDF."); return }
     setSavingPdf(true); setPdfError("")
     try {
-      const created = await api.lesson_pdfs.create({
-        lesson_id: lesson.id,
-        name: pdfName.trim(),
-        file: pdfFile,
-      })
+      const created = await api.lesson_pdfs.create({ lesson_id: lesson.id, name: pdfName.trim(), file: pdfFile })
       setPdfs((prev) => [...prev, created])
       setPdfName(""); setPdfFile(null); setAddingPdf(false)
     } catch (e) {
@@ -73,12 +96,15 @@ function LessonRow({ lesson, onDelete }: { lesson: ApiLesson; onDelete: () => vo
     setPdfs((prev) => prev.filter((p) => p.id !== pdfId))
   }
 
+  const previewId = videoUrl ? extractYoutubeId(videoUrl) : null
+
   return (
     <div className="rounded-lg border border-border bg-background">
       <button className="flex w-full items-center justify-between px-4 py-2.5 text-left" onClick={() => setOpen(!open)}>
         <div className="flex items-center gap-2 text-sm">
-          <FileText className="h-4 w-4 text-primary" />
+          {youtubeId ? <PlayCircle className="h-4 w-4 text-red-500" /> : <FileText className="h-4 w-4 text-primary" />}
           <span className="font-medium">{lesson.title}</span>
+          {lesson.duration && <span className="text-xs text-muted-foreground">{lesson.duration}</span>}
           {pdfs.length > 0 && <span className="text-xs text-muted-foreground">· {pdfs.length} PDF(s)</span>}
         </div>
         <div className="flex items-center gap-2">
@@ -88,6 +114,51 @@ function LessonRow({ lesson, onDelete }: { lesson: ApiLesson; onDelete: () => vo
       </button>
       {open && (
         <div className="border-t border-border px-4 py-4 space-y-4">
+
+          {/* Vídeo */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vídeo da Aula</p>
+            {youtubeId && !editingVideo && (
+              <div className="space-y-2">
+                <div className="overflow-hidden rounded-lg border border-border">
+                  <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+                    <iframe className="absolute inset-0 h-full w-full" src={`https://www.youtube.com/embed/${youtubeId}`} title={lesson.title} allowFullScreen />
+                  </div>
+                </div>
+                <button onClick={() => { setEditingVideo(true); setVideoUrl("") }} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
+                  <Link2 className="h-3.5 w-3.5" /> Alterar vídeo
+                </button>
+              </div>
+            )}
+            {editingVideo && (
+              <div className="space-y-2">
+                <div className="relative">
+                  <Link2 className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input placeholder="Novo link do YouTube" value={videoUrl} onChange={(e) => { setVideoUrl(e.target.value); setVideoError("") }} className="h-8 pl-8 text-sm" disabled={savingVideo} />
+                </div>
+                <Input placeholder="Duração (ex: 00:24:00)" value={videoDuracao} onChange={(e) => setVideoDuracao(e.target.value)} className="h-8 text-sm" disabled={savingVideo} />
+                {previewId && (
+                  <div className="overflow-hidden rounded-lg border border-border">
+                    <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+                      <iframe className="absolute inset-0 h-full w-full" src={`https://www.youtube.com/embed/${previewId}`} title="preview" allowFullScreen />
+                    </div>
+                  </div>
+                )}
+                {videoError && <p className="text-xs text-destructive">{videoError}</p>}
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-7 gap-1 text-xs" onClick={handleSaveVideo} disabled={savingVideo || !videoUrl.trim()}>
+                    {savingVideo && <Loader2 className="h-3 w-3 animate-spin" />} Salvar
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditingVideo(false); setVideoUrl(""); setVideoError("") }} disabled={savingVideo}>Cancelar</Button>
+                </div>
+              </div>
+            )}
+            {!youtubeId && !editingVideo && (
+              <button onClick={() => setEditingVideo(true)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
+                <PlayCircle className="h-3.5 w-3.5" /> Adicionar vídeo
+              </button>
+            )}
+          </div>
 
           {/* PDFs */}
           <div className="space-y-2">
@@ -150,19 +221,37 @@ function LessonRow({ lesson, onDelete }: { lesson: ApiLesson; onDelete: () => vo
 function NovaAulaForm({ topicId, currentLessonsCount, onAdded }: { topicId: number; currentLessonsCount: number; onAdded: (l: ApiLesson) => void }) {
   const [show, setShow] = useState(false)
   const [titulo, setTitulo] = useState("")
+  const [url, setUrl] = useState("")
+  const [duracao, setDuracao] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
+  function extractYoutubeId(input: string): string | null {
+    const regexes = [/youtube\.com\/watch\?v=([^&\s]+)/, /youtu\.be\/([^?\s]+)/, /youtube\.com\/embed\/([^?\s]+)/, /youtube\.com\/shorts\/([^?\s]+)/]
+    for (const re of regexes) { const m = input.match(re); if (m) return m[1] }
+    return null
+  }
+
   async function submit() {
     if (!titulo.trim()) return
+    const youtubeId = url.trim() ? extractYoutubeId(url.trim()) : undefined
+    if (url.trim() && !youtubeId) { setError("Link do YouTube inválido."); return }
     setSaving(true); setError("")
     try {
-      const lesson = await api.lessons.create({ topic_id: topicId, title: titulo.trim(), position: currentLessonsCount + 1, available: true })
+      const lesson = await api.lessons.create({
+        topic_id: topicId,
+        title: titulo.trim(),
+        ...(youtubeId ? { youtube_id: youtubeId, duration: duracao.trim() || "00:00:00" } : {}),
+        position: currentLessonsCount + 1,
+        available: true,
+      })
       onAdded(lesson)
-      setTitulo(""); setShow(false)
+      setTitulo(""); setUrl(""); setDuracao(""); setShow(false)
     } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erro ao salvar") }
     finally { setSaving(false) }
   }
+
+  const previewId = url ? extractYoutubeId(url) : null
 
   if (!show) return (
     <button onClick={() => setShow(true)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
@@ -173,14 +262,28 @@ function NovaAulaForm({ topicId, currentLessonsCount, onAdded }: { topicId: numb
   return (
     <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 space-y-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nova Aula</p>
-      <Input placeholder="Título da aula" value={titulo} onChange={(e) => setTitulo(e.target.value)} className="h-8 text-sm" disabled={saving}
+      <Input placeholder="Título da aula *" value={titulo} onChange={(e) => setTitulo(e.target.value)} className="h-8 text-sm" disabled={saving}
         onKeyDown={(e) => { if (e.key === "Enter" && titulo.trim()) submit() }} />
+      <div className="relative">
+        <Link2 className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input placeholder="Link do YouTube (opcional)" value={url} onChange={(e) => { setUrl(e.target.value); setError("") }} className="h-8 pl-8 text-sm" disabled={saving} />
+      </div>
+      {url && (
+        <Input placeholder="Duração (ex: 00:24:00)" value={duracao} onChange={(e) => setDuracao(e.target.value)} className="h-8 text-sm" disabled={saving} />
+      )}
+      {previewId && (
+        <div className="overflow-hidden rounded-lg border border-border">
+          <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+            <iframe className="absolute inset-0 h-full w-full" src={`https://www.youtube.com/embed/${previewId}`} title="preview" allowFullScreen />
+          </div>
+        </div>
+      )}
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex gap-2">
         <Button size="sm" className="h-8 gap-1" onClick={submit} disabled={saving || !titulo.trim()}>
           {saving && <Loader2 className="h-3 w-3 animate-spin" />} Adicionar Aula
         </Button>
-        <Button size="sm" variant="ghost" className="h-8" onClick={() => setShow(false)} disabled={saving}>Cancelar</Button>
+        <Button size="sm" variant="ghost" className="h-8" onClick={() => { setShow(false); setUrl(""); setDuracao(""); setError("") }} disabled={saving}>Cancelar</Button>
       </div>
     </div>
   )

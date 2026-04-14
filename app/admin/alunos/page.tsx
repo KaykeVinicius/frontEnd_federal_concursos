@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -106,22 +106,35 @@ export default function AlunosPage() {
     }
   }
 
+  const fetchStudents = useCallback((q?: string, status?: typeof filterStatus) => {
+    const ransackQ: Record<string, string> = {}
+    if (q) ransackQ["name_or_email_or_cpf_cont"] = q
+    if (status === "active") ransackQ["active_eq"] = "true"
+    if (status === "inactive") ransackQ["active_eq"] = "false"
+    return api.students.list(Object.keys(ransackQ).length ? ransackQ : undefined)
+  }, [])
+
   useEffect(() => {
-    Promise.all([api.students.list(), api.enrollments.list()])
+    setLoading(true)
+    Promise.all([fetchStudents(), api.enrollments.list()])
       .then(([s, e]) => { setStudents(s); setEnrollments(e) })
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
+  }, [fetchStudents])
 
-  const filtered = students.filter((s) => {
-    const matchSearch =
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.email.toLowerCase().includes(search.toLowerCase()) ||
-      s.cpf.includes(search)
-    const matchStatus =
-      filterStatus === "all" ? true : filterStatus === "active" ? s.active : !s.active
-    return matchSearch && matchStatus
-  })
+  // Debounced Ransack re-fetch on search/filter change
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setLoading(true)
+      fetchStudents(search || undefined, filterStatus)
+        .then(setStudents)
+        .catch(console.error)
+        .finally(() => setLoading(false))
+    }, 300)
+    return () => clearTimeout(t)
+  }, [search, filterStatus, fetchStudents])
+
+  const filtered = students
 
   function handleExportCSV() {
     const rows = [

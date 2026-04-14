@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -28,12 +28,23 @@ export default function CursosPage() {
   const [detailTurmas, setDetailTurmas] = useState<ApiTurma[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
 
+  const fetchCourses = useCallback((q?: string) => {
+    return api.courses.list(q ? { title_cont: q } : undefined)
+  }, [])
+
   useEffect(() => {
-    api.courses.list()
+    fetchCourses()
       .then(setCourses)
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
+  }, [fetchCourses])
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchCourses(search || undefined).then(setCourses).catch(console.error)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [search, fetchCourses])
 
   async function openDetail(course: ApiCourse) {
     setSelectedCourse(course)
@@ -51,7 +62,7 @@ export default function CursosPage() {
     finally { setDetailLoading(false) }
   }
 
-  const filtered = courses.filter((c) => c.title.toLowerCase().includes(search.toLowerCase()))
+  const filtered = courses
 
   return (
     <div>

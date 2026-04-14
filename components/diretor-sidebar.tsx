@@ -18,6 +18,7 @@ import {
   Settings,
   Menu,
   X,
+  ShieldCheck,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -33,6 +34,7 @@ const navItems = [
   { href: "/ceo/contratos", label: "Contratos", icon: FileText },
   { href: "/ceo/usuarios", label: "Usuários", icon: Users },
   { href: "/ceo/carreiras", label: "Carreiras", icon: GraduationCap },
+  { href: "/ceo/logs-acesso", label: "Logs de Acesso", icon: ShieldCheck },
   { href: "/ceo/configuracoes", label: "Configuracoes", icon: Settings },
 ]
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,20 +21,26 @@ export default function ContratosPage() {
   const [search, setSearch] = useState("")
   const [viewEnrollmentId, setViewEnrollmentId] = useState<number | null>(null)
 
+  const fetchEnrollments = useCallback((q?: string) => {
+    return api.enrollments.list(q ? { student_name_or_course_title_cont: q } : undefined)
+  }, [])
+
   useEffect(() => {
-    api.enrollments.list()
+    fetchEnrollments()
       .then(setEnrollments)
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
+  }, [fetchEnrollments])
 
-  const filtered = enrollments.filter((en) => {
-    const q = search.toLowerCase()
-    return (
-      en.student?.name.toLowerCase().includes(q) ||
-      en.course?.title.toLowerCase().includes(q)
-    )
-  })
+  // Debounced server-side search
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchEnrollments(search || undefined).then(setEnrollments).catch(console.error)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [search, fetchEnrollments])
+
+  const filtered = enrollments
 
   return (
     <div>

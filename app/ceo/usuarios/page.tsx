@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -91,9 +91,19 @@ export default function CeoUsuariosPage() {
   const [savingType, setSavingType] = useState(false)
   const [typeError, setTypeError] = useState("")
 
+  const fetchUsers = useCallback((q?: string, typeId?: string, status?: string) => {
+    const ransackQ: Record<string, string> = {}
+    if (q) ransackQ["name_or_email_cont"] = q
+    if (typeId && typeId !== "todos") ransackQ["user_type_id_eq"] = typeId
+    if (status === "ativo") ransackQ["active_eq"] = "true"
+    if (status === "inativo") ransackQ["active_eq"] = "false"
+    return api.users.list(Object.keys(ransackQ).length ? ransackQ : undefined)
+  }, [])
+
   useEffect(() => {
+    setLoading(true)
     Promise.all([
-      api.users.list(),
+      fetchUsers(),
       api.subjects.list(),
       api.userTypes.list(),
     ]).then(([u, s, ut]) => {
@@ -101,29 +111,24 @@ export default function CeoUsuariosPage() {
       setSubjects(s)
       setUserTypes(ut)
     }).catch(console.error).finally(() => setLoading(false))
-  }, [])
+  }, [fetchUsers])
+
+  // Debounced Ransack re-fetch on search/filter change
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchUsers(searchTerm || undefined, filterTypeId, filterStatus)
+        .then(setUsers)
+        .catch(console.error)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [searchTerm, filterTypeId, filterStatus, fetchUsers])
 
   const selectedUserType = useMemo(
     () => userTypes.find((ut) => ut.id === createUserTypeId) ?? null,
     [userTypes, createUserTypeId]
   )
 
-  const filteredUsers = useMemo(() => {
-    return users
-      .filter((user) => {
-        const matchesSearch =
-          user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.email.toLowerCase().includes(searchTerm.toLowerCase())
-        const matchesType =
-          filterTypeId === "todos" || String(user.user_type_id) === filterTypeId
-        const matchesStatus =
-          filterStatus === "todos" ||
-          (filterStatus === "ativo" && user.active) ||
-          (filterStatus === "inativo" && !user.active)
-        return matchesSearch && matchesType && matchesStatus
-      })
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [users, searchTerm, filterTypeId, filterStatus])
+  const filteredUsers = users
 
   const stats = useMemo(() => ({
     total: users.length,

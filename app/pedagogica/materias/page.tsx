@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,16 +21,25 @@ export default function PedagogicaMateriasPage() {
   const [fName, setFName] = useState("")
   const [fDesc, setFDesc] = useState("")
 
+  const fetchSubjects = useCallback((q?: string) => {
+    return api.subjects.list(undefined, q ? { name_cont: q } : undefined)
+  }, [])
+
   useEffect(() => {
-    api.subjects.list()
+    fetchSubjects()
       .then(setSubjects)
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
+  }, [fetchSubjects])
 
-  const filtered = subjects.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase())
-  )
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchSubjects(search || undefined).then(setSubjects).catch(console.error)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [search, fetchSubjects])
+
+  const filtered = subjects
 
   async function handleCreate(e: { preventDefault(): void }) {
     e.preventDefault()

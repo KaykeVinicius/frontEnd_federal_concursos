@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -19,16 +19,25 @@ export default function CeoCarreirasPage() {
   const [createName, setCreateName] = useState("")
   const [createDescription, setCreateDescription] = useState("")
 
-  useEffect(() => {
-    api.careers.list()
+  const fetchCareers = useCallback((q?: string) => {
+    setLoading(true)
+    api.careers.list(q ? { name_or_description_cont: q } : undefined)
       .then(setCareers)
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
 
-  const stats = useMemo(() => ({
-    total: careers.length,
-  }), [careers])
+  useEffect(() => { fetchCareers() }, [fetchCareers])
+
+  // Debounced server-side search
+  useEffect(() => {
+    const t = setTimeout(() => fetchCareers(searchTerm || undefined), 300)
+    return () => clearTimeout(t)
+  }, [searchTerm, fetchCareers])
+
+  const stats = { total: careers.length }
+
+  const filteredCareers = careers
 
   const handleAdd = async (e: { preventDefault(): void }) => {
     e.preventDefault()
@@ -59,17 +68,6 @@ export default function CeoCarreirasPage() {
       console.error(err)
     }
   }
-
-  // Filter and search careers (with alphabetical sorting)
-  const filteredCareers = useMemo(() => {
-    return careers
-      .filter((career) => {
-        const matchesSearch = career.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             career.description.toLowerCase().includes(searchTerm.toLowerCase())
-        return matchesSearch
-      })
-      .sort((a, b) => a.name.localeCompare(b.name)) // Alphabetical sorting
-  }, [careers, searchTerm])
 
   if (loading) {
     return (

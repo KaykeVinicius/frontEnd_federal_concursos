@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { api, type ApiEvent, type ApiEventLote, type ApiStudent, type ApiEventRegistration, type ApiSubject } from "@/lib/api"
 import { Card, CardContent } from "@/components/ui/card"
@@ -59,12 +59,23 @@ export default function PedagogicaEventosPage() {
   const [enrollSaving, setEnrollSaving] = useState(false)
   const [enrollError, setEnrollError] = useState("")
 
+  const fetchEvents = useCallback((q?: string) => {
+    return api.events.list(q ? { title_or_location_cont: q } : undefined)
+  }, [])
+
   useEffect(() => {
-    Promise.all([api.events.list(), api.students.list(), api.subjects.list()])
+    Promise.all([fetchEvents(), api.students.list(), api.subjects.list()])
       .then(([evs, studs, subs]) => { setEvents(evs); setStudents(studs); setSubjects(subs) })
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
+  }, [fetchEvents])
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchEvents(search || undefined).then(setEvents).catch(console.error)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [search, fetchEvents])
 
   function openCreate() {
     setEditingEvent(null); setForm(EMPTY_FORM); setFormLotes([]); setFormSubjectIds([]); setFormError(""); setShowForm(true)
@@ -227,7 +238,7 @@ export default function PedagogicaEventosPage() {
     } finally { setEnrollSaving(false) }
   }
 
-  const filtered = events.filter((e) => e.title.toLowerCase().includes(search.toLowerCase()) || (e.location ?? "").toLowerCase().includes(search.toLowerCase()))
+  const filtered = events
 
   return (
     <div>

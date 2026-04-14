@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -40,12 +40,29 @@ export default function CeoTurmasPage() {
   const [editShift, setEditShift] = useState("")
   const [editStatus, setEditStatus] = useState("")
 
+  const fetchTurmas = useCallback((q?: string, status?: string) => {
+    const ransackQ: Record<string, string> = {}
+    if (q) ransackQ["name_or_course_title_cont"] = q
+    if (status && status !== "todos") ransackQ["status_eq"] = status
+    return api.turmas.list(undefined, Object.keys(ransackQ).length ? ransackQ : undefined)
+  }, [])
+
   useEffect(() => {
-    Promise.all([api.turmas.list(), api.courses.list()])
+    Promise.all([fetchTurmas(), api.courses.list()])
       .then(([t, c]) => { setTurmas(t); setCourses(c) })
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
+  }, [fetchTurmas])
+
+  // Debounced server-side search
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchTurmas(searchTerm || undefined, filterStatus)
+        .then(setTurmas)
+        .catch(console.error)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [searchTerm, filterStatus, fetchTurmas])
 
   const availableCourses = courses.filter(
     (c) => c.access_type === "presencial" || c.access_type === "hibrido"
@@ -57,17 +74,7 @@ export default function CeoTurmasPage() {
     fechadas: turmas.filter((t) => t.status === "fechada").length,
   }), [turmas])
 
-  const filteredTurmas = useMemo(() => {
-    return turmas.filter((turma) => {
-      const accessType = turma.course?.access_type
-      const isPresencialOrHibrido = accessType === "presencial" || accessType === "hibrido"
-      const matchesSearch =
-        turma.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        turma.course?.title?.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesStatus = filterStatus === "todos" || turma.status === filterStatus
-      return isPresencialOrHibrido && matchesSearch && matchesStatus
-    })
-  }, [turmas, searchTerm, filterStatus])
+  const filteredTurmas = turmas
 
   async function handleCreate(e: { preventDefault(): void }) {
     e.preventDefault()
@@ -230,7 +237,7 @@ export default function CeoTurmasPage() {
                     <div className="flex items-center gap-2">
                       <GraduationCap className="h-4 w-4 text-purple-600" />
                       <Badge className="bg-purple-100 text-purple-800 border-purple-200">
-                        {turma.course.access_type === "interno" ? "Presencial" : "Híbrido"}
+                        {turma.course.access_type === "presencial" ? "Presencial" : "Híbrido"}
                       </Badge>
                     </div>
                   )}

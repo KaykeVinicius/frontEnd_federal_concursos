@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -19,16 +19,20 @@ export default function PedagogicaCarreirasPage() {
   const [createName, setCreateName] = useState("")
   const [createDescription, setCreateDescription] = useState("")
 
-  useEffect(() => {
-    api.careers.list()
-      .then(setCareers)
-      .catch(console.error)
-      .finally(() => setLoading(false))
+  const fetchCareers = useCallback((q?: string) => {
+    return api.careers.list(q ? { name_or_description_cont: q } : undefined)
   }, [])
 
-  const stats = useMemo(() => ({
-    total: careers.length,
-  }), [careers])
+  useEffect(() => { fetchCareers().then(setCareers).catch(console.error).finally(() => setLoading(false)) }, [fetchCareers])
+
+  useEffect(() => {
+    const t = setTimeout(() => { fetchCareers(searchTerm || undefined).then(setCareers).catch(console.error) }, 300)
+    return () => clearTimeout(t)
+  }, [searchTerm, fetchCareers])
+
+  const stats = { total: careers.length }
+
+  const filteredCareers = careers
 
   const handleAdd = async (e: { preventDefault(): void }) => {
     e.preventDefault()
@@ -59,16 +63,6 @@ export default function PedagogicaCarreirasPage() {
       console.error(err)
     }
   }
-
-  const filteredCareers = useMemo(() => {
-    return careers
-      .filter((career) => {
-        const matchesSearch = career.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             career.description.toLowerCase().includes(searchTerm.toLowerCase())
-        return matchesSearch
-      })
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [careers, searchTerm])
 
   if (loading) {
     return (
