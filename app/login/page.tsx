@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
-import { Eye, EyeOff, Loader2, Lock, Mail, MessageCircle, Landmark, Calculator, Scale, BookOpen, Trophy, GraduationCap, Target, CheckCircle } from "lucide-react"
+import { Eye, EyeOff, Loader2, Lock, Mail, MessageCircle, Landmark, Calculator, Scale, BookOpen, Trophy, GraduationCap, Target, CheckCircle, X, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,6 +18,11 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [sessionMsg, setSessionMsg] = useState("")
+  const [forgotOpen, setForgotOpen] = useState(false)
+  const [forgotCpf, setForgotCpf] = useState("")
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotSuccess, setForgotSuccess] = useState(false)
+  const [forgotError, setForgotError] = useState("")
 
   useEffect(() => {
     const msg = sessionStorage.getItem("session_msg")
@@ -68,6 +73,38 @@ export default function LoginPage() {
       setError(message)
       setLoading(false)
     }
+  }
+
+  function formatCpf(value: string) {
+    return value
+      .replace(/\D/g, "")
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d{1,2})$/, "$1-$2")
+      .slice(0, 14)
+  }
+
+  async function handleForgotPassword(e: { preventDefault(): void }) {
+    e.preventDefault()
+    const rawCpf = forgotCpf.replace(/\D/g, "")
+    if (rawCpf.length !== 11) { setForgotError("Informe um CPF válido com 11 dígitos."); return }
+    setForgotLoading(true)
+    setForgotError("")
+    try {
+      await api.auth.forgotPassword(rawCpf)
+      setForgotSuccess(true)
+    } catch {
+      setForgotError("Erro ao processar solicitação. Tente novamente.")
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
+  function closeForgot() {
+    setForgotOpen(false)
+    setForgotCpf("")
+    setForgotError("")
+    setForgotSuccess(false)
   }
 
   const phrases = [
@@ -251,9 +288,10 @@ export default function LoginPage() {
                     </p>
                   )}
                   {error && (
-                    <p className="rounded-md bg-red-500/20 px-3 py-2 text-sm text-red-300">
-                      {error}
-                    </p>
+                    <div className="flex items-start gap-2 rounded-md bg-red-500/15 border border-red-500/30 px-3 py-2.5">
+                      <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+                      <p className="text-sm text-red-300">{error}</p>
+                    </div>
                   )}
 
                   <Button
@@ -275,6 +313,7 @@ export default function LoginPage() {
                 <div className="mt-5 text-center">
                   <button
                     type="button"
+                    onClick={() => setForgotOpen(true)}
                     className="text-xs text-primary transition-colors hover:text-primary/80"
                   >
                     Esqueceu sua senha?
@@ -294,6 +333,76 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal — Esqueceu sua senha */}
+      {forgotOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#141414] p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-bold text-white">Redefinir senha</h2>
+              <button onClick={closeForgot} className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-white/10">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {forgotSuccess ? (
+              <div className="flex flex-col items-center gap-3 py-4 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20">
+                  <CheckCircle className="h-6 w-6 text-green-400" />
+                </div>
+                <p className="text-sm text-gray-300">
+                  Se este e-mail estiver cadastrado, você receberá as instruções de redefinição em breve.
+                </p>
+                <button onClick={closeForgot} className="mt-2 w-full rounded-xl bg-primary py-2.5 text-sm font-semibold text-white hover:opacity-90">
+                  Entendido
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPassword} className="flex flex-col gap-4">
+                <p className="text-sm text-gray-400">
+                  Informe o seu CPF cadastrado. Enviaremos o link de redefinição para o e-mail vinculado à sua conta.
+                </p>
+                <div>
+                  <Label htmlFor="forgot-cpf" className="mb-1 block text-xs font-semibold text-gray-300">
+                    CPF
+                  </Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Input
+                      id="forgot-cpf"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="000.000.000-00"
+                      value={forgotCpf}
+                      onChange={(e) => setForgotCpf(formatCpf(e.target.value))}
+                      className="h-10 border-white/20 bg-white/10 pl-10 text-white placeholder:text-gray-500 focus-visible:ring-primary focus-visible:ring-offset-0"
+                      disabled={forgotLoading}
+                    />
+                  </div>
+                </div>
+
+                {forgotError && (
+                  <div className="flex items-center gap-2 rounded-md bg-red-500/15 border border-red-500/30 px-3 py-2">
+                    <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+                    <p className="text-xs text-red-300">{forgotError}</p>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button type="button" onClick={closeForgot}
+                    className="flex-1 rounded-xl border border-white/15 py-2.5 text-sm font-semibold text-gray-400 transition hover:bg-white/5">
+                    Cancelar
+                  </button>
+                  <button type="submit" disabled={forgotLoading}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
+                    {forgotLoading ? <><Loader2 className="h-4 w-4 animate-spin" />Enviando...</> : "Enviar link"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -331,14 +331,16 @@ export default function LandingPage() {
                       </div>
                     </div>
 
-                    <Link
-                      href="/login"
+                    <a
+                      href="https://wa.me/5569993697213"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="flex w-full items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold text-white transition-all hover:brightness-110"
                       style={{ background: curso.cor }}
                     >
                       Quero me inscrever
                       <ArrowRight className="h-4 w-4" />
-                    </Link>
+                    </a>
                   </div>
                 </div>
               ))}
@@ -372,7 +374,7 @@ export default function LandingPage() {
             <h2 className="text-3xl font-black text-white">Por que o Federal Cursos?</h2>
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {[
               {
                 icon: PlayCircle,
@@ -398,17 +400,40 @@ export default function LandingPage() {
                 icon: Users,
                 title: "Suporte personalizado",
                 desc: "Acompanhamento da equipe pedagógica durante toda a sua preparação.",
+                whatsapp: true,
               },
             ].map((f) => (
               <div
                 key={f.title}
-                className="group rounded-xl border border-[#1e1e1e] bg-[#141414] p-6 transition-all hover:border-[#e84a20]/30 hover:-translate-y-0.5"
+                className="group rounded-xl border border-[#1e1e1e] bg-[#141414] p-6 transition-all hover:border-[#e84a20]/30 hover:-translate-y-0.5 flex flex-col"
               >
                 <f.icon className="mb-4 h-8 w-8 text-[#e84a20] transition-transform group-hover:scale-110" />
                 <h3 className="mb-2 font-bold text-white">{f.title}</h3>
-                <p className="text-sm text-[#6b7280]">{f.desc}</p>
+                <p className="text-sm text-[#6b7280] flex-1">{f.desc}</p>
+                {"whatsapp" in f && f.whatsapp && (
+                  <a
+                    href="https://wa.me/5569993697213"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 flex items-center justify-center gap-2 rounded-lg border border-[#e84a20]/40 py-2 text-xs font-bold text-[#e84a20] transition-all hover:bg-[#e84a20]/10"
+                  >
+                    <Phone className="h-3.5 w-3.5" />
+                    Falar no WhatsApp
+                  </a>
+                )}
               </div>
             ))}
+          </div>
+          <div className="text-center">
+            <a
+              href="https://wa.me/5569993697213"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-md bg-[#e84a20] px-8 py-4 text-sm font-bold uppercase tracking-wide text-white shadow-lg shadow-[#e84a20]/25 transition-all hover:bg-[#cc3f18] hover:-translate-y-0.5"
+            >
+              <Phone className="h-4 w-4" />
+              Falar com um consultor
+            </a>
           </div>
         </div>
       </section>

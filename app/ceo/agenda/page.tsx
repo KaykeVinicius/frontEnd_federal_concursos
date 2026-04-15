@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from "react"
 import {
   ChevronLeft, ChevronRight, CalendarRange, Loader2,
-  MapPin, Clock, Users, BookOpen, GraduationCap,
+  MapPin, Clock, Users, BookOpen, GraduationCap, Plus, X, Save,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { getToken } from "@/lib/api"
+import { api, getToken, type ApiTurma, type ApiSubject } from "@/lib/api"
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"
 
@@ -18,7 +18,7 @@ interface AgendaItem {
   type: "event" | "class_day"
   event_type?: "aulao" | "simulado"
   title: string
-  date: string         // YYYY-MM-DD
+  date: string
   start_time?: string
   end_time?: string
   location?: string
@@ -35,28 +35,33 @@ interface AgendaItem {
 
 // ─── Config visual ───────────────────────────────────────
 const TYPE_CONFIG = {
-  aulao:     { label: "Aulão",          color: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
-  simulado:  { label: "Simulado",       color: "bg-purple-500/20 text-purple-300 border-purple-500/30" },
+  aulao:     { label: "Aulão",           color: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
+  simulado:  { label: "Simulado",        color: "bg-purple-500/20 text-purple-300 border-purple-500/30" },
   class_day: { label: "Aula presencial", color: "bg-green-500/20 text-green-300 border-green-500/30" },
 }
 
 const MONTH_NAMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
 const DAY_NAMES   = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"]
 
-function formatTime(t?: string) {
-  if (!t) return null
-  return t.slice(0, 5)
-}
+const EMPTY_FORM = { turma_id: "", subject_id: "", date: "", start_time: "", end_time: "", title: "", description: "" }
 
 // ─── Page ─────────────────────────────────────────────────
 export default function AgendaPage() {
   const today = new Date()
   const [year, setYear]   = useState(today.getFullYear())
-  const [month, setMonth] = useState(today.getMonth()) // 0-indexed
+  const [month, setMonth] = useState(today.getMonth())
   const [items, setItems] = useState<AgendaItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [selected, setSelected] = useState<string | null>(null) // YYYY-MM-DD
+  const [selected, setSelected] = useState<string | null>(null)
   const [view, setView] = useState<"month" | "list">("month")
+
+  // Modal state
+  const [showModal, setShowModal]   = useState(false)
+  const [turmasAll, setTurmasAll]   = useState<ApiTurma[]>([])
+  const [subjectsAll, setSubjectsAll] = useState<ApiSubject[]>([])
+  const [form, setForm]             = useState(EMPTY_FORM)
+  const [saving, setSaving]         = useState(false)
+  const [formErr, setFormErr]       = useState("")
 
   const fetchAgenda = useCallback(async (y: number, m: number) => {
     setLoading(true)
@@ -79,6 +84,16 @@ export default function AgendaPage() {
 
   useEffect(() => { fetchAgenda(year, month) }, [year, month, fetchAgenda])
 
+  // Load turmas and subjects for the modal
+  useEffect(() => {
+    Promise.all([api.turmas.list(), api.subjects.list()])
+      .then(([t, s]) => {
+        setTurmasAll(t.filter((x) => x.modalidade === "presencial" || x.modalidade === "hibrido"))
+        setSubjectsAll(s)
+      })
+      .catch(console.error)
+  }, [])
+
   function prevMonth() {
     if (month === 0) { setYear(y => y - 1); setMonth(11) }
     else setMonth(m => m - 1)
@@ -91,6 +106,37 @@ export default function AgendaPage() {
   }
   function goToday() { setYear(today.getFullYear()); setMonth(today.getMonth()); setSelected(null) }
 
+  function openModal() {
+    setForm({ ...EMPTY_FORM, date: selected ?? "" })
+    setFormErr("")
+    setShowModal(true)
+  }
+
+  async function handleCreate() {
+    if (!form.turma_id || !form.subject_id || !form.date) {
+      setFormErr("Turma, matéria e data são obrigatórios.")
+      return
+    }
+    setSaving(true)
+    setFormErr("")
+    try {
+      await api.turmas.classDays.create(Number(form.turma_id), {
+        subject_id: Number(form.subject_id),
+        date: form.date,
+        start_time: form.start_time || undefined,
+        end_time: form.end_time || undefined,
+        title: form.title || undefined,
+        description: form.description || undefined,
+      })
+      setShowModal(false)
+      fetchAgenda(year, month)
+    } catch {
+      setFormErr("Erro ao salvar. Verifique os dados.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   // Build calendar grid
   const firstDay = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
@@ -98,7 +144,6 @@ export default function AgendaPage() {
     ...Array(firstDay).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ]
-  // pad to full weeks
   while (cells.length % 7 !== 0) cells.push(null)
 
   function dateStr(day: number) {
@@ -117,6 +162,14 @@ export default function AgendaPage() {
     return TYPE_CONFIG[item.event_type ?? "aulao"] ?? TYPE_CONFIG.aulao
   }
 
+  function chipLabel(item: AgendaItem) {
+    if (item.type === "class_day") {
+      if (item.title && item.subject_name) return `${item.title} · ${item.subject_name}`
+      return item.subject_name || item.title
+    }
+    return item.title
+  }
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -128,7 +181,10 @@ export default function AgendaPage() {
             <p className="text-xs text-muted-foreground">Aulas presenciais, aulões e simulados</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button size="sm" onClick={openModal} className="gap-1.5">
+            <Plus className="h-4 w-4" /> Nova Aula
+          </Button>
           <div className="flex rounded-md border border-border overflow-hidden">
             <button onClick={() => setView("month")}
               className={cn("px-3 py-1.5 text-xs font-medium transition-colors", view === "month" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
@@ -159,13 +215,11 @@ export default function AgendaPage() {
         <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
       ) : view === "month" ? (
         <div className="rounded-lg border border-border overflow-hidden">
-          {/* Day headers */}
           <div className="grid grid-cols-7 border-b border-border">
             {DAY_NAMES.map((d) => (
               <div key={d} className="py-2 text-center text-xs font-semibold text-muted-foreground">{d}</div>
             ))}
           </div>
-          {/* Weeks */}
           <div className="grid grid-cols-7 divide-x divide-y divide-border">
             {cells.map((day, idx) => {
               if (!day) return <div key={`empty-${idx}`} className="min-h-[90px] bg-muted/20" />
@@ -193,7 +247,7 @@ export default function AgendaPage() {
                       const cfg = getTypeConfig(item)
                       return (
                         <div key={item.id} className={cn("rounded px-1 py-0.5 text-[10px] font-medium border truncate", cfg.color)}>
-                          {item.title}
+                          {chipLabel(item)}
                         </div>
                       )
                     })}
@@ -207,7 +261,6 @@ export default function AgendaPage() {
           </div>
         </div>
       ) : (
-        /* List view */
         <div className="space-y-2">
           {items.length === 0 ? (
             <div className="rounded-lg border border-border p-12 text-center text-muted-foreground">
@@ -221,15 +274,130 @@ export default function AgendaPage() {
       )}
 
       {/* Detail panel for selected day */}
-      {selected && selectedItems.length > 0 && (
+      {selected && (
         <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-foreground">
-            {new Date(selected + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}
-          </h3>
-          {selectedItems.map((item) => {
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">
+              {new Date(selected + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}
+            </h3>
+            <Button size="sm" variant="outline" onClick={openModal} className="gap-1 text-xs">
+              <Plus className="h-3 w-3" /> Aula neste dia
+            </Button>
+          </div>
+          {selectedItems.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Nenhuma aula neste dia.</p>
+          ) : selectedItems.map((item) => {
             const cfg = getTypeConfig(item)
             return <AgendaItemCard key={item.id} item={item} cfg={cfg} />
           })}
+        </div>
+      )}
+
+      {/* Modal: Nova Aula */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold">Nova Aula</h2>
+              <button onClick={() => setShowModal(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {formErr && <p className="text-xs text-red-500">{formErr}</p>}
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Turma *</label>
+                <select
+                  value={form.turma_id}
+                  onChange={(e) => setForm((f) => ({ ...f, turma_id: e.target.value }))}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="">Selecione a turma</option>
+                  {turmasAll.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}{t.course ? ` — ${t.course.title}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Matéria *</label>
+                <select
+                  value={form.subject_id}
+                  onChange={(e) => setForm((f) => ({ ...f, subject_id: e.target.value }))}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="">Selecione a matéria</option>
+                  {subjectsAll.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Data *</label>
+                <input
+                  type="date"
+                  value={form.date}
+                  onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Início</label>
+                  <input
+                    type="time"
+                    value={form.start_time}
+                    onChange={(e) => setForm((f) => ({ ...f, start_time: e.target.value }))}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Fim</label>
+                  <input
+                    type="time"
+                    value={form.end_time}
+                    onChange={(e) => setForm((f) => ({ ...f, end_time: e.target.value }))}
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Título (opcional)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Aula 01 — Direito Penal"
+                  value={form.title}
+                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Descrição (opcional)</label>
+                <textarea
+                  rows={2}
+                  value={form.description}
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowModal(false)}>Cancelar</Button>
+              <Button size="sm" onClick={handleCreate} disabled={saving} className="gap-1.5">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Salvar
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -251,7 +419,7 @@ function AgendaItemCard({ item, cfg }: { item: AgendaItem; cfg: { label: string;
         {item.start_time && (
           <span className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
-            {item.start_time?.slice(0,5)}{item.end_time ? ` – ${item.end_time?.slice(0,5)}` : ""}
+            {item.start_time?.slice(0, 5)}{item.end_time ? ` – ${item.end_time?.slice(0, 5)}` : ""}
           </span>
         )}
         {item.location && (

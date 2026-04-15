@@ -15,17 +15,16 @@ interface Announcement {
   audience: string
   pinned: boolean
   active: boolean
-  expires_at: string | null
+  expires_at?: string | null
   created_at: string
   author?: { id: number; name: string }
 }
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
-  geral:       { label: "Geral",       color: "bg-slate-500/20 text-slate-300 border-slate-500/30" },
-  urgente:     { label: "Urgente",     color: "bg-red-500/20 text-red-400 border-red-500/30" },
-  evento:      { label: "Evento",      color: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
-  financeiro:  { label: "Financeiro",  color: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30" },
-  pedagogico:  { label: "Pedagógico",  color: "bg-green-500/20 text-green-300 border-green-500/30" },
+  geral:      { label: "Geral",       color: "bg-slate-500/20 text-slate-300 border-slate-500/30" },
+  urgente:    { label: "Urgente",     color: "bg-red-500/20 text-red-400 border-red-500/30" },
+  evento:     { label: "Evento",      color: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
+  pedagogico: { label: "Pedagógico",  color: "bg-green-500/20 text-green-300 border-green-500/30" },
 }
 
 export default function AlunoAvisosPage() {

@@ -373,7 +373,13 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
 
   return (
     <div className="rounded-lg border border-border bg-background">
-      <button className="flex w-full items-center justify-between px-4 py-2.5 text-left" onClick={() => setOpen(!open)}>
+      <div
+        role="button"
+        tabIndex={0}
+        className="flex w-full items-center justify-between px-4 py-2.5 text-left cursor-pointer"
+        onClick={() => setOpen(!open)}
+        onKeyDown={(e) => e.key === "Enter" && setOpen(!open)}
+      >
         <div className="flex items-center gap-2 flex-wrap">
           <GraduationCap className="h-4 w-4 text-blue-500" />
           <span className="text-sm font-medium">{subject.name}</span>
@@ -401,7 +407,7 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
           <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </div>
-      </button>
+      </div>
 
       {editingProf && (
         <div className="border-t border-border bg-blue-50/50 px-4 py-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>

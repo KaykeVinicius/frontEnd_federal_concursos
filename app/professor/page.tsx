@@ -48,26 +48,30 @@ export default function ProfessorDashboard() {
       } catch {}
     }
 
-    // Carrega dados da API em paralelo
-    Promise.all([
+    // Carrega dados da API em paralelo — falhas individuais não afetam os outros
+    Promise.allSettled([
       api.professor.dashboard(),
       api.professor.turmas(),
       api.professor.questions("pending"),
       api.events.list(),
     ])
-      .then(([dashboard, turmasData, questionsData, eventsData]) => {
-        setStats(dashboard)
-        setTurmas(turmasData)
-        setQuestions(questionsData)
-        setEvents(eventsData)
+      .then(([dashRes, turmasRes, questionsRes, eventsRes]) => {
+        if (dashRes.status     === "fulfilled") setStats(dashRes.value)
+        else console.error("dashboard:", dashRes.reason)
+
+        if (turmasRes.status   === "fulfilled") setTurmas(turmasRes.value)
+        else console.error("turmas:", turmasRes.reason)
+
+        if (questionsRes.status === "fulfilled") setQuestions(questionsRes.value)
+        else console.error("questions:", questionsRes.reason)
+
+        if (eventsRes.status   === "fulfilled") setEvents(eventsRes.value)
+        else console.error("events:", eventsRes.reason)
       })
-      .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
 
-  const activeTurmas = turmas.filter(
-    (t) => t.status === "em_andamento" || t.status === "aberta"
-  )
+  const activeTurmas = turmas.slice(0, 3)
 
   const upcomingEvents = events.filter((e) => e.status === "agendado").slice(0, 4)
 
@@ -107,7 +111,7 @@ export default function ProfessorDashboard() {
               <p className="text-sm font-medium text-white/70 mb-1">Bem-vindo(a) de volta 👋</p>
               <h1 className="text-4xl font-extrabold text-white tracking-tight">{profNome}</h1>
               <p className="mt-1 text-sm text-white/70">
-                {stats.active_turmas_count} turma(s) ativa(s) · {stats.pending_questions_count} dúvida(s) pendente(s)
+                {stats.turmas_count} turma(s) · {stats.pending_questions_count} dúvida(s) pendente(s)
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:items-end">
@@ -137,11 +141,11 @@ export default function ProfessorDashboard() {
         {/* ── STATS ───────────────────────────────────────────── */}
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
           {[
-            { label: "Minhas Turmas",     value: stats.active_turmas_count,       icon: Users,       color: "text-primary",     bg: "bg-primary/10",     border: "border-primary/20" },
-            { label: "Meus Cursos",       value: stats.courses_count,             icon: BookOpen,    color: "text-blue-500",    bg: "bg-blue-500/10",    border: "border-blue-500/20" },
-            { label: "Matérias",          value: stats.subjects_count,            icon: TrendingUp,  color: "text-green-500",   bg: "bg-green-500/10",   border: "border-green-500/20" },
-            { label: "Dúvidas Pendentes", value: stats.pending_questions_count,   icon: HelpCircle,  color: "text-yellow-500",  bg: "bg-yellow-500/10",  border: "border-yellow-500/20" },
-          ].map((stat) => (
+            { label: "Minhas Turmas",     value: stats.turmas_count,              icon: Users,       color: "text-primary",     bg: "bg-primary/10",     border: "border-primary/20",   show: true },
+            { label: "Meus Cursos",       value: stats.courses_count,             icon: BookOpen,    color: "text-blue-500",    bg: "bg-blue-500/10",    border: "border-blue-500/20",  show: true },
+            { label: "Matérias",          value: stats.subjects_count,            icon: TrendingUp,  color: "text-green-500",   bg: "bg-green-500/10",   border: "border-green-500/20", show: stats.subjects_count > 1 },
+            { label: "Dúvidas Pendentes", value: stats.pending_questions_count,   icon: HelpCircle,  color: "text-yellow-500",  bg: "bg-yellow-500/10",  border: "border-yellow-500/20", show: true },
+          ].filter((s) => s.show).map((stat) => (
             <div
               key={stat.label}
               className={`flex items-center gap-4 rounded-2xl border ${stat.border} bg-card/80 p-4 shadow-sm backdrop-blur-sm transition-all hover:-translate-y-0.5`}
@@ -216,7 +220,7 @@ export default function ProfessorDashboard() {
               {activeTurmas.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-8 text-center">
                   <Users className="h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Nenhuma turma ativa.</p>
+                  <p className="text-sm text-muted-foreground">Nenhuma turma vinculada.</p>
                 </div>
               ) : (
                 activeTurmas.slice(0, 3).map((turma) => (
@@ -240,10 +244,12 @@ export default function ProfessorDashboard() {
                       className={
                         turma.status === "em_andamento"
                           ? "bg-blue-500/10 text-blue-600 border-0"
+                          : turma.status === "fechada"
+                          ? "bg-red-500/10 text-red-600 border-0"
                           : "bg-green-500/10 text-green-600 border-0"
                       }
                     >
-                      {turma.status === "em_andamento" ? "Em Andamento" : "Aberta"}
+                      {turma.status === "em_andamento" ? "Em Andamento" : turma.status === "fechada" ? "Fechada" : "Aberta"}
                     </Badge>
                   </div>
                 ))

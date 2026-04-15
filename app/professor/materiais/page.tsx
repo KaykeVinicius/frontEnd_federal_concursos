@@ -14,72 +14,112 @@ const tipoConfig: Record<TipoMaterial, { label: string; color: string; bg: strin
   link:      { label: "Link",      color: "text-purple-500", bg: "bg-purple-500/10" },
 }
 
+const FORM_EMPTY = {
+  title: "",
+  material_type: "pdf" as TipoMaterial,
+  file_name: "",
+  file_url: "",
+  file_size: "",
+  course_id: "",
+  subject_id: "",
+  notes: "",
+}
+
 export default function MateriaisPage() {
   const [materiais, setMateriais] = useState<ApiMaterial[]>([])
-  const [turmas, setTurmas] = useState<ApiTurma[]>([])
-  const [subjects, setSubjects] = useState<ApiSubject[]>([])
-  const [loading, setLoading] = useState(true)
+  const [turmas,    setTurmas   ] = useState<ApiTurma[]>([])
+  const [subjects,  setSubjects ] = useState<ApiSubject[]>([])
+  const [loading,   setLoading  ] = useState(true)
   const [modalAberto, setModalAberto] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({
-    title: "",
-    material_type: "pdf" as TipoMaterial,
-    file_name: "",
-    file_url: "",
-    file_size: "",
-    subject_id: "",
-    turma_id: "",
-    notes: "",
-  })
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [saving,    setSaving   ] = useState(false)
+  const [form,      setForm     ] = useState(FORM_EMPTY)
+  const [selectedFile,  setSelectedFile ] = useState<File | null>(null)
+  const [selectedTurmas, setSelectedTurmas] = useState<number[]>([])
 
   useEffect(() => {
+    const stored = localStorage.getItem("currentUser")
+    const professorId = stored ? JSON.parse(stored)?.id : undefined
+
+    const subjectsPromise = api.professor.subjects().catch(() =>
+      professorId
+        ? api.subjects.list(undefined, { professor_id_eq: String(professorId) })
+            .then((subs) => subs.filter((s) => s.professor_id === professorId))
+        : Promise.resolve<ApiSubject[]>([])
+    )
+
     Promise.all([
       api.professor.materials.list(),
       api.professor.turmas(),
+      subjectsPromise,
     ])
-      .then(([mats, ts]) => {
-        setMateriais(mats)
-        setTurmas(ts)
-      })
+      .then(([mats, ts, subs]) => { setMateriais(mats); setTurmas(ts); setSubjects(subs) })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
 
-  // Load subjects when a turma is selected (via its course)
-  async function handleTurmaChange(turmaId: string) {
-    setForm((f) => ({ ...f, turma_id: turmaId, subject_id: "" }))
-    if (!turmaId) { setSubjects([]); return }
-    const turma = turmas.find((t) => String(t.id) === turmaId)
-    if (turma?.course_id) {
-      try {
-        const subs = await api.subjects.list(turma.course_id)
-        setSubjects(subs)
-      } catch { setSubjects([]) }
-    }
+  // Courses derivados das turmas do professor
+  const courses = Array.from(
+    new Map(turmas.filter((t) => t.course).map((t) => [t.course_id, t.course!])).values()
+  )
+
+  // Turmas filtradas pelo curso selecionado
+  const turmasDoCurso = form.course_id
+    ? turmas.filter((t) => String(t.course_id) === form.course_id)
+    : []
+
+  // Matérias filtradas pelo curso selecionado
+  const subjectsDoCurso = form.course_id
+    ? subjects.filter((s) => s.course_id && String(s.course_id) === form.course_id)
+    : subjects
+
+  function handleCourseChange(courseId: string) {
+    setForm((f) => ({ ...f, course_id: courseId, subject_id: "" }))
+    setSelectedTurmas([])
+  }
+
+  function toggleTurma(id: number) {
+    setSelectedTurmas((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
+  }
+
+  function resetModal() {
+    setModalAberto(false)
+    setForm(FORM_EMPTY)
+    setSelectedFile(null)
+    setSelectedTurmas([])
   }
 
   async function adicionarMaterial() {
     if (!form.title.trim()) return
-    if (form.material_type !== "link" && !selectedFile && !form.file_name.trim()) return
+    if (form.material_type !== "link" && !selectedFile) return
     if (form.material_type === "link" && !form.file_url.trim()) return
     setSaving(true)
     try {
-      const created = await api.professor.materials.create({
-        title: form.title.trim(),
+      const base = {
+        title:         form.title.trim(),
         material_type: form.material_type,
-        file_name: selectedFile ? selectedFile.name : form.file_name.trim() || undefined,
-        file_url: form.material_type === "link" ? form.file_url.trim() : undefined,
-        subject_id: form.subject_id ? parseInt(form.subject_id) : undefined,
-        turma_id: form.turma_id ? parseInt(form.turma_id) : undefined,
-        notes: form.notes.trim() || undefined,
-        file: selectedFile ?? undefined,
-      })
-      setMateriais((m) => [created, ...m])
-      setModalAberto(false)
-      setForm({ title: "", material_type: "pdf", file_name: "", file_url: "", file_size: "", subject_id: "", turma_id: "", notes: "" })
-      setSelectedFile(null)
-      setSubjects([])
+        file_name:     selectedFile ? selectedFile.name : undefined,
+        file_url:      form.material_type === "link" ? form.file_url.trim() : undefined,
+        subject_id:    form.subject_id ? parseInt(form.subject_id) : undefined,
+        notes:         form.notes.trim() || undefined,
+        file:          selectedFile ?? undefined,
+      }
+
+      if (selectedTurmas.length === 0) {
+        // sem turma vinculada
+        const created = await api.professor.materials.create(base)
+        setMateriais((m) => [created, ...m])
+      } else {
+        // cria um material por turma selecionada
+        const results = await Promise.all(
+          selectedTurmas.map((tid) =>
+            api.professor.materials.create({ ...base, turma_id: tid })
+          )
+        )
+        setMateriais((m) => [...results, ...m])
+      }
+      resetModal()
     } catch (err) {
       console.error("Erro ao adicionar material:", err)
     } finally {
@@ -142,67 +182,92 @@ export default function MateriaisPage() {
           <p className="text-sm text-muted-foreground">Nenhum material adicionado ainda.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {materiais.map((m) => {
-            const tipo = m.material_type as TipoMaterial
-            const cfg = tipoConfig[tipo] ?? tipoConfig.pdf
-            return (
-              <div key={m.id} className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/20">
-                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}>
-                  {tipo === "link"
-                    ? <LinkIcon className={`h-5 w-5 ${cfg.color}`} />
-                    : <FileText className={`h-5 w-5 ${cfg.color}`} />
-                  }
+        <div className="space-y-6">
+          {(() => {
+            // Agrupa por curso (course_id), sem curso = grupo "Sem curso"
+            const groups = new Map<string, { label: string; items: typeof materiais }>()
+            for (const m of materiais) {
+              const key   = m.course_id ? String(m.course_id) : "sem_curso"
+              const label = m.course_title ?? "Sem curso vinculado"
+              if (!groups.has(key)) groups.set(key, { label, items: [] })
+              groups.get(key)!.items.push(m)
+            }
+            return Array.from(groups.entries()).map(([key, group]) => (
+              <div key={key}>
+                {/* Cabeçalho do curso */}
+                <div className="mb-3 flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-primary" />
+                  <h2 className="text-sm font-bold text-foreground">{group.label}</h2>
+                  <span className="text-xs text-muted-foreground">· {group.items.length} material(is)</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <p className="truncate text-sm font-semibold text-foreground">{m.title}</p>
-                    <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", cfg.bg, cfg.color)}>{cfg.label}</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                    {m.subject && (
-                      <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {m.subject.name}</span>
-                    )}
-                    {m.file_size && <span>{m.file_size}</span>}
-                    <span>{formatDate(m.created_at)}</span>
-                  </div>
-                  {m.notes && (
-                    <p className="mt-1 text-xs text-muted-foreground/80 italic line-clamp-2">{m.notes}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {m.file_url && (
-                    <a href={m.file_url} target="_blank" rel="noopener noreferrer"
-                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-primary/40 hover:text-primary"
-                      title="Baixar"
-                    >
-                      <Download className="h-4 w-4" />
-                    </a>
-                  )}
-                  <button onClick={() => remover(m.id)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-red-500/40 hover:text-red-500"
-                    title="Remover"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+
+                <div className="space-y-2">
+                  {group.items.map((m) => {
+                    const tipo = m.material_type as TipoMaterial
+                    const cfg  = tipoConfig[tipo] ?? tipoConfig.pdf
+                    return (
+                      <div key={m.id} className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/20">
+                        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}>
+                          {tipo === "link"
+                            ? <LinkIcon className={`h-5 w-5 ${cfg.color}`} />
+                            : <FileText className={`h-5 w-5 ${cfg.color}`} />
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <p className="truncate text-sm font-semibold text-foreground">{m.title}</p>
+                            <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", cfg.bg, cfg.color)}>{cfg.label}</span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                            {m.subject && (
+                              <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {m.subject.name}</span>
+                            )}
+                            {m.file_size && <span>{m.file_size}</span>}
+                            <span>{formatDate(m.created_at)}</span>
+                          </div>
+                          {m.notes && (
+                            <p className="mt-1 text-xs text-muted-foreground/80 italic line-clamp-2">{m.notes}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {m.file_url && (
+                            <a href={m.file_url} target="_blank" rel="noopener noreferrer"
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-primary/40 hover:text-primary"
+                              title="Baixar"
+                            >
+                              <Download className="h-4 w-4" />
+                            </a>
+                          )}
+                          <button onClick={() => remover(m.id)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-red-500/40 hover:text-red-500"
+                            title="Remover"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
-            )
-          })}
+            ))
+          })()}
         </div>
       )}
 
       {/* Modal adicionar */}
       {modalAberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold text-foreground">Adicionar Material</h2>
-              <button onClick={() => setModalAberto(false)} className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted">
+              <button onClick={resetModal} className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted">
                 <X className="h-4 w-4" />
               </button>
             </div>
+
             <div className="space-y-3">
+              {/* Título */}
               <div>
                 <label className="mb-1 block text-xs font-semibold text-foreground">Título *</label>
                 <input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
@@ -210,6 +275,8 @@ export default function MateriaisPage() {
                   className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50"
                 />
               </div>
+
+              {/* Tipo */}
               <div>
                 <label className="mb-1 block text-xs font-semibold text-foreground">Tipo</label>
                 <select value={form.material_type} onChange={(e) => setForm((f) => ({ ...f, material_type: e.target.value as TipoMaterial }))}
@@ -221,28 +288,66 @@ export default function MateriaisPage() {
                   <option value="link">Link externo</option>
                 </select>
               </div>
+
+              {/* Curso */}
               <div>
-                <label className="mb-1 block text-xs font-semibold text-foreground">Turma</label>
-                <select value={form.turma_id} onChange={(e) => handleTurmaChange(e.target.value)}
+                <label className="mb-1 block text-xs font-semibold text-foreground">Curso</label>
+                <select value={form.course_id} onChange={(e) => handleCourseChange(e.target.value)}
                   className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
                 >
-                  <option value="">Selecione a turma</option>
-                  {turmas.map((t) => <option key={t.id} value={String(t.id)}>{t.name}</option>)}
+                  <option value="">Selecione o curso</option>
+                  {courses.map((c) => <option key={c.id} value={String(c.id)}>{c.title}</option>)}
                 </select>
               </div>
-              {subjects.length > 0 && (
+
+              {/* Turmas do curso — multi-select com checkboxes */}
+              {form.course_id && turmasDoCurso.length > 0 && (
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-foreground">
+                    Turmas <span className="font-normal text-muted-foreground">(selecione uma ou mais)</span>
+                  </label>
+                  <div className="rounded-xl border border-border bg-background divide-y divide-border">
+                    {turmasDoCurso.map((t) => (
+                      <label key={t.id} className="flex cursor-pointer items-center gap-3 px-3 py-2.5 hover:bg-muted/50 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={selectedTurmas.includes(t.id)}
+                          onChange={() => toggleTurma(t.id)}
+                          className="h-4 w-4 accent-primary rounded"
+                        />
+                        <span className="text-sm text-foreground">{t.name}</span>
+                        {t.schedule && (
+                          <span className="ml-auto text-xs text-muted-foreground">{t.schedule}</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                  {selectedTurmas.length > 1 && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Será criado um material para cada turma selecionada ({selectedTurmas.length} materiais).
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Matéria — filtrada pelo curso selecionado e vinculada ao professor logado */}
+              {subjectsDoCurso.length > 0 && (
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-foreground">Matéria</label>
                   <select value={form.subject_id} onChange={(e) => setForm((f) => ({ ...f, subject_id: e.target.value }))}
                     className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50"
                   >
                     <option value="">Selecione a matéria</option>
-                    {subjects.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
+                    {subjectsDoCurso.map((s) => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
                   </select>
                 </div>
               )}
+
+              {/* Observação */}
               <div>
-                <label className="mb-1 block text-xs font-semibold text-foreground">Observação <span className="font-normal text-muted-foreground">(opcional, máx. 1000 caracteres)</span></label>
+                <label className="mb-1 block text-xs font-semibold text-foreground">
+                  Observação <span className="font-normal text-muted-foreground">(opcional, máx. 1000 caracteres)</span>
+                </label>
                 <textarea
                   value={form.notes}
                   onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
@@ -255,6 +360,8 @@ export default function MateriaisPage() {
                   <p className="mt-0.5 text-right text-[10px] text-muted-foreground">{form.notes.length}/1000</p>
                 )}
               </div>
+
+              {/* Arquivo ou URL */}
               {form.material_type === "link" ? (
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-foreground">URL *</label>
@@ -265,7 +372,7 @@ export default function MateriaisPage() {
                 </div>
               ) : (
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-foreground">Arquivo (PDF/Slide) *</label>
+                  <label className="mb-1 block text-xs font-semibold text-foreground">Arquivo *</label>
                   <input
                     type="file"
                     accept=".pdf,.ppt,.pptx,.doc,.docx"
@@ -284,14 +391,22 @@ export default function MateriaisPage() {
                 </div>
               )}
             </div>
+
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setModalAberto(false)} className="flex-1 rounded-xl border border-border py-2.5 text-sm font-semibold text-muted-foreground transition hover:bg-muted">
+              <button onClick={resetModal} className="flex-1 rounded-xl border border-border py-2.5 text-sm font-semibold text-muted-foreground transition hover:bg-muted">
                 Cancelar
               </button>
-              <button onClick={adicionarMaterial} disabled={!form.title.trim() || saving || (form.material_type === "link" ? !form.file_url.trim() : !selectedFile)}
+              <button
+                onClick={adicionarMaterial}
+                disabled={!form.title.trim() || saving || (form.material_type === "link" ? !form.file_url.trim() : !selectedFile)}
                 className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {saving ? <><Loader2 className="h-4 w-4 animate-spin" />Salvando...</> : "Adicionar"}
+                {saving
+                  ? <><Loader2 className="h-4 w-4 animate-spin" />Salvando...</>
+                  : selectedTurmas.length > 1
+                    ? `Adicionar para ${selectedTurmas.length} turmas`
+                    : "Adicionar"
+                }
               </button>
             </div>
           </div>

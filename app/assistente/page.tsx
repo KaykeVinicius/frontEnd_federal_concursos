@@ -17,7 +17,6 @@ import {
   Laptop,
   Ticket,
   CalendarDays,
-  DollarSign,
   Loader2,
   BookOpen,
   Filter,
@@ -83,11 +82,31 @@ export default function AssistenteDashboardPage() {
     { value: "hibrido",    label: "Híbrido",    Icon: Laptop    },
   ]
 
-  const filteredCourses = useMemo(() =>
-    courseFilter === "all"
-      ? courses
-      : courses.filter((c) => (c.access_type ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === courseFilter),
-  [courses, courseFilter])
+  // turmas com vaga por course_id
+  const turmasByCourse = useMemo(() => {
+    const map = new Map<number, ApiTurma[]>()
+    for (const t of turmas) {
+      if (!t.course_id) continue
+      if (!map.has(t.course_id)) map.set(t.course_id, [])
+      map.get(t.course_id)!.push(t)
+    }
+    return map
+  }, [turmas])
+
+  const filteredCourses = useMemo(() => {
+    return courses.filter((c) => {
+      if (c.status !== "published") return false
+      if (courseFilter !== "all" && c.access_type !== courseFilter) return false
+      if (c.access_type === "presencial" || c.access_type === "hibrido") {
+        const temVaga = (turmasByCourse.get(c.id) ?? []).some(
+          (t) => (t.status === "aberta" || t.status === "em_andamento") &&
+                 t.enrolled_count < t.max_students
+        )
+        if (!temVaga) return false
+      }
+      return true
+    })
+  }, [courses, turmasByCourse, courseFilter])
 
   const activeEvents = useMemo(() => events, [events])
 
@@ -104,7 +123,7 @@ export default function AssistenteDashboardPage() {
       description: e.description,
       date: e.date,
       time: e.start_time && e.end_time ? `${e.start_time} às ${e.end_time}` : e.start_time ?? "",
-      location: e.location,
+      location: e.location ?? "",
       price: 0,
       availableTickets: 0,
       soldTickets: 0,

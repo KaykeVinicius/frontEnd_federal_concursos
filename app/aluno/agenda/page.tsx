@@ -105,6 +105,14 @@ export default function AlunoAgendaPage() {
     return TYPE_CONFIG[item.event_type ?? "aulao"] ?? TYPE_CONFIG.aulao
   }
 
+  function chipLabel(item: AgendaItem) {
+    if (item.type === "class_day") {
+      if (item.title && item.subject_name) return `${item.title} · ${item.subject_name}`
+      return item.subject_name || item.title
+    }
+    return item.title
+  }
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -179,7 +187,7 @@ export default function AlunoAgendaPage() {
                       const cfg = getTypeConfig(item)
                       return (
                         <div key={item.id} className={cn("rounded px-1 py-0.5 text-[10px] font-medium border truncate", cfg.color)}>
-                          {item.title}
+                          {chipLabel(item)}
                         </div>
                       )
                     })}

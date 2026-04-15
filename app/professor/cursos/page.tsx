@@ -4,142 +4,138 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { BookOpen, Search, Loader2, Clock, ChevronDown, ChevronUp } from "lucide-react"
-import { api, type ApiCourse, type ApiSubject, type ApiTurma } from "@/lib/api"
+import { BookOpen, Search, Loader2, Monitor, MapPin, Layers } from "lucide-react"
+import { api, type ApiCourse } from "@/lib/api"
 
-type CourseData = ApiCourse & {
-  subjects?: ApiSubject[]
-  turmas?: ApiTurma[]
-  loadingDetail?: boolean
+const modalidadeLabel: Record<string, string> = {
+  presencial: "Presencial",
+  online:     "Online",
+  hibrido:    "Híbrido",
+}
+const modalidadeClass: Record<string, string> = {
+  presencial: "bg-amber-100 text-amber-700",
+  online:     "bg-sky-100 text-sky-700",
+  hibrido:    "bg-violet-100 text-violet-700",
+}
+const modalidadeIcon: Record<string, typeof MapPin> = {
+  presencial: MapPin,
+  online:     Monitor,
+  hibrido:    Layers,
 }
 
 export default function ProfessorCursosPage() {
   const [loading, setLoading] = useState(true)
-  const [courses, setCourses] = useState<CourseData[]>([])
-  const [search, setSearch] = useState("")
-  const [expandedCourse, setExpandedCourse] = useState<number | null>(null)
+  const [courses, setCourses] = useState<ApiCourse[]>([])
+  const [search,  setSearch ] = useState("")
 
   useEffect(() => {
     api.courses.list()
-      .then((all) => setCourses(all.filter((c) => c.status === "published")))
+      .then(setCourses)
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
 
-  async function toggleExpand(courseId: number) {
-    if (expandedCourse === courseId) { setExpandedCourse(null); return }
-    setExpandedCourse(courseId)
-    const course = courses.find((c) => c.id === courseId)
-    if (course?.subjects) return // already loaded
-
-    setCourses((prev) => prev.map((c) => c.id === courseId ? { ...c, loadingDetail: true } : c))
-    try {
-      const [subjects, turmas] = await Promise.all([
-        api.subjects.list(courseId),
-        api.turmas.list(courseId),
-      ])
-      setCourses((prev) => prev.map((c) => c.id === courseId ? { ...c, subjects, turmas, loadingDetail: false } : c))
-    } catch {
-      setCourses((prev) => prev.map((c) => c.id === courseId ? { ...c, loadingDetail: false } : c))
-    }
-  }
-
-  const filtered = courses.filter((c) => c.title.toLowerCase().includes(search.toLowerCase()))
-
-  if (loading) {
-    return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-  }
+  const filtered = courses.filter((c) =>
+    c.title.toLowerCase().includes(search.toLowerCase())
+  )
 
   return (
-    <div className="p-4 pt-16 lg:p-8 lg:pt-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground">Cursos</h1>
-        <p className="text-muted-foreground">Visualize os cursos e suas matérias</p>
+    <div>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Meus Cursos</h1>
+          <p className="mt-1 text-muted-foreground">Cursos vinculados ao seu perfil</p>
+        </div>
       </div>
 
-      <div className="relative mb-6 max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Buscar curso..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+      <div className="mb-6">
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar curso..."
+            className="pl-10"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {filtered.map((course) => {
-          const isExpanded = expandedCourse === course.id
-          const subjects = course.subjects ?? []
-          const turmas = course.turmas ?? []
-
-          return (
-            <Card key={course.id} className="transition-shadow hover:shadow-md">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="text-lg text-foreground">{course.title}</CardTitle>
-                  <Badge className="bg-green-500/10 text-green-600">Publicado</Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">{course.description}</p>
-
-                <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-4 w-4 text-primary" />
-                    <span>{course.duration_in_days} dias</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <BookOpen className="h-4 w-4 text-primary" />
-                    <span>{subjects.length > 0 ? `${subjects.length} matérias` : "Matérias"}</span>
-                  </div>
-                </div>
-
-                <button type="button" onClick={() => toggleExpand(course.id)}
-                  className="flex w-full items-center justify-between rounded-lg border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-                >
-                  <span className="flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 text-primary" />
-                    {isExpanded ? "Ocultar matérias" : "Ver matérias"}
-                  </span>
-                  {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                </button>
-
-                {isExpanded && (
-                  <div className="rounded-lg border bg-background p-3">
-                    {course.loadingDetail ? (
-                      <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
-                    ) : subjects.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Nenhuma matéria cadastrada.</p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {subjects.map((subject, idx) => (
-                          <li key={subject.id} className="flex items-center gap-3 rounded-lg bg-muted/50 px-3 py-2">
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{idx + 1}</span>
-                            <div>
-                              <p className="text-sm font-medium text-foreground">{subject.name}</p>
-                              <p className="text-xs text-muted-foreground">{subject.description}</p>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between text-foreground">
+            <span>Lista de Cursos</span>
+            <span className="text-sm font-normal text-muted-foreground">{filtered.length} curso(s)</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b text-left text-sm text-muted-foreground">
+                    <th className="pb-3 font-medium">
+                      <span className="flex items-center gap-1.5">
+                        <BookOpen className="h-3.5 w-3.5" /> Curso
+                      </span>
+                    </th>
+                    <th className="pb-3 font-medium">
+                      <span className="flex items-center gap-1.5">
+                        <Layers className="h-3.5 w-3.5" /> Modalidade
+                      </span>
+                    </th>
+                    <th className="pb-3 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((course) => {
+                    const Icon = modalidadeIcon[course.access_type] ?? BookOpen
+                    return (
+                      <tr key={course.id} className="border-b last:border-0">
+                        <td className="py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                              {course.title.charAt(0)}
                             </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-
-                {turmas.length > 0 && (
-                  <div className="rounded-lg bg-muted/30 p-3">
-                    <p className="mb-2 text-xs font-medium text-muted-foreground">Turmas ({turmas.length}):</p>
-                    <div className="flex flex-wrap gap-2">
-                      {turmas.map((turma) => (
-                        <Badge key={turma.id} variant="outline">{turma.name}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )
-        })}
-        {filtered.length === 0 && (
-          <p className="col-span-full py-8 text-center text-muted-foreground">Nenhum curso encontrado.</p>
-        )}
-      </div>
+                            <span className="font-medium text-foreground">{course.title}</span>
+                          </div>
+                        </td>
+                        <td className="py-4">
+                          <Badge
+                            variant="secondary"
+                            className={modalidadeClass[course.access_type] ?? "bg-gray-100 text-gray-600"}
+                          >
+                            <Icon className="mr-1 h-3 w-3" />
+                            {modalidadeLabel[course.access_type] ?? course.access_type}
+                          </Badge>
+                        </td>
+                        <td className="py-4">
+                          <Badge
+                            variant="secondary"
+                            className={
+                              course.status === "published"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-gray-100 text-gray-500"
+                            }
+                          >
+                            {course.status === "published" ? "Publicado" : "Rascunho"}
+                          </Badge>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              {filtered.length === 0 && (
+                <p className="py-8 text-center text-muted-foreground">Nenhum curso encontrado.</p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

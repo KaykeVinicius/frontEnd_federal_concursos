@@ -47,15 +47,17 @@ export default function ProfessorAgendaPage() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<string | null>(null)
   const [view, setView] = useState<"month" | "list">("month")
+  const [scope, setScope] = useState<"mine" | "all">("mine") // minhas aulas / geral
 
-  const fetchAgenda = useCallback(async (y: number, m: number) => {
+  const fetchAgenda = useCallback(async (y: number, m: number, s: "mine" | "all") => {
     setLoading(true)
     try {
       const start = `${y}-${String(m + 1).padStart(2, "0")}-01`
       const lastDay = new Date(y, m + 1, 0).getDate()
       const end = `${y}-${String(m + 1).padStart(2, "0")}-${lastDay}`
       const token = getToken()
-      const res = await fetch(`${BASE_URL}/agenda?start=${start}&end=${end}`, {
+      const allParam = s === "all" ? "&all=true" : ""
+      const res = await fetch(`${BASE_URL}/agenda?start=${start}&end=${end}${allParam}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
@@ -67,7 +69,7 @@ export default function ProfessorAgendaPage() {
     }
   }, [])
 
-  useEffect(() => { fetchAgenda(year, month) }, [year, month, fetchAgenda])
+  useEffect(() => { fetchAgenda(year, month, scope) }, [year, month, scope, fetchAgenda])
 
   function prevMonth() {
     if (month === 0) { setYear(y => y - 1); setMonth(11) }
@@ -105,6 +107,14 @@ export default function ProfessorAgendaPage() {
     return TYPE_CONFIG[item.event_type ?? "aulao"] ?? TYPE_CONFIG.aulao
   }
 
+  function chipLabel(item: AgendaItem) {
+    if (item.type === "class_day") {
+      if (item.title && item.subject_name) return `${item.title} · ${item.subject_name}`
+      return item.subject_name || item.title
+    }
+    return item.title
+  }
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -113,10 +123,24 @@ export default function ProfessorAgendaPage() {
           <CalendarRange className="h-6 w-6 text-primary" />
           <div>
             <h1 className="text-xl font-bold">Agenda</h1>
-            <p className="text-xs text-muted-foreground">Aulas presenciais, aulões e simulados</p>
+            <p className="text-xs text-muted-foreground">
+              {scope === "mine" ? "Suas aulas da semana" : "Todas as aulas da semana"}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Scope toggle */}
+          <div className="flex rounded-md border border-border overflow-hidden">
+            <button
+              onClick={() => { setScope("mine"); setSelected(null) }}
+              className={cn("px-3 py-1.5 text-xs font-medium transition-colors", scope === "mine" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
+            >Minhas Aulas</button>
+            <button
+              onClick={() => { setScope("all"); setSelected(null) }}
+              className={cn("px-3 py-1.5 text-xs font-medium transition-colors border-l border-border", scope === "all" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
+            >Geral</button>
+          </div>
+          {/* View toggle */}
           <div className="flex rounded-md border border-border overflow-hidden">
             <button onClick={() => setView("month")}
               className={cn("px-3 py-1.5 text-xs font-medium transition-colors", view === "month" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}
@@ -179,7 +203,7 @@ export default function ProfessorAgendaPage() {
                       const cfg = getTypeConfig(item)
                       return (
                         <div key={item.id} className={cn("rounded px-1 py-0.5 text-[10px] font-medium border truncate", cfg.color)}>
-                          {item.title}
+                          {chipLabel(item)}
                         </div>
                       )
                     })}

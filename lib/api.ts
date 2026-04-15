@@ -34,18 +34,20 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 
   if (!res.ok) {
     if (res.status === 401) {
-      if (typeof window !== "undefined") {
-        const errBody = await res.json().catch(() => ({}))
-        const msg = errBody?.error ?? "Sessão expirada. Faça login novamente."
+      const errBody = await res.json().catch(() => ({}))
+      const msg = errBody?.error ?? "Sessão expirada. Faça login novamente."
+
+      if (typeof window !== "undefined" && getToken()) {
+        // Só redireciona se havia uma sessão ativa (token presente) — não durante o login
         localStorage.removeItem("auth_token")
         localStorage.removeItem("currentUser")
-        // Mostra mensagem antes de redirecionar se for sessão encerrada por outro dispositivo
         if (msg.includes("encerrada")) {
           sessionStorage.setItem("session_msg", msg)
         }
         window.location.href = "/login"
       }
-      throw new Error("Sessão expirada. Faça login novamente.")
+
+      throw new Error(msg)
     }
     const err = await res.json().catch(() => ({ error: `Erro ${res.status}` }))
     const msg = err.error ?? (Array.isArray(err.errors) ? err.errors.join(", ") : null) ?? `Erro ${res.status}`
@@ -334,6 +336,8 @@ export interface ApiMaterial {
   professor_id: number
   subject_id?: number
   turma_id?: number
+  course_id?: number
+  course_title?: string
   notes?: string | null
   created_at: string
   professor?: ApiUser
@@ -351,6 +355,22 @@ export interface ApiAnnouncement {
   expires_at?: string | null
   created_at: string
   author: ApiUser
+}
+
+export interface ApiDashboard {
+  revenue: { total: number; month: number; quarter: number; year: number; avg_per_enrollment: number }
+  enrollments: { total: number; active: number }
+  students: { total: number; active: number }
+  modality: { presencial: number; online: number; hibrido: number }
+  courses: number
+  turmas: number
+  events: number
+  upcoming_events: number
+  charts: {
+    courses:  { id: number; name: string; matriculas: number; receita: number }[]
+    careers:  { id: number; name: string; matriculas: number }[]
+    monthly:  { month: string; matriculas: number; receita: number }[]
+  }
 }
 
 export interface ApiNotification {
@@ -420,6 +440,12 @@ export const api = {
       req<{ token: string; user: ApiUser }>("POST", "/auth/login", { email, password }),
     me: () => req<ApiUser>("GET", "/auth/me"),
     logout: () => req<void>("DELETE", "/auth/logout").catch(() => {}),
+    forgotPassword: (cpf: string) =>
+      req<{ message: string }>("POST", "/auth/forgot_password", { cpf }),
+    validateResetToken: (token: string) =>
+      req<{ name: string; email: string }>("GET", `/auth/setup_password/validate?token=${token}`),
+    resetPassword: (token: string, password: string, password_confirmation: string) =>
+      req<{ message: string }>("POST", "/auth/setup_password", { token, password, password_confirmation }),
   },
 
   users: {
@@ -474,7 +500,7 @@ export const api = {
 
   subjects: {
     list: (courseId?: number, q?: RansackQ) => {
-      if (courseId) return req<ApiSubject[]>("GET", `/courses/${courseId}/subjects`)
+      if (courseId) return req<ApiSubject[]>("GET", `/courses/${courseId}/subjects${buildRansackQuery(q)}`)
       return req<ApiSubject[]>("GET", `/subjects${buildRansackQuery(q)}`)
     },
     create: (body: Partial<ApiSubject>) =>
@@ -613,6 +639,11 @@ export const api = {
   professor: {
     dashboard: () => req<ProfessorDashboardResponse>("GET", "/professor/dashboard"),
     turmas: () => req<ApiTurma[]>("GET", "/professor/turmas"),
+    subjects: () => req<ApiSubject[]>("GET", "/professor/subjects"),
+    turmaStudents: (turmaId: number) =>
+      req<{ id: number; name: string; email: string; whatsapp?: string; cpf?: string }[]>(
+        "GET", `/professor/turmas/${turmaId}/students`
+      ),
     questions: (status?: string) =>
       req<ApiQuestion[]>("GET", `/professor/questions${status ? `?status=${status}` : ""}`),
     answerQuestion: (id: number, answer: string) =>
@@ -647,6 +678,10 @@ export const api = {
       },
       delete: (id: number) => req<void>("DELETE", `/professor/event_materials/${id}`),
     },
+  },
+
+  dashboard: {
+    get: () => req<ApiDashboard>("GET", "/dashboard"),
   },
 
   announcements: {

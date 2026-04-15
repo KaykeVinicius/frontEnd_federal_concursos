@@ -2,53 +2,45 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
-import {
-  Users, Search, Loader2, CalendarDays, Clock,
-  ChevronRight, BookOpen, ChevronDown, ChevronUp, User,
-} from "lucide-react"
-import { api, type ApiTurma, type ApiEnrollment } from "@/lib/api"
+import { Users, Search, Loader2, CalendarDays, ChevronRight } from "lucide-react"
+import { api, type ApiTurma } from "@/lib/api"
 
-const statusColors: Record<string, string> = {
+const modalidadeLabel: Record<string, string> = {
+  presencial: "Presencial",
+  hibrido:    "Híbrido",
+}
+const modalidadeClass: Record<string, string> = {
+  presencial: "bg-amber-100 text-amber-700",
+  hibrido:    "bg-violet-100 text-violet-700",
+}
+const statusClass: Record<string, string> = {
   aberta:       "bg-green-500/10 text-green-600",
   fechada:      "bg-red-500/10 text-red-600",
   em_andamento: "bg-blue-500/10 text-blue-600",
 }
-const statusLabels: Record<string, string> = {
+const statusLabel: Record<string, string> = {
   aberta: "Aberta", fechada: "Fechada", em_andamento: "Em Andamento",
 }
 
 export default function ProfessorTurmasPage() {
-  const router          = useRouter()
-  const [loading,       setLoading      ] = useState(true)
-  const [turmas,        setTurmas       ] = useState<ApiTurma[]>([])
-  const [enrollments,   setEnrollments  ] = useState<ApiEnrollment[]>([])
-  const [search,        setSearch       ] = useState("")
-  const [expandedTurma, setExpandedTurma] = useState<number | null>(null)
+  const router                = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [turmas,  setTurmas ] = useState<ApiTurma[]>([])
+  const [search,  setSearch ] = useState("")
+  const [error,   setError  ] = useState("")
 
   useEffect(() => {
-    Promise.all([api.professor.turmas(), api.enrollments.list()])
-      .then(([allTurmas, allEnrollments]) => {
-        // Filtra apenas turmas presenciais ou híbridas
-        const presenciais = allTurmas.filter(
-          (t) => t.modalidade === "presencial" || t.modalidade === "hibrido"
-        )
-        setTurmas(presenciais)
-        setEnrollments(allEnrollments)
+    api.professor.turmas()
+      .then(setTurmas)
+      .catch((err) => {
+        console.error(err)
+        setError(err?.message ?? "Erro ao carregar turmas.")
       })
-      .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
-
-  function getStudentsByTurma(turmaId: number) {
-    return enrollments
-      .filter((e) => e.turma?.id === turmaId && e.status === "active")
-      .map((e) => e.student)
-      .filter(Boolean)
-  }
 
   const filtered = turmas.filter(
     (t) =>
@@ -64,28 +56,39 @@ export default function ProfessorTurmasPage() {
     )
   }
 
+  if (error) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 p-8 text-center">
+        <p className="text-destructive font-medium">{error}</p>
+        <p className="text-sm text-muted-foreground">Tente fazer logout e login novamente.</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="p-4 pt-16 lg:p-8 lg:pt-8">
-      <div className="mb-8">
+    <div className="p-4 pt-16 lg:p-8 lg:pt-8 max-w-3xl">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground">Minhas Turmas</h1>
-        <p className="text-muted-foreground">Turmas presenciais — gerencie alunos e materiais por dia letivo</p>
+        <p className="text-sm text-muted-foreground">Turmas presenciais vinculadas ao seu perfil</p>
       </div>
 
-      <div className="relative mb-6 max-w-md">
+      <div className="relative mb-4 max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Buscar turma..."
+          placeholder="Buscar turma ou curso..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9"
         />
       </div>
 
+      <p className="mb-4 text-sm text-muted-foreground">
+        {filtered.length} {filtered.length === 1 ? "turma" : "turmas"}
+      </p>
+
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-border py-20 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
-            <Users className="h-8 w-8 text-muted-foreground" />
-          </div>
+        <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-border py-16 text-center">
+          <Users className="h-8 w-8 text-muted-foreground" />
           <div>
             <p className="font-semibold text-foreground">Nenhuma turma encontrada</p>
             <p className="text-sm text-muted-foreground">
@@ -96,114 +99,79 @@ export default function ProfessorTurmasPage() {
           </div>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((turma) => {
-            const occupancy  = Math.round((turma.enrolled_count / turma.max_students) * 100)
-            const isExpanded = expandedTurma === turma.id
-            const students   = isExpanded ? getStudentsByTurma(turma.id) : []
+        <div className="rounded-xl border border-border overflow-hidden">
+          {filtered.map((turma, index) => {
+            const occupancy = turma.max_students > 0
+              ? Math.round((turma.enrolled_count / turma.max_students) * 100)
+              : 0
 
             return (
-              <Card key={turma.id} className="transition-shadow hover:shadow-md">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-base text-foreground">{turma.name}</CardTitle>
-                    <Badge className={statusColors[turma.status] ?? "bg-gray-100 text-gray-600"} variant="secondary">
-                      {statusLabels[turma.status] ?? turma.status}
+              <div
+                key={turma.id}
+                className={`flex items-center gap-4 px-4 py-4 ${
+                  index !== filtered.length - 1 ? "border-b border-border" : ""
+                }`}
+              >
+                {/* Info principal */}
+                <div className="min-w-0 flex-1 space-y-2">
+                  {/* Linha 1: curso + badges */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-foreground truncate">
+                      {turma.course?.title ?? turma.name}
+                    </span>
+                    {turma.modalidade && (
+                      <Badge
+                        variant="secondary"
+                        className={`${modalidadeClass[turma.modalidade] ?? "bg-gray-100 text-gray-600"} shrink-0`}
+                      >
+                        {modalidadeLabel[turma.modalidade] ?? turma.modalidade}
+                      </Badge>
+                    )}
+                    <Badge
+                      variant="secondary"
+                      className={`${statusClass[turma.status] ?? "bg-gray-100 text-gray-600"} shrink-0`}
+                    >
+                      {statusLabel[turma.status] ?? turma.status}
                     </Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground">{turma.course?.title}</p>
-                  {turma.modalidade && (
-                    <Badge
-                      className={turma.modalidade === "presencial" ? "bg-amber-100 text-amber-700 w-fit" : "bg-violet-100 text-violet-700 w-fit"}
-                      variant="secondary"
-                    >
-                      {turma.modalidade === "presencial" ? "Presencial" : "Híbrido"}
-                    </Badge>
-                  )}
-                </CardHeader>
 
-                <CardContent className="space-y-4">
-                  <div className="space-y-2 text-sm text-muted-foreground">
-                    {turma.schedule && (
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-primary" />
-                        <span>{turma.schedule}</span>
-                      </div>
+                  {/* Linha 2: turno + período */}
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                    {turma.name && (
+                      <span className="font-medium text-foreground/70">{turma.name}</span>
                     )}
                     {(turma.start_date || turma.end_date) && (
-                      <div className="flex items-center gap-2">
-                        <CalendarDays className="h-4 w-4 text-primary" />
-                        <span>{turma.start_date} a {turma.end_date}</span>
-                      </div>
+                      <span className="flex items-center gap-1">
+                        <CalendarDays className="h-3.5 w-3.5 text-primary" />
+                        {turma.start_date} a {turma.end_date}
+                      </span>
                     )}
                   </div>
 
-                  {/* Barra de ocupação */}
-                  <div>
-                    <div className="mb-1 flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-1 text-muted-foreground">
-                        <Users className="h-3 w-3" /> Ocupação
-                      </span>
-                      <span className="font-medium text-foreground">
-                        {turma.enrolled_count}/{turma.max_students}
-                      </span>
-                    </div>
-                    <Progress value={occupancy} className="h-2" />
-                  </div>
-
-                  {/* Alunos Matriculados (accordion) */}
-                  <button
-                    type="button"
-                    onClick={() => setExpandedTurma(isExpanded ? null : turma.id)}
-                    className="flex w-full items-center justify-between rounded-lg border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-primary" />
-                      Alunos Matriculados
+                  {/* Linha 3: barra de ocupação */}
+                  <div className="flex items-center gap-3">
+                    <Progress value={occupancy} className="h-1.5 flex-1" />
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      <span className="font-semibold text-foreground">{turma.enrolled_count}</span>
+                      /{turma.max_students} alunos
                     </span>
-                    {isExpanded
-                      ? <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                      : <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    }
-                  </button>
+                  </div>
+                </div>
 
-                  {isExpanded && (
-                    <div className="rounded-lg border bg-background">
-                      {students.length > 0 ? (
-                        <ul className="divide-y">
-                          {students.map((student, idx) => (
-                            <li key={student!.id} className="flex items-center gap-3 px-3 py-2">
-                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                                {idx + 1}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium text-foreground">{student!.name}</p>
-                                <p className="truncate text-xs text-muted-foreground">{student!.email}</p>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <div className="flex flex-col items-center gap-2 py-4">
-                          <User className="h-5 w-5 text-muted-foreground" />
-                          <p className="text-sm text-muted-foreground">Nenhum aluno matriculado</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Botão materiais por dia letivo */}
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/professor/turmas/${turma.id}`)}
-                    className="flex w-full items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
-                  >
-                    <BookOpen className="h-3.5 w-3.5 shrink-0" />
-                    Materiais por dia letivo
-                    <ChevronRight className="h-3.5 w-3.5 ml-auto" />
-                  </button>
-                </CardContent>
-              </Card>
+                {/* Botão alunos */}
+                <button
+                  type="button"
+                  onClick={() => router.push(`/professor/turmas/${turma.id}/alunos`)}
+                  className="shrink-0 flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+                >
+                  <Users className="h-3.5 w-3.5 text-primary" />
+                  <span>Alunos</span>
+                  <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                    {turma.enrolled_count}
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </div>
             )
           })}
         </div>
