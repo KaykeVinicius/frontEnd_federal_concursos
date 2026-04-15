@@ -126,6 +126,7 @@ export interface ApiCourse {
   duration_in_days: number
   start_date: string
   end_date: string
+  online_url?: string | null
   created_at?: string
   career_id?: number
   career?: ApiCareer
@@ -169,7 +170,8 @@ export interface ApiLesson {
   id: number
   title: string
   duration: string
-  youtube_id: string | null
+  youtube_id?: string | null   // nunca retornado em listagens — use aluno.lessons.videoToken()
+  has_video?: boolean           // indica se a aula tem vídeo, sem expor o ID
   position: number
   available: boolean
   topic_id: number
@@ -727,6 +729,8 @@ export const api = {
     },
     lessons: {
       list: (topicId: number) => req<ApiLesson[]>("GET", `/aluno/lessons?topic_id=${topicId}`),
+      videoToken: (lessonId: number) =>
+        req<{ youtube_id: string }>("GET", `/aluno/lessons/${lessonId}/video_token`),
     },
   },
 }

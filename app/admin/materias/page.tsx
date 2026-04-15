@@ -1,32 +1,48 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Plus, Search, Loader2, GraduationCap, Trash2 } from "lucide-react"
-import { api, type ApiSubject } from "@/lib/api"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Plus, Search, Loader2, GraduationCap, Trash2, Pencil, User, BookOpen, Settings2, AlertTriangle } from "lucide-react"
+import { api, type ApiSubject, type ApiCourse } from "@/lib/api"
 
 export default function MateriasPage() {
   const [subjects, setSubjects] = useState<ApiSubject[]>([])
+  const [courses, setCourses] = useState<ApiCourse[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+
+  // New subject dialog
   const [showNew, setShowNew] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState("")
+  const [newError, setNewError] = useState("")
   const [fName, setFName] = useState("")
   const [fDesc, setFDesc] = useState("")
+
+  // Edit subject dialog
+  const [editSubject, setEditSubject] = useState<ApiSubject | null>(null)
+  const [editName, setEditName] = useState("")
+  const [editDesc, setEditDesc] = useState("")
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState("")
+
+  // Delete confirmation
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const fetchSubjects = useCallback((q?: string) => {
     return api.subjects.list(undefined, q ? { name_cont: q } : undefined)
   }, [])
 
   useEffect(() => {
-    fetchSubjects()
-      .then(setSubjects)
+    setLoading(true)
+    Promise.all([fetchSubjects(), api.courses.list()])
+      .then(([s, c]) => { setSubjects(s); setCourses(c) })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [fetchSubjects])
@@ -38,30 +54,58 @@ export default function MateriasPage() {
     return () => clearTimeout(t)
   }, [search, fetchSubjects])
 
-  const filtered = subjects
+  function getCourseTitle(courseId?: number | null) {
+    if (!courseId) return null
+    return courses.find((c) => c.id === courseId)?.title ?? null
+  }
+
+  function openEditDialog(subject: ApiSubject) {
+    setEditSubject(subject)
+    setEditName(subject.name)
+    setEditDesc(subject.description ?? "")
+    setEditError("")
+  }
 
   async function handleCreate(e: { preventDefault(): void }) {
     e.preventDefault()
-    if (!fName.trim()) { setError("Nome obrigatório."); return }
-    setSaving(true); setError("")
+    if (!fName.trim()) { setNewError("Nome obrigatório."); return }
+    setSaving(true); setNewError("")
     try {
       const created = await api.subjects.create({ name: fName.trim(), description: fDesc.trim() })
       setSubjects((prev) => [...prev, created])
       setShowNew(false); setFName(""); setFDesc("")
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Erro ao criar matéria")
+      setNewError(err instanceof Error ? err.message : "Erro ao criar matéria")
     } finally {
       setSaving(false)
     }
   }
 
+  async function handleEditSave(e: { preventDefault(): void }) {
+    e.preventDefault()
+    if (!editSubject) return
+    setEditSaving(true); setEditError("")
+    try {
+      const updated = await api.subjects.update(editSubject.id, { name: editName.trim(), description: editDesc.trim() })
+      setSubjects((prev) => prev.map((s) => s.id === updated.id ? updated : s))
+      setEditSubject(null)
+    } catch (err: unknown) {
+      setEditError(err instanceof Error ? err.message : "Erro ao salvar alterações")
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
   async function handleDelete(id: number) {
-    if (!confirm("Excluir esta matéria?")) return
+    setDeletingId(id)
     try {
       await api.subjects.delete(id)
       setSubjects((prev) => prev.filter((s) => s.id !== id))
+      setConfirmDeleteId(null)
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Erro ao excluir")
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -79,40 +123,110 @@ export default function MateriasPage() {
 
       <div className="mb-6 relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Buscar matérias..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input
+          placeholder="Buscar matérias..."
+          className="pl-10"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-      ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-20 text-center">
-          <GraduationCap className="h-10 w-10 text-muted-foreground" />
-          <p className="font-semibold text-foreground">Nenhuma matéria encontrada</p>
-          <p className="text-sm text-muted-foreground">Clique em &quot;Nova Matéria&quot; para criar.</p>
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <div className="divide-y divide-border">
-              {filtered.map((sub) => (
-                <div key={sub.id} className="flex items-center justify-between px-5 py-4 hover:bg-muted/40 transition-colors">
-                  <div>
-                    <p className="font-medium text-foreground">{sub.name}</p>
-                    {sub.description && <p className="text-sm text-muted-foreground mt-0.5">{sub.description}</p>}
-                  </div>
-                  <button
-                    onClick={() => handleDelete(sub.id)}
-                    className="ml-4 shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between text-foreground">
+            <span>Lista de Matérias</span>
+            <span className="text-sm font-normal text-muted-foreground">{subjects.length} matéria(s)</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b text-left text-sm text-muted-foreground">
+                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5" />Matéria</span></th>
+                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Professor</span></th>
+                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Curso</span></th>
+                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><Settings2 className="h-3.5 w-3.5" />Ações</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subjects.map((sub) => {
+                    const courseTitle = getCourseTitle(sub.course_id)
+                    return (
+                      <tr key={sub.id} className="border-b last:border-0 hover:bg-muted/40 transition-colors">
+                        <td className="py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                              {sub.name.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">{sub.name}</p>
+                              {sub.description && (
+                                <p className="text-xs text-muted-foreground mt-0.5 max-w-xs truncate">{sub.description}</p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 text-sm text-muted-foreground">
+                          {sub.professor?.name ?? <span className="text-muted-foreground/50">—</span>}
+                        </td>
+                        <td className="py-4 text-sm text-muted-foreground">
+                          {courseTitle ?? <span className="text-muted-foreground/50">—</span>}
+                        </td>
+                        <td className="py-4">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <Settings2 className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEditDialog(sub)} className="gap-2 cursor-pointer">
+                                <Pencil className="h-4 w-4" /> Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {confirmDeleteId === sub.id ? (
+                                <DropdownMenuItem
+                                  onClick={() => handleDelete(sub.id)}
+                                  disabled={deletingId === sub.id}
+                                  className="gap-2 cursor-pointer text-destructive focus:text-destructive"
+                                >
+                                  {deletingId === sub.id
+                                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Excluindo...</>
+                                    : <><AlertTriangle className="h-4 w-4" /> Confirmar exclusão</>}
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onClick={() => setConfirmDeleteId(sub.id)}
+                                  className="gap-2 cursor-pointer text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" /> Excluir
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              {subjects.length === 0 && (
+                <div className="flex flex-col items-center gap-3 py-16 text-center">
+                  <GraduationCap className="h-10 w-10 text-muted-foreground" />
+                  <p className="font-semibold text-foreground">Nenhuma matéria encontrada</p>
+                  <p className="text-sm text-muted-foreground">Clique em &quot;Nova Matéria&quot; para criar.</p>
                 </div>
-              ))}
+              )}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
+      {/* Nova Matéria Dialog */}
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -128,11 +242,38 @@ export default function MateriasPage() {
               <Label>Descrição</Label>
               <Textarea placeholder="Descreva a matéria..." rows={3} value={fDesc} onChange={(e) => setFDesc(e.target.value)} />
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {newError && <p className="text-sm text-destructive">{newError}</p>}
             <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="outline" onClick={() => setShowNew(false)}>Cancelar</Button>
               <Button type="submit" disabled={saving}>
                 {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando...</> : "Adicionar Matéria"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Editar Matéria Dialog */}
+      <Dialog open={!!editSubject} onOpenChange={(open) => { if (!open) setEditSubject(null) }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Editar Matéria</DialogTitle>
+            <DialogDescription>Altere os dados da matéria e salve.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditSave} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Nome *</Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Descrição</Label>
+              <Textarea rows={3} value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
+            </div>
+            {editError && <p className="text-sm text-destructive">{editError}</p>}
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="outline" onClick={() => setEditSubject(null)}>Cancelar</Button>
+              <Button type="submit" disabled={editSaving} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                {editSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Salvando...</> : "Salvar Alterações"}
               </Button>
             </div>
           </form>

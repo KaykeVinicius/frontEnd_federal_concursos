@@ -7,7 +7,7 @@ import {
   ChevronLeft, ChevronRight, PlayCircle, FileText, CheckCircle, Lock, Download, Search,
   Maximize2, Minimize2, X, PenLine, Clock, BookOpen, BarChart2, HelpCircle, Send,
   CheckCheck, AlertCircle, Loader2, Pause, Play, Volume2, VolumeX,
-  SkipBack, SkipForward, Rewind, FastForward, Settings, Monitor,
+  SkipBack, SkipForward, Rewind, FastForward, Settings, Monitor, Captions, CaptionsOff,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api, type ApiSubject, type ApiTopic, type ApiLesson, type ApiQuestion, type ApiEnrollment } from "@/lib/api"
@@ -36,6 +36,11 @@ interface YTPlayer {
   getPlayerState(): number
   setPlaybackRate(rate: number): void
   getPlaybackRate(): number
+  setPlaybackQuality(quality: string): void
+  loadModule(module: string): void
+  unloadModule(module: string): void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  setOption(module: string, option: string, value: any): void
   destroy(): void
 }
 
@@ -65,8 +70,11 @@ function YoutubePlayer({
   const [showControls, setShowControls] = useState(true)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [speed, setSpeed] = useState(1)
-  const [showSpeedMenu, setShowSpeedMenu] = useState(false)
   const [autoPlay, setAutoPlay] = useState(true)
+  const [captions, setCaptions] = useState(false)
+  const [quality, setQuality] = useState("default")
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<"speed" | "quality">("speed")
   const autoPlayRef = useRef(true)
   const onEndedRef = useRef(onEnded)
   useEffect(() => { onEndedRef.current = onEnded }, [onEnded])
@@ -173,6 +181,24 @@ function YoutubePlayer({
     playerRef.current?.setVolume(v)
     if (v === 0) setMuted(true)
     else if (muted) { playerRef.current?.unMute(); setMuted(false) }
+  }
+
+  function toggleCaptions() {
+    if (!playerRef.current) return
+    const next = !captions
+    if (next) {
+      playerRef.current.loadModule("captions")
+      playerRef.current.setOption("captions", "track", { languageCode: "pt" })
+    } else {
+      playerRef.current.unloadModule("captions")
+    }
+    setCaptions(next)
+  }
+
+  function changeQuality(q: string) {
+    playerRef.current?.setPlaybackQuality(q)
+    setQuality(q)
+    setShowSettingsMenu(false)
   }
 
   function fmt(s: number) {
@@ -308,10 +334,20 @@ function YoutubePlayer({
 
             {/* RIGHT */}
             <div className="flex items-center gap-2 shrink-0">
-              {/* Engrenagem: velocidade + auto-play */}
+
+              {/* Legenda PT */}
+              <button
+                onClick={toggleCaptions}
+                title={captions ? "Desativar legenda" : "Legenda em Português"}
+                className={cn("transition-colors", captions ? "text-primary" : "text-white hover:text-primary")}
+              >
+                {captions ? <Captions className="h-4 w-4" /> : <CaptionsOff className="h-4 w-4" />}
+              </button>
+
+              {/* Engrenagem: velocidade + qualidade + auto-play */}
               <div className="relative">
                 <button
-                  onClick={() => setShowSpeedMenu((v) => !v)}
+                  onClick={() => setShowSettingsMenu((v) => !v)}
                   className="flex items-center gap-0.5 text-white hover:text-primary transition-colors"
                   title="Configurações"
                 >
@@ -319,30 +355,69 @@ function YoutubePlayer({
                   <Settings className="h-3.5 w-3.5" />
                 </button>
 
-                {showSpeedMenu && (
+                {showSettingsMenu && (
                   <>
-                    {/* overlay para fechar */}
-                    <div className="fixed inset-0 z-40" onClick={() => setShowSpeedMenu(false)} />
-                    <div className="absolute bottom-9 right-0 z-50 min-w-[150px] rounded-xl border border-zinc-700 bg-zinc-900/95 p-2 shadow-xl backdrop-blur-sm">
-                      <p className="mb-1 px-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Velocidade</p>
-                      {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((s) => (
-                        <button key={s} onClick={() => { setSpeed(s); playerRef.current?.setPlaybackRate(s); setShowSpeedMenu(false) }}
-                          className={cn(
-                            "flex w-full items-center justify-between rounded-lg px-2 py-1 text-xs transition-colors hover:bg-zinc-800",
-                            speed === s ? "text-primary font-semibold" : "text-zinc-300"
-                          )}>
-                          <span>{s === 1 ? "Normal" : `${s}×`}</span>
-                          {speed === s && <span className="text-[10px]">✓</span>}
-                        </button>
-                      ))}
-                      <div className="my-1 border-t border-zinc-800" />
-                      <button
-                        onClick={() => { const next = !autoPlay; setAutoPlay(next); autoPlayRef.current = next }}
-                        className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-xs text-zinc-300 transition-colors hover:bg-zinc-800"
-                      >
-                        <span>Auto-play</span>
-                        <span className={cn("text-[10px] font-bold", autoPlay ? "text-primary" : "text-zinc-600")}>{autoPlay ? "ON" : "OFF"}</span>
-                      </button>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowSettingsMenu(false)} />
+                    <div className="absolute bottom-9 right-0 z-50 w-44 rounded-xl border border-zinc-700 bg-zinc-900/95 shadow-xl backdrop-blur-sm overflow-hidden">
+                      {/* Abas */}
+                      <div className="flex border-b border-zinc-800">
+                        {(["speed", "quality"] as const).map((tab) => (
+                          <button key={tab} onClick={() => setSettingsTab(tab)}
+                            className={cn(
+                              "flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors",
+                              settingsTab === tab ? "text-primary border-b-2 border-primary" : "text-zinc-500 hover:text-zinc-300"
+                            )}>
+                            {tab === "speed" ? "Velocidade" : "Qualidade"}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="p-1.5">
+                        {settingsTab === "speed" && (
+                          <>
+                            {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((s) => (
+                              <button key={s} onClick={() => { setSpeed(s); playerRef.current?.setPlaybackRate(s); setShowSettingsMenu(false) }}
+                                className={cn(
+                                  "flex w-full items-center justify-between rounded-lg px-2 py-1 text-xs transition-colors hover:bg-zinc-800",
+                                  speed === s ? "text-primary font-semibold" : "text-zinc-300"
+                                )}>
+                                <span>{s === 1 ? "Normal" : `${s}×`}</span>
+                                {speed === s && <span className="text-[10px]">✓</span>}
+                              </button>
+                            ))}
+                            <div className="my-1 border-t border-zinc-800" />
+                            <button
+                              onClick={() => { const next = !autoPlay; setAutoPlay(next); autoPlayRef.current = next }}
+                              className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-xs text-zinc-300 transition-colors hover:bg-zinc-800"
+                            >
+                              <span>Auto-play</span>
+                              <span className={cn("text-[10px] font-bold", autoPlay ? "text-primary" : "text-zinc-600")}>{autoPlay ? "ON" : "OFF"}</span>
+                            </button>
+                          </>
+                        )}
+
+                        {settingsTab === "quality" && (
+                          <>
+                            {[
+                              { label: "Auto",  value: "default" },
+                              { label: "1080p", value: "hd1080"  },
+                              { label: "720p",  value: "hd720"   },
+                              { label: "480p",  value: "large"   },
+                              { label: "360p",  value: "medium"  },
+                              { label: "240p",  value: "small"   },
+                            ].map((q) => (
+                              <button key={q.value} onClick={() => changeQuality(q.value)}
+                                className={cn(
+                                  "flex w-full items-center justify-between rounded-lg px-2 py-1 text-xs transition-colors hover:bg-zinc-800",
+                                  quality === q.value ? "text-primary font-semibold" : "text-zinc-300"
+                                )}>
+                                <span>{q.label}</span>
+                                {quality === q.value && <span className="text-[10px]">✓</span>}
+                              </button>
+                            ))}
+                          </>
+                        )}
+                      </div>
                     </div>
                   </>
                 )}
@@ -539,6 +614,8 @@ function AssistirInner() {
   const [_nomeAluno, setNomeAluno] = useState("Aluno")
   const [sidebarTab, setSidebarTab] = useState<"aulas" | "cronograma">("aulas")
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null)
+  const [loadingVideo, setLoadingVideo] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const videoRef = useRef<HTMLDivElement>(null)
 
@@ -718,9 +795,21 @@ function AssistirInner() {
     }
   }
 
-  const hasVideo = !!aulaAtiva?.youtube_id
+  const hasVideo = !!aulaAtiva?.has_video
   const isPresencial = enrollment?.enrollment_type === "presencial" || enrollment?.enrollment_type === 0
   const isHibrido   = enrollment?.enrollment_type === "hibrido"    || enrollment?.enrollment_type === 2
+
+  // Busca o ID do vídeo somente quando o aluno vai assistir (tab vídeo ativa)
+  useEffect(() => {
+    if (!aulaAtiva || !hasVideo || isPresencial) { setActiveVideoId(null); return }
+    if (rightTab !== "video") return
+    setActiveVideoId(null)
+    setLoadingVideo(true)
+    api.aluno.lessons.videoToken(aulaAtiva.id)
+      .then(({ youtube_id }) => setActiveVideoId(youtube_id))
+      .catch(console.error)
+      .finally(() => setLoadingVideo(false))
+  }, [aulaAtiva?.id, rightTab])
 
   const rightTabs = [
     ...(!isPresencial && hasVideo ? [{ key: "video" as RightTab, label: "Vídeo", icon: PlayCircle }] : []),
@@ -812,10 +901,15 @@ function AssistirInner() {
                     className="w-full"
                     style={fullscreen ? { width: "min(100vw, calc(100vh * 16 / 9))" } : {}}
                   >
-                    {hasVideo ? (
+                    {hasVideo && loadingVideo && (
+                      <div className="flex aspect-video w-full items-center justify-center bg-black">
+                        <Loader2 className="h-8 w-8 animate-spin text-zinc-600" />
+                      </div>
+                    )}
+                    {hasVideo && !loadingVideo && activeVideoId && (
                       <YoutubePlayer
                         key={aulaAtiva.id}
-                        videoId={aulaAtiva.youtube_id}
+                        videoId={activeVideoId}
                         cpf={cpf}
                         isFullscreen={fullscreen}
                         onFullscreen={() => setFullscreen(!fullscreen)}
@@ -825,7 +919,7 @@ function AssistirInner() {
                         onNext={proxima ? () => setAulaAtiva(proxima) : undefined}
                         onEnded={() => { if (proxima) { setAulaAtiva(proxima); setRightTab("video") } }}
                       />
-                    ) : null}
+                    )}
                   </div>
                 </div>
               )}

@@ -100,18 +100,20 @@ function LessonRow({ lesson, onDelete }: { lesson: ApiLesson; onDelete: () => vo
 
   return (
     <div className="rounded-lg border border-border bg-background">
-      <button className="flex w-full items-center justify-between px-4 py-2.5 text-left" onClick={() => setOpen(!open)}>
-        <div className="flex items-center gap-2 text-sm">
-          {youtubeId ? <PlayCircle className="h-4 w-4 text-red-500" /> : <FileText className="h-4 w-4 text-primary" />}
-          <span className="font-medium">{lesson.title}</span>
-          {lesson.duration && <span className="text-xs text-muted-foreground">{lesson.duration}</span>}
-          {pdfs.length > 0 && <span className="text-xs text-muted-foreground">· {pdfs.length} PDF(s)</span>}
+      <div className="flex w-full items-center justify-between px-4 py-2.5">
+        <button className="flex flex-1 items-center gap-2 text-sm text-left min-w-0" onClick={() => setOpen(!open)}>
+          {youtubeId ? <PlayCircle className="h-4 w-4 shrink-0 text-red-500" /> : <FileText className="h-4 w-4 shrink-0 text-primary" />}
+          <span className="font-medium truncate">{lesson.title}</span>
+          {lesson.duration && <span className="text-xs text-muted-foreground shrink-0">{lesson.duration}</span>}
+          {pdfs.length > 0 && <span className="text-xs text-muted-foreground shrink-0">· {pdfs.length} PDF(s)</span>}
+        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={onDelete} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+          <button onClick={() => setOpen(!open)} className="text-muted-foreground">
+            {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
-          {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-        </div>
-      </button>
+      </div>
       {open && (
         <div className="border-t border-border px-4 py-4 space-y-4">
 
@@ -304,17 +306,19 @@ function TopicBlock({ topic, onDelete, onLessonsChange }: {
 
   return (
     <div className="rounded-lg border border-border bg-muted/20">
-      <button className="flex w-full items-center justify-between px-4 py-2.5 text-left" onClick={() => setOpen(!open)}>
-        <div className="flex items-center gap-2">
+      <div className="flex w-full items-center justify-between px-4 py-2.5">
+        <button className="flex flex-1 items-center gap-2 text-left" onClick={() => setOpen(!open)}>
           <FileText className="h-4 w-4 text-yellow-500" />
           <span className="text-sm font-medium">{topic.title}</span>
           <Badge variant="secondary" className="text-xs">{topic.lessons.length} aula(s)</Badge>
+        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={onDelete} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+          <button onClick={() => setOpen(!open)} className="text-muted-foreground">
+            {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
-          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        </div>
-      </button>
+      </div>
       {open && (
         <div className="border-t border-border px-4 py-3 space-y-2">
           {topic.lessons.map((lesson) => (
@@ -473,6 +477,9 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
   const [toggling, setToggling] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [loadingSubjects, setLoadingSubjects] = useState(false)
+  const [editingUrl, setEditingUrl] = useState(false)
+  const [newOnlineUrl, setNewOnlineUrl] = useState(course.online_url ?? "")
+  const [savingUrl, setSavingUrl] = useState(false)
 
   async function loadSubjects() {
     if (loadingSubjects) return
@@ -558,6 +565,16 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
     finally { setDeleting(false) }
   }
 
+  async function saveOnlineUrl() {
+    setSavingUrl(true)
+    try {
+      const updated = await api.courses.update(course.id, { online_url: newOnlineUrl.trim() || undefined })
+      onUpdate({ ...course, ...updated })
+      setEditingUrl(false)
+    } catch (e) { console.error(e) }
+    finally { setSavingUrl(false) }
+  }
+
   async function unlinkSubject(subjectId: number) {
     await api.subjects.delete(subjectId)
     onUpdate({ ...course, subjects: course.subjects.filter((s) => s.id !== subjectId) })
@@ -612,6 +629,46 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
           </button>
         </div>
       </div>
+
+      {/* Link da aula online — só para cursos online/híbrido */}
+      {(course.access_type === "online" || course.access_type === "hibrido") && (
+        <div className="border-b border-border px-5 py-2.5 flex items-center gap-2">
+          <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          {editingUrl ? (
+            <>
+              <Input
+                value={newOnlineUrl}
+                onChange={(e) => setNewOnlineUrl(e.target.value)}
+                placeholder="https://meet.google.com/..."
+                className="h-7 flex-1 text-xs"
+                disabled={savingUrl}
+                autoFocus
+              />
+              <Button size="sm" className="h-7 px-2 text-xs" onClick={saveOnlineUrl} disabled={savingUrl}>
+                {savingUrl ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => { setEditingUrl(false); setNewOnlineUrl(course.online_url ?? "") }} disabled={savingUrl}>
+                <X className="h-3 w-3" />
+              </Button>
+            </>
+          ) : (
+            <>
+              {course.online_url ? (
+                <a href={course.online_url} target="_blank" rel="noreferrer"
+                  className="flex-1 truncate text-xs text-primary hover:underline flex items-center gap-1">
+                  <ExternalLink className="h-3 w-3 shrink-0" />
+                  {course.online_url}
+                </a>
+              ) : (
+                <span className="flex-1" />
+              )}
+              <button onClick={() => setEditingUrl(true)} className="shrink-0 text-xs text-muted-foreground hover:text-primary">
+                Editar
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {open && (
         <div className="px-5 py-4 space-y-3">
@@ -697,6 +754,7 @@ function NovoCursoForm({ onCreated, onCancel }: {
   const [durationDays, setDurationDays] = useState("")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
+  const [onlineUrl, setOnlineUrl] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
@@ -718,6 +776,7 @@ function NovoCursoForm({ onCreated, onCancel }: {
         duration_in_days: parseInt(durationDays) || 0,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
+        online_url: (accessType === "online" || accessType === "hibrido") && onlineUrl.trim() ? onlineUrl.trim() : undefined,
       })
       onCreated({ ...novo, subjects: [] })
     } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erro ao criar curso") }
@@ -779,6 +838,23 @@ function NovoCursoForm({ onCreated, onCancel }: {
             <option value="hibrido">Híbrido</option>
           </select>
         </div>
+
+        {(accessType === "online" || accessType === "hibrido") && (
+          <div className="sm:col-span-2 space-y-1">
+            <Label className="text-xs flex items-center gap-1"><Link2 className="h-3 w-3" /> Link da aula online</Label>
+            <div className="relative">
+              <Link2 className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="https://meet.google.com/... ou https://zoom.us/..."
+                value={onlineUrl}
+                onChange={(e) => setOnlineUrl(e.target.value)}
+                className="pl-8"
+                disabled={saving}
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">Link do Meet, Zoom ou plataforma utilizada nas aulas ao vivo.</p>
+          </div>
+        )}
       </div>
 
       {error && <p className="text-xs text-destructive">{error}</p>}
