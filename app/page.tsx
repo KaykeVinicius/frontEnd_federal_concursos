@@ -18,115 +18,324 @@ import {
   BarChart,
   ShieldCheck,
   Phone,
-  Calculator,
   Monitor,
-  MapPin,
+  X,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react"
 
-const cursos = [
-  {
-    titulo: "GCM Porto Velho — RO",
-    categoria: "Municipal",
-    nivel: "Superior",
-    modalidade: "presencial",
-    duracao: "4 meses",
-    vagas: "Aprox. 250 vagas",
-    destaque: true,
-    cor: "#e84a20",
-  },
-  {
-    titulo: "IPERON",
-    categoria: "Estadual",
-    nivel: "Médio e Superior",
-    modalidade: "online",
-    duracao: "5 meses",
-    vagas: "Aprox. 200 vagas",
-    destaque: false,
-    cor: "#16a34a",
-  },
-  {
-    titulo: "SESAU — RO",
-    categoria: "Estadual",
-    nivel: "Médio e Superior",
-    modalidade: "presencial",
-    duracao: "4 meses",
-    vagas: "Diversas vagas",
-    destaque: false,
-    cor: "#0891b2",
-  },
-  {
-    titulo: "Prefeitura de Candeias do Jamari — RO",
-    categoria: "Municipal",
-    nivel: "Todos os níveis",
-    modalidade: "presencial",
-    duracao: "3 meses",
-    vagas: "Diversas vagas",
-    destaque: false,
-    cor: "#ca8a04",
-  },
-  {
-    titulo: "OAB — 1ª e 2ª Fase",
-    categoria: "OAB",
-    nivel: "Superior",
-    modalidade: "presencial",
-    duracao: "8 meses",
-    vagas: "Próxima turma",
-    destaque: false,
-    cor: "#2563eb",
-  },
-  {
-    titulo: "Português — Nova Turma",
-    categoria: "Curso Livre",
-    nivel: "Todos os níveis",
-    modalidade: "presencial",
-    duracao: "2 meses",
-    vagas: "Turma abrindo",
-    destaque: false,
-    cor: "#7c3aed",
-  },
-  {
-    titulo: "INSS",
-    categoria: "Federal",
-    nivel: "Médio e Superior",
-    modalidade: "online",
-    duracao: "5 meses",
-    vagas: "Edital previsto",
-    destaque: false,
-    cor: "#0e7490",
-  },
-  {
-    titulo: "CFC — Conselho Federal de Contabilidade",
-    categoria: "CFC",
-    nivel: "Superior",
-    modalidade: "presencial",
-    duracao: "4 meses",
-    vagas: "Turma aberta",
-    destaque: false,
-    cor: "#be185d",
-  },
-]
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"
+
+interface ApiCareer { id: number; name: string; description: string }
+interface ApiCourse {
+  id: number; title: string; description: string
+  price: number; duration_in_days: number
+  start_date: string; end_date: string
+  access_type: "online" | "presencial" | "hibrido"
+  status: string; career_id?: number
+}
+
+const CAREER_COLORS = ["#e84a20","#16a34a","#2563eb","#ca8a04","#7c3aed","#0891b2","#be185d","#0e7490"]
+
+function formatPrice(cents: number) {
+  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+}
+
+function validateCpf(digits: string): boolean {
+  if (digits.length !== 11 || new Set(digits.split("")).size === 1) return false
+  for (const pos of [9, 10]) {
+    const sum = digits.slice(0, pos).split("").reduce((acc, d, i) => acc + parseInt(d) * (pos + 1 - i), 0)
+    let rem = (sum * 10) % 11
+    if (rem >= 10) rem = 0
+    if (rem !== parseInt(digits[pos])) return false
+  }
+  return true
+}
+
+function maskCpf(value: string) {
+  const d = value.replace(/\D/g, "").slice(0, 11)
+  if (d.length > 9) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, "$1.$2.$3-$4")
+  if (d.length > 6) return d.replace(/(\d{3})(\d{3})(\d{1,3})/, "$1.$2.$3")
+  if (d.length > 3) return d.replace(/(\d{3})(\d{1,3})/, "$1.$2")
+  return d
+}
+
+function maskCep(value: string) {
+  const d = value.replace(/\D/g, "").slice(0, 8)
+  if (d.length > 5) return d.replace(/(\d{5})(\d{1,3})/, "$1-$2")
+  return d
+}
+
+function maskPhone(value: string) {
+  const d = value.replace(/\D/g, "").slice(0, 11)
+  if (d.length > 10) return d.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3")
+  if (d.length > 6) return d.replace(/(\d{2})(\d{4,5})(\d{0,4})/, "($1) $2-$3")
+  if (d.length > 2) return d.replace(/(\d{2})(\d{0,5})/, "($1) $2")
+  return d
+}
+
+const emptyForm = {
+  name: "", cpf: "", email: "", whatsapp: "",
+  postal_code: "", street: "", number: "", complement: "", neighborhood: "", city: "", state: ""
+}
+
+function fieldCls(value: string, valid: boolean | null) {
+  const base = "w-full rounded-lg border bg-[#0d0d0d] px-3 py-2.5 pr-9 text-sm text-white placeholder-[#4a4a4a] outline-none transition-colors"
+  if (!value) return `${base} border-[#2a2a2a] focus:border-[#e84a20]`
+  if (valid === true)  return `${base} border-green-500 focus:border-green-500`
+  if (valid === false) return `${base} border-red-500 focus:border-red-500`
+  return `${base} border-[#2a2a2a] focus:border-[#e84a20]`
+}
+
+function FieldIcon({ valid }: { valid: boolean | null }) {
+  if (valid === null) return null
+  if (valid) return <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500 pointer-events-none" />
+  return <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-red-500 pointer-events-none" />
+}
 
 export default function LandingPage() {
   const trackRef = useRef<HTMLDivElement>(null)
   const [current, setCurrent] = useState(0)
   const [isAnimating, setIsAnimating] = useState(false)
-  const visibleCount = 3
+
+  const [careers, setCareers] = useState<ApiCareer[]>([])
+  const [coursesByCareer, setCoursesByCareer] = useState<Record<number, ApiCourse[]>>({})
+  const [selectedCareer, setSelectedCareer] = useState<number | null>(null)
+
+  const [enrollingCourse, setEnrollingCourse] = useState<ApiCourse | null>(null)
+  const [enrollStep, setEnrollStep] = useState<"choose" | "lookup" | "form">("choose")
+  const [isNewStudent, setIsNewStudent] = useState(true)
+  const [lookupCpf, setLookupCpf] = useState("")
+  const [lookupLoading, setLookupLoading] = useState(false)
+  const [lookupError, setLookupError] = useState("")
+  const [form, setForm] = useState(emptyForm)
+  const [formError, setFormError] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [cepLoading, setCepLoading] = useState(false)
+  const [cpfTaken, setCpfTaken] = useState<boolean | null>(null)
+  const [emailTaken, setEmailTaken] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [cRes, coRes] = await Promise.all([
+          fetch(`${BASE_URL}/careers`),
+          fetch(`${BASE_URL}/courses?q[access_type_eq]=1&q[status_eq]=1`),
+        ])
+        const cData: ApiCareer[] = cRes.ok ? await cRes.json() : []
+        const coData: ApiCourse[] = coRes.ok ? await coRes.json() : []
+
+        const grouped: Record<number, ApiCourse[]> = {}
+        for (const course of coData) {
+          if (!course.career_id) continue
+          if (!grouped[course.career_id]) grouped[course.career_id] = []
+          grouped[course.career_id].push(course)
+        }
+
+        const careersWithCourses = cData.filter(c => grouped[c.id]?.length > 0)
+        setCareers(careersWithCourses)
+        setCoursesByCareer(grouped)
+      } catch {}
+    }
+    load()
+  }, [])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setEnrollingCourse(null)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [])
+
+  const allOnlineCourses = Object.values(coursesByCareer).flat()
+  const visibleCount = Math.min(3, allOnlineCourses.length) || 1
 
   function scroll(direction: "prev" | "next") {
-    if (isAnimating) return
+    if (isAnimating || allOnlineCourses.length === 0) return
     setIsAnimating(true)
     setCurrent((prev) => {
-      if (direction === "next") return prev >= cursos.length - visibleCount ? 0 : prev + 1
-      return prev <= 0 ? cursos.length - visibleCount : prev - 1
+      if (direction === "next") return prev >= allOnlineCourses.length - visibleCount ? 0 : prev + 1
+      return prev <= 0 ? allOnlineCourses.length - visibleCount : prev - 1
     })
     setTimeout(() => setIsAnimating(false), 400)
   }
 
-  // Auto-play
   useEffect(() => {
+    if (allOnlineCourses.length === 0) return
     const id = setInterval(() => scroll("next"), 4000)
     return () => clearInterval(id)
   })
+
+  async function fetchCep(cep: string) {
+    const digits = cep.replace(/\D/g, "")
+    if (digits.length !== 8) return
+    setCepLoading(true)
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`)
+      const data = await res.json()
+      if (!data.erro) {
+        setForm(f => ({
+          ...f,
+          street:       data.logradouro  || f.street,
+          neighborhood: data.bairro      || f.neighborhood,
+          city:         data.localidade  || f.city,
+          state:        data.uf          || f.state,
+        }))
+      }
+    } catch {}
+    setCepLoading(false)
+  }
+
+  async function handleEnrollSubmit(e: { preventDefault(): void }) {
+    e.preventDefault()
+    setFormError("")
+
+    if (isNewStudent && cpfTaken) {
+      setFormError("Este CPF já possui cadastro. Use a opção \"Já sou aluno\".")
+      return
+    }
+    if (isNewStudent && emailTaken) {
+      setFormError("Este e-mail já possui cadastro. Use a opção \"Já sou aluno\".")
+      return
+    }
+
+    const cpfDigits = form.cpf.replace(/\D/g, "")
+    if (!validateCpf(cpfDigits)) {
+      setFormError("CPF inválido. Verifique os dígitos informados.")
+      return
+    }
+    if (!form.email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
+      setFormError("E-mail inválido.")
+      return
+    }
+    const phone = form.whatsapp.replace(/\D/g, "")
+    if (phone.length < 10 || phone.length > 11) {
+      setFormError("WhatsApp inválido. Digite DDD + número (ex: 69912345678).")
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const res = await fetch(`${BASE_URL}/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          course_id:    enrollingCourse!.id,
+          name:         form.name.trim(),
+          cpf:          cpfDigits,
+          email:        form.email.trim().toLowerCase(),
+          whatsapp:     phone,
+          postal_code:  form.postal_code.replace(/\D/g, ""),
+          street:       form.street.trim(),
+          number:       form.number.trim(),
+          complement:   form.complement.trim(),
+          neighborhood: form.neighborhood.trim(),
+          city:         form.city.trim(),
+          state:        form.state.trim().toUpperCase(),
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.payment_url) {
+        window.location.href = data.payment_url
+      } else {
+        setFormError(data.error || "Erro ao processar inscrição. Tente novamente.")
+      }
+    } catch {
+      setFormError("Erro de conexão. Verifique sua internet e tente novamente.")
+    }
+    setSubmitting(false)
+  }
+
+  function openEnroll(course: ApiCourse) {
+    setEnrollingCourse(course)
+    setEnrollStep("choose")
+    setIsNewStudent(true)
+    setLookupCpf("")
+    setLookupError("")
+    setForm(emptyForm)
+    setFormError("")
+    setCpfTaken(null)
+    setEmailTaken(null)
+  }
+
+  useEffect(() => {
+    if (!isNewStudent || enrollStep !== "form") return
+    if (cpfDigitsLive.length !== 11 || !validateCpf(cpfDigitsLive)) { setCpfTaken(null); return }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`${BASE_URL}/checkout/check_availability?cpf=${cpfDigitsLive}`)
+        const data = await res.json()
+        setCpfTaken(data.cpf_taken)
+      } catch {}
+    }, 400)
+    return () => clearTimeout(t)
+  }, [form.cpf, enrollStep, isNewStudent])
+
+  useEffect(() => {
+    if (!isNewStudent || enrollStep !== "form") return
+    if (!emailValid) { setEmailTaken(null); return }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`${BASE_URL}/checkout/check_availability?email=${encodeURIComponent(form.email)}`)
+        const data = await res.json()
+        setEmailTaken(data.email_taken)
+      } catch {}
+    }, 600)
+    return () => clearTimeout(t)
+  }, [form.email, enrollStep, isNewStudent])
+
+  async function handleLookup(e: { preventDefault(): void }) {
+    e.preventDefault()
+    setLookupError("")
+    const digits = lookupCpf.replace(/\D/g, "")
+    if (!validateCpf(digits)) {
+      setLookupError("CPF inválido. Verifique os dígitos.")
+      return
+    }
+    setLookupLoading(true)
+    try {
+      const res = await fetch(`${BASE_URL}/checkout/student_lookup?cpf=${digits}`)
+      const data = await res.json()
+      if (data.found) {
+        setForm({
+          name:         data.name        ?? "",
+          email:        data.email       ?? "",
+          whatsapp:     data.whatsapp    ?? "",
+          cpf:          maskCpf(digits),
+          postal_code:  maskCep(data.postal_code  ?? ""),
+          street:       data.street       ?? "",
+          number:       data.number       ?? "",
+          complement:   data.complement   ?? "",
+          neighborhood: data.neighborhood ?? "",
+          city:         data.city         ?? "",
+          state:        data.state        ?? "",
+        })
+        setIsNewStudent(false)
+        setCpfTaken(null)
+        setEmailTaken(null)
+        setEnrollStep("form")
+      } else {
+        setLookupError("CPF não encontrado. Faça sua primeira matrícula como novo aluno.")
+      }
+    } catch {
+      setLookupError("Erro de conexão. Tente novamente.")
+    }
+    setLookupLoading(false)
+  }
+
+  const cpfDigitsLive   = form.cpf.replace(/\D/g, "")
+  const cpfValid: boolean | null   = cpfDigitsLive.length === 0 ? null : cpfDigitsLive.length < 11 ? null : validateCpf(cpfDigitsLive)
+  const emailValid: boolean | null = form.email.length === 0 ? null : /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)
+  const phoneDigitsLive = form.whatsapp.replace(/\D/g, "")
+  const phoneValid: boolean | null = phoneDigitsLive.length === 0 ? null : phoneDigitsLive.length < 10 ? null : phoneDigitsLive.length <= 11
+  const cepDigitsLive   = form.postal_code.replace(/\D/g, "")
+  const cepValid: boolean | null   = cepDigitsLive.length === 0 ? null : cepDigitsLive.length === 8 ? true : false
+  const nameValid: boolean | null  = form.name.trim().length === 0 ? null : true
+
+  const labelCls = "mb-1 block text-xs font-semibold text-[#9ca3af]"
 
   return (
     <div className="flex min-h-screen flex-col bg-[#0d0d0d] text-[#f1f1f1]">
@@ -136,7 +345,6 @@ export default function LandingPage() {
       {/* Navbar */}
       <header className="sticky top-0 z-50 border-b border-[#1e1e1e] bg-[#0d0d0d]/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-          {/* Brand */}
           <Image
             src="/images/tigre_sem_fundo.png"
             alt="Federal Cursos"
@@ -170,13 +378,11 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="relative overflow-hidden px-4 pb-16 pt-20 sm:px-6 lg:px-8">
-        {/* Background blobs */}
         <div className="pointer-events-none absolute right-[-10%] top-[-10%] h-[500px] w-[500px] rounded-full bg-[#e84a20]/8 blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 left-[-5%] h-72 w-72 rounded-full bg-[#e84a20]/5 blur-3xl" />
 
         <div className="relative mx-auto max-w-7xl">
           <div className="flex flex-col items-center text-center">
-            {/* Badge */}
             <span className="mb-8 inline-flex items-center gap-2 rounded-full border border-[#e84a20]/30 bg-[#e84a20]/10 px-4 py-1.5 text-sm font-medium text-[#e84a20]">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#e84a20] opacity-75" />
@@ -185,7 +391,6 @@ export default function LandingPage() {
               Turmas abertas para 2026
             </span>
 
-            {/* Logo em destaque */}
             <div className="mb-8 drop-shadow-2xl">
               <Image
                 src="/images/federal_cursos_sem_fundo.png"
@@ -225,7 +430,6 @@ export default function LandingPage() {
               </button>
             </div>
 
-            {/* Trust icons */}
             <div className="mt-10 flex flex-wrap items-center justify-center gap-6 text-xs text-[#6b7280]">
               <span className="flex items-center gap-1.5">
                 <ShieldCheck className="h-4 w-4 text-[#e84a20]" />
@@ -246,7 +450,6 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Stats */}
           <div className="mt-16 grid grid-cols-2 gap-4 sm:grid-cols-4">
             {[
               { value: "5.000+", label: "Alunos aprovados" },
@@ -254,10 +457,7 @@ export default function LandingPage() {
               { value: "98%", label: "Satisfação" },
               { value: "15 anos", label: "De experiência" },
             ].map((stat) => (
-              <div
-                key={stat.label}
-                className="rounded-xl border border-[#1e1e1e] bg-[#141414] p-6 text-center"
-              >
+              <div key={stat.label} className="rounded-xl border border-[#1e1e1e] bg-[#141414] p-6 text-center">
                 <div className="text-3xl font-black text-[#e84a20]">{stat.value}</div>
                 <div className="mt-1 text-xs text-[#9ca3af]">{stat.label}</div>
               </div>
@@ -269,119 +469,95 @@ export default function LandingPage() {
       {/* Courses Carousel */}
       <section id="cursos" className="border-t border-[#1e1e1e] px-4 py-20 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
-          {/* Section header */}
           <div className="mb-10 flex items-end justify-between">
             <div>
               <span className="mb-2 block text-xs font-bold uppercase tracking-widest text-[#e84a20]">
                 Turmas abertas
               </span>
-              <h2 className="text-3xl font-black text-white sm:text-4xl">
-                Cursos disponíveis
-              </h2>
-              <p className="mt-2 text-[#6b7280]">
-                Escolha sua área e comece hoje mesmo
-              </p>
+              <h2 className="text-3xl font-black text-white sm:text-4xl">Cursos online disponíveis</h2>
+              <p className="mt-2 text-[#6b7280]">Escolha sua área e comece hoje mesmo</p>
             </div>
-            {/* Carousel controls */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => scroll("prev")}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#2a2a2a] bg-[#141414] text-[#9ca3af] transition-all hover:border-[#e84a20] hover:text-[#e84a20]"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => scroll("next")}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#2a2a2a] bg-[#141414] text-[#9ca3af] transition-all hover:border-[#e84a20] hover:text-[#e84a20]"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
-            </div>
+            {allOnlineCourses.length > visibleCount && (
+              <div className="flex gap-2">
+                <button onClick={() => scroll("prev")} className="flex h-10 w-10 items-center justify-center rounded-full border border-[#2a2a2a] bg-[#141414] text-[#9ca3af] transition-all hover:border-[#e84a20] hover:text-[#e84a20]">
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button onClick={() => scroll("next")} className="flex h-10 w-10 items-center justify-center rounded-full border border-[#2a2a2a] bg-[#141414] text-[#9ca3af] transition-all hover:border-[#e84a20] hover:text-[#e84a20]">
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Carousel track */}
-          <div className="overflow-hidden">
-            <div
-              ref={trackRef}
-              className="flex gap-4 transition-transform duration-400 ease-in-out"
-              style={{ transform: `translateX(calc(-${current} * (100% / ${visibleCount} + 5.5px)))` }}
-            >
-              {cursos.map((curso, i) => (
+          {allOnlineCourses.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-[#1e1e1e] bg-[#141414] py-20 text-center">
+              <Monitor className="mb-4 h-10 w-10 text-[#3a3a3a]" />
+              <p className="text-[#6b7280]">Nenhum curso online disponível no momento.</p>
+              <p className="mt-1 text-sm text-[#3a3a3a]">Em breve novos cursos serão adicionados.</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-hidden">
                 <div
-                  key={i}
-                  className="min-w-[calc(33.333%-11px)] flex-shrink-0 overflow-hidden rounded-2xl border border-[#1e1e1e] bg-[#141414] transition-all hover:border-[#333] hover:-translate-y-1"
-                  style={{ ["--curso-cor" as string]: curso.cor }}
+                  ref={trackRef}
+                  className="flex gap-4 transition-transform duration-400 ease-in-out"
+                  style={{ transform: `translateX(calc(-${current} * (100% / ${visibleCount} + 5.5px)))` }}
                 >
-                  {/* Top color bar */}
-                  <div className="h-1 w-full" style={{ background: curso.cor }} />
-
-                  <div className="p-6">
-                    {/* Category + destaque */}
-                    <div className="mb-4 flex items-center justify-between">
-                      <span
-                        className="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide"
-                        style={{ background: `${curso.cor}20`, color: curso.cor }}
+                  {allOnlineCourses.map((curso, i) => {
+                    const cor = CAREER_COLORS[i % CAREER_COLORS.length]
+                    const career = careers.find(c => c.id === curso.career_id)
+                    return (
+                      <div
+                        key={curso.id}
+                        className="min-w-[calc(33.333%-11px)] flex-shrink-0 overflow-hidden rounded-2xl border border-[#1e1e1e] bg-[#141414] transition-all hover:border-[#333] hover:-translate-y-1"
                       >
-                        {curso.categoria}
-                      </span>
-                      {curso.destaque && (
-                        <span className="flex items-center gap-1 rounded-full bg-[#e84a20]/10 px-2.5 py-1 text-xs font-bold text-[#e84a20]">
-                          <Star className="h-3 w-3 fill-[#e84a20]" />
-                          Destaque
-                        </span>
-                      )}
-                    </div>
-
-                    <h3 className="mb-1 text-lg font-bold text-white">{curso.titulo}</h3>
-                    <p className="mb-4 text-sm text-[#6b7280]">{curso.nivel}</p>
-
-                    <div className="mb-5 space-y-2">
-                      <div className="flex items-center gap-2 text-sm text-[#9ca3af]">
-                        {curso.modalidade === "online"
-                          ? <Monitor className="h-4 w-4" style={{ color: curso.cor }} />
-                          : <MapPin className="h-4 w-4" style={{ color: curso.cor }} />}
-                        {curso.modalidade === "online" ? "Online" : "Presencial"}
+                        <div className="h-1 w-full" style={{ background: cor }} />
+                        <div className="p-6">
+                          <div className="mb-4 flex items-center justify-between">
+                            <span className="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide" style={{ background: `${cor}20`, color: cor }}>
+                              {career?.name ?? "Curso"}
+                            </span>
+                            <span className="flex items-center gap-1 rounded-full bg-[#1a1a1a] px-2.5 py-1 text-xs font-bold text-[#9ca3af]">
+                              <Monitor className="h-3 w-3 text-[#e84a20]" />
+                              Online
+                            </span>
+                          </div>
+                          <h3 className="mb-1 text-lg font-bold text-white">{curso.title}</h3>
+                          <p className="mb-4 line-clamp-2 text-sm text-[#6b7280]">{curso.description}</p>
+                          <div className="mb-5 space-y-2">
+                            <div className="flex items-center gap-2 text-sm text-[#9ca3af]">
+                              <Clock className="h-4 w-4" style={{ color: cor }} />
+                              {curso.duration_in_days} dias de acesso
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-[#9ca3af]">
+                              <BarChart className="h-4 w-4" style={{ color: cor }} />
+                              {formatPrice(curso.price)}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => openEnroll(curso)}
+                            className="flex w-full items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold text-white transition-all hover:brightness-110 cursor-pointer"
+                            style={{ background: cor }}
+                          >
+                            Quero me inscrever
+                            <ArrowRight className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-[#9ca3af]">
-                        <Clock className="h-4 w-4" style={{ color: curso.cor }} />
-                        Acesso conforme o curso
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-[#9ca3af]">
-                        <BarChart className="h-4 w-4" style={{ color: curso.cor }} />
-                        {curso.vagas}
-                      </div>
-                    </div>
-
-                    <a
-                      href="https://wa.me/5569993697213"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex w-full items-center justify-center gap-2 rounded-lg py-3 text-sm font-bold text-white transition-all hover:brightness-110"
-                      style={{ background: curso.cor }}
-                    >
-                      Quero me inscrever
-                      <ArrowRight className="h-4 w-4" />
-                    </a>
-                  </div>
+                    )
+                  })}
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Dots */}
-          <div className="mt-6 flex items-center justify-center gap-2">
-            {cursos.slice(0, cursos.length - visibleCount + 1).map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrent(i)}
-                className="h-2 rounded-full transition-all"
-                style={{
-                  width: current === i ? "24px" : "8px",
-                  background: current === i ? "#e84a20" : "#2a2a2a",
-                }}
-              />
-            ))}
-          </div>
+              </div>
+              {allOnlineCourses.length > visibleCount && (
+                <div className="mt-6 flex items-center justify-center gap-2">
+                  {allOnlineCourses.slice(0, allOnlineCourses.length - visibleCount + 1).map((_, i) => (
+                    <button key={i} onClick={() => setCurrent(i)} className="h-2 rounded-full transition-all"
+                      style={{ width: current === i ? "24px" : "8px", background: current === i ? "#e84a20" : "#2a2a2a" }} />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </section>
 
@@ -397,52 +573,20 @@ export default function LandingPage() {
 
           <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {[
-              {
-                icon: PlayCircle,
-                title: "Videoaulas exclusivas",
-                desc: "Aulas gravadas por professores especialistas, disponíveis 24h dentro da plataforma.",
-              },
-              {
-                icon: BookOpen,
-                title: "Material didático completo",
-                desc: "Apostilas, resumos e exercícios comentados para reforçar seu aprendizado.",
-              },
-              {
-                icon: GraduationCap,
-                title: "Equipe pedagógica dedicada",
-                desc: "Professores com experiência em aprovações e docência de referência nacional.",
-              },
-              {
-                icon: Award,
-                title: "Metodologia focada em resultados",
-                desc: "Desenvolvida para maximizar seu desempenho nas provas com eficiência.",
-              },
-              {
-                icon: ShieldCheck,
-                title: "Simulados e questões comentadas",
-                desc: "Pratique com questões de provas anteriores e gabarito comentado para fixar o conteúdo.",
-              },
-              {
-                icon: Users,
-                title: "Suporte personalizado",
-                desc: "Acompanhamento da equipe pedagógica durante toda a sua preparação.",
-                whatsapp: true,
-              },
+              { icon: PlayCircle, title: "Videoaulas exclusivas", desc: "Aulas gravadas por professores especialistas, disponíveis 24h dentro da plataforma." },
+              { icon: BookOpen, title: "Material didático completo", desc: "Apostilas, resumos e exercícios comentados para reforçar seu aprendizado." },
+              { icon: GraduationCap, title: "Equipe pedagógica dedicada", desc: "Professores com experiência em aprovações e docência de referência nacional." },
+              { icon: Award, title: "Metodologia focada em resultados", desc: "Desenvolvida para maximizar seu desempenho nas provas com eficiência." },
+              { icon: ShieldCheck, title: "Simulados e questões comentadas", desc: "Pratique com questões de provas anteriores e gabarito comentado para fixar o conteúdo." },
+              { icon: Users, title: "Suporte personalizado", desc: "Acompanhamento da equipe pedagógica durante toda a sua preparação.", whatsapp: true },
             ].map((f) => (
-              <div
-                key={f.title}
-                className="group rounded-xl border border-[#1e1e1e] bg-[#141414] p-6 transition-all hover:border-[#e84a20]/30 hover:-translate-y-0.5 flex flex-col"
-              >
+              <div key={f.title} className="group rounded-xl border border-[#1e1e1e] bg-[#141414] p-6 transition-all hover:border-[#e84a20]/30 hover:-translate-y-0.5 flex flex-col">
                 <f.icon className="mb-4 h-8 w-8 text-[#e84a20] transition-transform group-hover:scale-110" />
                 <h3 className="mb-2 font-bold text-white">{f.title}</h3>
                 <p className="text-sm text-[#6b7280] flex-1">{f.desc}</p>
                 {"whatsapp" in f && f.whatsapp && (
-                  <a
-                    href="https://wa.me/5569993697213"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-4 flex items-center justify-center gap-2 rounded-lg border border-[#e84a20]/40 py-2 text-xs font-bold text-[#e84a20] transition-all hover:bg-[#e84a20]/10"
-                  >
+                  <a href="https://wa.me/5569993697213" target="_blank" rel="noopener noreferrer"
+                    className="mt-4 flex items-center justify-center gap-2 rounded-lg border border-[#e84a20]/40 py-2 text-xs font-bold text-[#e84a20] transition-all hover:bg-[#e84a20]/10">
                     <Phone className="h-3.5 w-3.5" />
                     Falar no WhatsApp
                   </a>
@@ -451,12 +595,8 @@ export default function LandingPage() {
             ))}
           </div>
           <div className="text-center">
-            <a
-              href="https://wa.me/5569993697213"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-md bg-[#e84a20] px-8 py-4 text-sm font-bold uppercase tracking-wide text-white shadow-lg shadow-[#e84a20]/25 transition-all hover:bg-[#cc3f18] hover:-translate-y-0.5"
-            >
+            <a href="https://wa.me/5569993697213" target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-md bg-[#e84a20] px-8 py-4 text-sm font-bold uppercase tracking-wide text-white shadow-lg shadow-[#e84a20]/25 transition-all hover:bg-[#cc3f18] hover:-translate-y-0.5">
               <Phone className="h-4 w-4" />
               Falar com um consultor
             </a>
@@ -464,33 +604,92 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Areas */}
+      {/* Carreiras + Cursos filtráveis */}
       <section id="carreiras" className="border-t border-[#1e1e1e] px-4 py-20 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
-          <div className="mb-12 text-center">
-            <span className="mb-2 block text-xs font-bold uppercase tracking-widest text-[#e84a20]">
-              Áreas
-            </span>
+          <div className="mb-10 text-center">
+            <span className="mb-2 block text-xs font-bold uppercase tracking-widest text-[#e84a20]">Carreiras</span>
             <h2 className="text-3xl font-black text-white">Onde você quer se aprovar?</h2>
+            <p className="mt-2 text-[#6b7280]">Selecione uma carreira para filtrar os cursos online</p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { label: "Concursos Públicos", sub: "Federal, Estadual e Municipal", icon: Award },
-              { label: "OAB", sub: "1ª e 2ª fases", icon: BookOpen },
-              { label: "CFC", sub: "Conselho Federal de Contabilidade", icon: Calculator },
-              { label: "Bancários", sub: "BB, Caixa e outros", icon: BarChart },
-            ].map((area) => (
-              <div
-                key={area.label}
-                className="group flex flex-col items-center rounded-xl border border-[#1e1e1e] bg-[#141414] p-6 text-center transition-all hover:border-[#e84a20]/40 hover:-translate-y-0.5"
-              >
-                <area.icon className="mb-3 h-7 w-7 text-[#e84a20] transition-transform group-hover:scale-110" />
-                <h3 className="font-bold text-white">{area.label}</h3>
-                <p className="mt-1 text-xs text-[#6b7280]">{area.sub}</p>
+          {careers.length > 0 && (
+            <div className="mb-10 flex flex-wrap items-center justify-center gap-3">
+              <button onClick={() => setSelectedCareer(null)}
+                className="rounded-full border px-5 py-2 text-sm font-bold transition-all"
+                style={selectedCareer === null
+                  ? { background: "#e84a20", borderColor: "#e84a20", color: "#fff" }
+                  : { background: "transparent", borderColor: "#2a2a2a", color: "#9ca3af" }}>
+                Todos
+              </button>
+              {careers.map((career, ci) => {
+                const cor = CAREER_COLORS[ci % CAREER_COLORS.length]
+                const active = selectedCareer === career.id
+                return (
+                  <button key={career.id} onClick={() => setSelectedCareer(active ? null : career.id)}
+                    className="rounded-full border px-5 py-2 text-sm font-bold transition-all"
+                    style={active
+                      ? { background: cor, borderColor: cor, color: "#fff" }
+                      : { background: "transparent", borderColor: "#2a2a2a", color: "#9ca3af" }}>
+                    {career.name}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {allOnlineCourses.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-[#1e1e1e] bg-[#141414] py-20 text-center">
+              <BookOpen className="mb-4 h-10 w-10 text-[#3a3a3a]" />
+              <p className="text-[#6b7280]">Nenhum curso online disponível no momento.</p>
+            </div>
+          ) : (() => {
+            const filtered = selectedCareer ? (coursesByCareer[selectedCareer] ?? []) : allOnlineCourses
+            const careerMap = Object.fromEntries(careers.map((c, ci) => [c.id, { career: c, cor: CAREER_COLORS[ci % CAREER_COLORS.length] }]))
+
+            if (filtered.length === 0) return (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-[#1e1e1e] bg-[#141414] py-16 text-center">
+                <Monitor className="mb-4 h-10 w-10 text-[#3a3a3a]" />
+                <p className="text-[#6b7280]">Nenhum curso online nesta carreira ainda.</p>
               </div>
-            ))}
-          </div>
+            )
+
+            return (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {filtered.map((curso) => {
+                  const meta = curso.career_id ? careerMap[curso.career_id] : null
+                  const cor = meta?.cor ?? "#e84a20"
+                  return (
+                    <div key={curso.id} className="overflow-hidden rounded-xl border border-[#1e1e1e] bg-[#141414] transition-all hover:border-[#333] hover:-translate-y-0.5">
+                      <div className="h-1 w-full" style={{ background: cor }} />
+                      <div className="p-5">
+                        <div className="mb-3 flex items-center justify-between">
+                          <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: `${cor}20`, color: cor }}>
+                            {meta?.career.name ?? "Curso"}
+                          </span>
+                          <span className="flex items-center gap-1 text-xs text-[#9ca3af]">
+                            <Monitor className="h-3.5 w-3.5 text-[#e84a20]" /> Online
+                          </span>
+                        </div>
+                        <h4 className="mb-2 font-bold text-white">{curso.title}</h4>
+                        <p className="mb-4 line-clamp-2 text-sm text-[#6b7280]">{curso.description}</p>
+                        <div className="mb-4 flex items-center justify-between text-xs text-[#9ca3af]">
+                          <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{curso.duration_in_days} dias</span>
+                          <span className="font-bold text-white">{formatPrice(curso.price)}</span>
+                        </div>
+                        <button
+                          onClick={() => openEnroll(curso)}
+                          className="flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-bold text-white transition-all hover:brightness-110 cursor-pointer"
+                          style={{ background: cor }}>
+                          Quero me inscrever <ArrowRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </div>
       </section>
 
@@ -500,20 +699,11 @@ export default function LandingPage() {
           <div className="relative overflow-hidden rounded-2xl border border-[#e84a20]/20 bg-gradient-to-br from-[#1a0d09] via-[#141414] to-[#0d0d0d] p-12 text-center">
             <div className="pointer-events-none absolute right-0 top-0 h-64 w-64 rounded-full bg-[#e84a20]/10 blur-3xl" />
             <div className="pointer-events-none absolute bottom-0 left-0 h-40 w-40 rounded-full bg-[#e84a20]/5 blur-2xl" />
-
-            <span className="mb-4 block text-xs font-bold uppercase tracking-widest text-[#e84a20]">
-              Comece hoje
-            </span>
-            <h2 className="relative text-3xl font-black text-white sm:text-4xl">
-              Sua aprovação é o nosso objetivo
-            </h2>
-            <p className="relative mt-4 text-[#9ca3af]">
-              Junte-se a mais de 5.000 alunos aprovados. Acesse agora e comece sua preparação.
-            </p>
-            <Link
-              href="/login"
-              className="relative mt-8 inline-flex items-center gap-2 rounded-md bg-[#e84a20] px-10 py-4 text-sm font-bold uppercase tracking-wide text-white shadow-lg shadow-[#e84a20]/25 transition-all hover:bg-[#cc3f18] hover:-translate-y-0.5"
-            >
+            <span className="mb-4 block text-xs font-bold uppercase tracking-widest text-[#e84a20]">Comece hoje</span>
+            <h2 className="relative text-3xl font-black text-white sm:text-4xl">Sua aprovação é o nosso objetivo</h2>
+            <p className="relative mt-4 text-[#9ca3af]">Junte-se a mais de 5.000 alunos aprovados. Acesse agora e comece sua preparação.</p>
+            <Link href="/login"
+              className="relative mt-8 inline-flex items-center gap-2 rounded-md bg-[#e84a20] px-10 py-4 text-sm font-bold uppercase tracking-wide text-white shadow-lg shadow-[#e84a20]/25 transition-all hover:bg-[#cc3f18] hover:-translate-y-0.5">
               Acessar minha conta
               <ArrowRight className="h-4 w-4" />
             </Link>
@@ -524,8 +714,6 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="mt-auto border-t border-[#1e1e1e] px-4 py-10 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl space-y-6">
-
-          {/* Mobile footer */}
           <div className="sm:hidden space-y-5">
             <div className="rounded-2xl border border-[#1e1e1e] overflow-hidden divide-y divide-[#1e1e1e]">
               <a href="https://wa.me/5569993697213" target="_blank" rel="noopener noreferrer"
@@ -568,7 +756,6 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* Desktop footer */}
           <div className="hidden sm:flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-[#6b7280]">
             <a href="https://wa.me/5569993697213" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 transition-colors hover:text-white">
               <Phone className="h-4 w-4 text-[#e84a20]" />
@@ -602,6 +789,271 @@ export default function LandingPage() {
       </footer>
 
       <div className="h-1 w-full bg-gradient-to-r from-[#e84a20] via-[#ff6b3d] to-[#e84a20]" />
+
+      {/* Enrollment Modal */}
+      {enrollingCourse && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.85)" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setEnrollingCourse(null) }}
+        >
+          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-[#2a2a2a] bg-[#141414] shadow-2xl">
+            {/* Header */}
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#2a2a2a] bg-[#141414] px-6 py-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-[#e84a20]">Inscrição</p>
+                <h2 className="text-base font-black text-white leading-tight">{enrollingCourse.title}</h2>
+                <p className="text-xs text-[#6b7280] mt-0.5">{formatPrice(enrollingCourse.price)}</p>
+              </div>
+              <button onClick={() => setEnrollingCourse(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-[#2a2a2a] text-[#9ca3af] hover:border-[#e84a20] hover:text-white transition-colors">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Step: choose */}
+            {enrollStep === "choose" && (
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-[#9ca3af] text-center">Como você quer continuar?</p>
+                <button
+                  onClick={() => setEnrollStep("form")}
+                  className="flex w-full items-start gap-4 rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-5 text-left transition-all hover:border-[#e84a20]/60 hover:bg-[#1f1f1f] cursor-pointer group"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e84a20]/10 group-hover:bg-[#e84a20]/20 transition-colors">
+                    <Users className="h-5 w-5 text-[#e84a20]" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white">Primeira matrícula</p>
+                    <p className="mt-0.5 text-xs text-[#6b7280]">Ainda não tenho cadastro no Federal Cursos</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setEnrollStep("lookup")}
+                  className="flex w-full items-start gap-4 rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-5 text-left transition-all hover:border-green-500/60 hover:bg-[#1f1f1f] cursor-pointer group"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-500/10 group-hover:bg-green-500/20 transition-colors">
+                    <CheckCircle2 className="h-5 w-5 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white">Já sou aluno</p>
+                    <p className="mt-0.5 text-xs text-[#6b7280]">Já estudei no Federal Cursos — preenche automático</p>
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {/* Step: lookup */}
+            {enrollStep === "lookup" && (
+              <form onSubmit={handleLookup} className="p-6 space-y-4">
+                <p className="text-sm text-[#9ca3af]">Digite seu CPF para buscar seus dados cadastrados:</p>
+                <div>
+                  <label className={labelCls}>CPF *</label>
+                  <div className="relative">
+                    <input
+                      required autoFocus
+                      className={fieldCls(lookupCpf, lookupCpf.replace(/\D/g,"").length === 11 ? validateCpf(lookupCpf.replace(/\D/g,"")) : lookupCpf.length > 0 ? null : null)}
+                      placeholder="000.000.000-00"
+                      inputMode="numeric" maxLength={14}
+                      value={lookupCpf}
+                      onChange={e => { setLookupCpf(maskCpf(e.target.value)); setLookupError("") }}
+                    />
+                    <FieldIcon valid={lookupCpf.replace(/\D/g,"").length === 11 ? validateCpf(lookupCpf.replace(/\D/g,"")) : null} />
+                  </div>
+                  {lookupError && (
+                    <p className="mt-1.5 text-xs text-red-400">{lookupError}</p>
+                  )}
+                </div>
+                <button type="submit" disabled={lookupLoading}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#e84a20] py-3 text-sm font-bold text-white transition-all hover:bg-[#cc3f18] disabled:opacity-60 cursor-pointer">
+                  {lookupLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Buscando...</> : "Buscar meus dados"}
+                </button>
+                <button type="button" onClick={() => setEnrollStep("choose")}
+                  className="w-full text-center text-xs text-[#6b7280] hover:text-white transition-colors cursor-pointer">
+                  ← Voltar
+                </button>
+              </form>
+            )}
+
+            {/* Step: form */}
+            {enrollStep === "form" && <form onSubmit={handleEnrollSubmit} className="p-6 space-y-5">
+              {/* Dados pessoais */}
+              <div>
+                <p className="mb-3 text-xs font-bold uppercase tracking-widest text-[#6b7280]">Dados pessoais</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className={labelCls}>Nome completo *</label>
+                    <div className="relative">
+                      <input required className={fieldCls(form.name, nameValid)} placeholder="Seu nome completo"
+                        value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                      <FieldIcon valid={nameValid} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>CPF *</label>
+                      <div className="relative">
+                        <input required className={fieldCls(form.cpf, cpfValid)} placeholder="000.000.000-00"
+                          inputMode="numeric" maxLength={14}
+                          value={form.cpf}
+                          onChange={e => setForm(f => ({ ...f, cpf: maskCpf(e.target.value) }))} />
+                        <FieldIcon valid={cpfValid} />
+                      </div>
+                      {cpfValid === false && (
+                        <p className="mt-1 text-xs text-red-400">CPF inválido. Verifique os dígitos.</p>
+                      )}
+                      {cpfTaken === true && (
+                        <div className="mt-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                          Este CPF já possui cadastro.{" "}
+                          <button type="button" onClick={() => setEnrollStep("lookup")}
+                            className="font-bold underline hover:text-amber-300 cursor-pointer">
+                            Usar &quot;Já sou aluno&quot;
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className={labelCls}>WhatsApp *</label>
+                      <div className="relative">
+                        <input required className={fieldCls(form.whatsapp, phoneValid)} placeholder="(69) 99999-9999"
+                          inputMode="numeric" maxLength={15}
+                          value={form.whatsapp}
+                          onChange={e => setForm(f => ({ ...f, whatsapp: maskPhone(e.target.value) }))} />
+                        <FieldIcon valid={phoneValid} />
+                      </div>
+                      {phoneValid === false && (
+                        <p className="mt-1 text-xs text-red-400">Digite DDD + número (10 ou 11 dígitos).</p>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>E-mail *</label>
+                    <div className="relative">
+                      <input required type="email" className={fieldCls(form.email, emailValid)} placeholder="seu@email.com"
+                        value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+                      <FieldIcon valid={emailValid} />
+                    </div>
+                    {emailValid === false && (
+                      <p className="mt-1 text-xs text-red-400">E-mail inválido.</p>
+                    )}
+                    {emailTaken === true && (
+                      <div className="mt-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                        Este e-mail já possui cadastro.{" "}
+                        <button type="button" onClick={() => setEnrollStep("lookup")}
+                          className="font-bold underline hover:text-amber-300 cursor-pointer">
+                          Usar &quot;Já sou aluno&quot;
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Endereço */}
+              <div>
+                <p className="mb-3 text-xs font-bold uppercase tracking-widest text-[#6b7280]">Endereço</p>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>CEP *</label>
+                      <div className="relative">
+                        <input required className={fieldCls(form.postal_code, cepLoading ? null : cepValid)} placeholder="00000-000"
+                          inputMode="numeric" maxLength={9}
+                          value={form.postal_code}
+                          onChange={e => {
+                            const v = maskCep(e.target.value)
+                            setForm(f => ({ ...f, postal_code: v }))
+                            if (v.replace(/\D/g, "").length === 8) fetchCep(v)
+                          }} />
+                        {cepLoading
+                          ? <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-[#e84a20]" />
+                          : <FieldIcon valid={cepValid} />
+                        }
+                      </div>
+                      {!cepLoading && cepValid === false && (
+                        <p className="mt-1 text-xs text-red-400">CEP inválido. Digite 8 dígitos.</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className={labelCls}>Estado *</label>
+                      <div className="relative">
+                        <input required className={fieldCls(form.state, form.state.length === 2 ? true : form.state.length > 0 ? false : null)}
+                          placeholder="RO" maxLength={2}
+                          value={form.state}
+                          onChange={e => setForm(f => ({ ...f, state: e.target.value.toUpperCase() }))} />
+                        <FieldIcon valid={form.state.length === 2 ? true : form.state.length > 0 ? false : null} />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Cidade *</label>
+                    <div className="relative">
+                      <input required className={fieldCls(form.city, form.city.trim().length > 0 ? true : null)} placeholder="Porto Velho"
+                        value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
+                      <FieldIcon valid={form.city.trim().length > 0 ? true : null} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Bairro *</label>
+                    <div className="relative">
+                      <input required className={fieldCls(form.neighborhood, form.neighborhood.trim().length > 0 ? true : null)} placeholder="São Cristóvão"
+                        value={form.neighborhood} onChange={e => setForm(f => ({ ...f, neighborhood: e.target.value }))} />
+                      <FieldIcon valid={form.neighborhood.trim().length > 0 ? true : null} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-2">
+                      <label className={labelCls}>Rua / Logradouro *</label>
+                      <div className="relative">
+                        <input required className={fieldCls(form.street, form.street.trim().length > 0 ? true : null)} placeholder="R. Getúlio Vargas"
+                          value={form.street} onChange={e => setForm(f => ({ ...f, street: e.target.value }))} />
+                        <FieldIcon valid={form.street.trim().length > 0 ? true : null} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Número *</label>
+                      <div className="relative">
+                        <input required className={fieldCls(form.number, form.number.trim().length > 0 ? true : null)} placeholder="2634"
+                          value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value }))} />
+                        <FieldIcon valid={form.number.trim().length > 0 ? true : null} />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Complemento</label>
+                    <input
+                      className="w-full rounded-lg border border-[#2a2a2a] bg-[#0d0d0d] px-3 py-2.5 text-sm text-white placeholder-[#4a4a4a] outline-none focus:border-[#e84a20] transition-colors"
+                      placeholder="Apto, sala, bloco..."
+                      value={form.complement} onChange={e => setForm(f => ({ ...f, complement: e.target.value }))} />
+                  </div>
+                </div>
+              </div>
+
+              {formError && (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                  {formError}
+                </div>
+              )}
+
+              <div className="flex items-center gap-1.5 text-xs text-[#6b7280]">
+                <ShieldCheck className="h-3.5 w-3.5 text-[#e84a20] shrink-0" />
+                Pagamento processado com segurança via NuPay / Nubank
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#e84a20] py-3.5 text-sm font-bold text-white transition-all hover:bg-[#cc3f18] disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {submitting ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Processando...</>
+                ) : (
+                  <>Ir para pagamento <ArrowRight className="h-4 w-4" /></>
+                )}
+              </button>
+            </form>}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

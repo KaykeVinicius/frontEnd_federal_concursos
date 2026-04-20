@@ -251,7 +251,7 @@ export default function CeoCarreirasPage() {
                   </Label>
                   <Input
                     id="create-name"
-                    placeholder="Ex: Engenharia de Software"
+                    placeholder="Ex: Língua Portuguesa"
                     value={createName}
                     onChange={(e) => setCreateName(e.target.value)}
                     required

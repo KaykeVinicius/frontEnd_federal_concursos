@@ -236,7 +236,7 @@ function NovaAulaForm({ topicId, currentLessonsCount, onAdded }: { topicId: numb
   }
 
   async function submit() {
-    if (!titulo.trim()) return
+    if (!titulo.trim()) { setError("O título da aula é obrigatório."); return }
     const youtubeId = url.trim() ? extractYoutubeId(url.trim()) : undefined
     if (url.trim() && !youtubeId) { setError("Link do YouTube inválido."); return }
     setSaving(true); setError("")
@@ -283,7 +283,7 @@ function NovaAulaForm({ topicId, currentLessonsCount, onAdded }: { topicId: numb
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex gap-2">
-        <Button size="sm" className="h-8 gap-1" onClick={submit} disabled={saving || !titulo.trim()}>
+        <Button size="sm" className="h-8 gap-1" onClick={submit} disabled={saving}>
           {saving && <Loader2 className="h-3 w-3 animate-spin" />} Adicionar Aula
         </Button>
         <Button size="sm" variant="ghost" className="h-8" onClick={() => { setShow(false); setUrl(""); setDuracao(""); setError("") }} disabled={saving}>Cancelar</Button>
@@ -472,7 +472,7 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
           setDeleting(true)
           setDeleteError(null)
           try {
-            await onDelete()
+            onDelete()
             setConfirmDelete(false)
           } catch (err) {
             setDeleteError(err instanceof Error ? err.message : "Erro ao excluir disciplina.")
@@ -810,9 +810,11 @@ function NovoCursoForm({ onCreated, onCancel }: {
       fd.append("price", String(parseFloat(price) || 0))
       fd.append("status", status)
       fd.append("access_type", accessType)
-      fd.append("duration_in_days", String(parseInt(durationDays) || 0))
-      if (startDate) fd.append("start_date", startDate)
-      if (endDate) fd.append("end_date", endDate)
+      if (accessType !== "online") {
+        fd.append("duration_in_days", String(parseInt(durationDays) || 0))
+        if (startDate) fd.append("start_date", startDate)
+        if (endDate) fd.append("end_date", endDate)
+      }
       if (careerId) fd.append("career_id", careerId)
       if ((accessType === "online" || accessType === "hibrido") && onlineUrl.trim()) fd.append("online_url", onlineUrl.trim())
       if (accessType === "presencial" && workloadHours) fd.append("workload_hours", workloadHours)
@@ -830,7 +832,7 @@ function NovoCursoForm({ onCreated, onCancel }: {
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2 space-y-1">
           <Label className="text-xs">Título *</Label>
-          <Input placeholder="Ex: Reta Final - Assembleia Legislativa RO" value={title} onChange={(e) => setTitle(e.target.value)} disabled={saving} />
+          <Input placeholder="Ex: Preparatório para Concurso Público" value={title} onChange={(e) => setTitle(e.target.value)} disabled={saving} />
         </div>
         <div className="sm:col-span-2 space-y-1">
           <Label className="text-xs">Descrição</Label>
@@ -849,18 +851,27 @@ function NovoCursoForm({ onCreated, onCancel }: {
           <Label className="text-xs flex items-center gap-1"><DollarSign className="h-3 w-3" /> Preço (R$)</Label>
           <Input type="number" placeholder="450.00" value={price} onChange={(e) => setPrice(e.target.value)} disabled={saving} />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs flex items-center gap-1"><Clock className="h-3 w-3" /> Duração (dias)</Label>
-          <Input type="number" placeholder="30" value={durationDays} onChange={(e) => setDurationDays(e.target.value)} disabled={saving} />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Data Início</Label>
-          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} disabled={saving} />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Data Fim</Label>
-          <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} disabled={saving} />
-        </div>
+        {accessType !== "online" && (
+          <>
+            <div className="space-y-1">
+              <Label className="text-xs flex items-center gap-1"><Clock className="h-3 w-3" /> Duração (dias)</Label>
+              <Input type="number" placeholder="30" value={durationDays} onChange={(e) => setDurationDays(e.target.value)} disabled={saving} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Data Início</Label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} disabled={saving} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs flex items-center gap-1"><Calendar className="h-3 w-3" /> Data Fim</Label>
+              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} disabled={saving} />
+            </div>
+          </>
+        )}
+        {accessType === "online" && (
+          <div className="sm:col-span-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-400">
+            ⏱ Curso online: a duração e o prazo de acesso são definidos na matrícula do aluno, contados a partir da data de contratação.
+          </div>
+        )}
         <div className="space-y-1">
           <Label className="text-xs">Status</Label>
           <select value={status} onChange={(e) => setStatus(e.target.value as "draft" | "published")}
