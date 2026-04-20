@@ -21,16 +21,16 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 
 const navItems = [
-  { href: "/professor", label: "Início", icon: LayoutDashboard },
-  { href: "/professor/turmas", label: "Minhas Turmas", icon: Users },
-  { href: "/professor/cursos", label: "Cursos", icon: BookOpen },
-  { href: "/professor/duvidas", label: "Dúvidas", icon: HelpCircle },
-  { href: "/professor/materiais", label: "Materiais", icon: FolderOpen },
-  { href: "/professor/eventos", label: "Eventos", icon: CalendarDays },
-  { href: "/professor/eventos/auloes", label: "Aulões — PDFs", icon: FolderOpen },
-  { href: "/professor/agenda",        label: "Agenda",        icon: CalendarRange },
-  { href: "/professor/avisos",        label: "Avisos",        icon: Megaphone },
-  { href: "/professor/configuracoes", label: "Configurações", icon: Settings },
+  { href: "/professor",               label: "Início",         icon: LayoutDashboard },
+  { href: "/professor/turmas",        label: "Minhas Turmas",  icon: Users },
+  { href: "/professor/cursos",        label: "Cursos",         icon: BookOpen },
+  { href: "/professor/materiais",      label: "Materiais Presencial", icon: FolderOpen },
+  { href: "/professor/duvidas",        label: "Dúvidas",              icon: HelpCircle },
+  { href: "/professor/eventos",        label: "Eventos",              icon: CalendarDays },
+  { href: "/professor/eventos/auloes", label: "Materiais para Eventos", icon: FolderOpen },
+  { href: "/professor/agenda",        label: "Agenda",         icon: CalendarRange },
+  { href: "/professor/avisos",        label: "Avisos",         icon: Megaphone },
+  { href: "/professor/configuracoes", label: "Configurações",  icon: Settings },
 ]
 
 export function ProfessorSidebar() {

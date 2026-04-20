@@ -10,11 +10,31 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { api, type ApiUser, type ApiSubject, type ApiUserType } from "@/lib/api"
+import { isValidCpf } from "@/lib/cpf"
 import {
   Users, Plus, Search, Settings, UserCheck, UserX, Crown, Briefcase,
   GraduationCap, BookOpen, User, Filter, BarChart3, Shield,
-  CheckCircle, XCircle, Percent, Mail, Loader2, Layers, Pencil, Trash2,
+  CheckCircle, XCircle, Percent, Mail, Loader2,
 } from "lucide-react"
+
+const applyCpfMask = (value: string) => {
+  const n = value.replace(/\D/g, "").slice(0, 11)
+  if (n.length <= 3) return n
+  if (n.length <= 6) return n.replace(/(\d{3})(\d+)/, "$1.$2")
+  if (n.length <= 9) return n.replace(/(\d{3})(\d{3})(\d+)/, "$1.$2.$3")
+  return n.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, "$1.$2.$3-$4")
+}
+
+function fieldClass(value: string, isValid: boolean | null): string {
+  if (!value) return ""
+  if (isValid === true) return "border-green-500 focus-visible:ring-green-500"
+  if (isValid === false) return "border-red-500 focus-visible:ring-red-500"
+  return ""
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
 
 export default function CeoUsuariosPage() {
   const [users, setUsers] = useState<ApiUser[]>([])
@@ -81,15 +101,6 @@ export default function CeoUsuariosPage() {
   function toggleProfSubject(id: number) {
     setProfSubjectIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
   }
-
-  // Tipos de usuário — CRUD
-  const [isTypeModalOpen, setIsTypeModalOpen] = useState(false)
-  const [editingType, setEditingType] = useState<ApiUserType | null>(null)
-  const [typeName, setTypeName] = useState("")
-  const [typeSlug, setTypeSlug] = useState("")
-  const [typeDescription, setTypeDescription] = useState("")
-  const [savingType, setSavingType] = useState(false)
-  const [typeError, setTypeError] = useState("")
 
   const fetchUsers = useCallback((q?: string, typeId?: string, status?: string) => {
     const ransackQ: Record<string, string> = {}
@@ -161,13 +172,21 @@ export default function CeoUsuariosPage() {
   async function handleCreateUser(e: { preventDefault(): void }) {
     e.preventDefault()
     if (!createName || !createEmail || !createCpf || !createPassword || !createUserTypeId) return
-    setSaving(true)
     setCreateError("")
+    if (!isValidEmail(createEmail)) {
+      setCreateError("E-mail inválido. Verifique o formato e tente novamente.")
+      return
+    }
+    if (!isValidCpf(createCpf)) {
+      setCreateError("CPF inválido. Verifique os dígitos e tente novamente.")
+      return
+    }
+    setSaving(true)
     try {
       const newUser = await api.users.create({
         name: createName,
         email: createEmail,
-        cpf: createCpf,
+        cpf: createCpf.replace(/\D/g, ""),
         password: createPassword,
         user_type_id: createUserTypeId,
         commission_percent: selectedUserType?.slug === "assistente_comercial" ? createCommission : undefined,
@@ -216,63 +235,6 @@ export default function CeoUsuariosPage() {
     setCreateError("")
     setNewSubjectName("")
     setAddingSubject(false)
-  }
-
-  // ── User Type CRUD ────────────────────────────────────────
-  function openCreateType() {
-    setEditingType(null)
-    setTypeName("")
-    setTypeSlug("")
-    setTypeDescription("")
-    setTypeError("")
-    setIsTypeModalOpen(true)
-  }
-
-  function openEditType(ut: ApiUserType) {
-    setEditingType(ut)
-    setTypeName(ut.name)
-    setTypeSlug(ut.slug)
-    setTypeDescription(ut.description ?? "")
-    setTypeError("")
-    setIsTypeModalOpen(true)
-  }
-
-  async function handleSaveType(e: { preventDefault(): void }) {
-    e.preventDefault()
-    if (!typeName.trim() || !typeSlug.trim()) return
-    setSavingType(true)
-    setTypeError("")
-    try {
-      if (editingType) {
-        const updated = await api.userTypes.update(editingType.id, {
-          name: typeName.trim(),
-          description: typeDescription.trim() || undefined,
-        })
-        setUserTypes((prev) => prev.map((ut) => (ut.id === updated.id ? updated : ut)))
-      } else {
-        const created = await api.userTypes.create({
-          name: typeName.trim(),
-          slug: typeSlug.trim(),
-          description: typeDescription.trim() || undefined,
-        })
-        setUserTypes((prev) => [...prev, created])
-      }
-      setIsTypeModalOpen(false)
-    } catch (err) {
-      setTypeError(err instanceof Error ? err.message : "Erro ao salvar")
-    } finally {
-      setSavingType(false)
-    }
-  }
-
-  async function handleDeleteType(ut: ApiUserType) {
-    if (!confirm(`Excluir tipo "${ut.name}"? Isso não é permitido se houver usuários vinculados.`)) return
-    try {
-      await api.userTypes.delete(ut.id)
-      setUserTypes((prev) => prev.filter((t) => t.id !== ut.id))
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Erro ao excluir")
-    }
   }
 
   const getRoleColor = (slug: string) => {
@@ -412,11 +374,11 @@ export default function CeoUsuariosPage() {
                                 {user.user_type?.name ?? user.role}
                               </Badge>
                               {user.active ? (
-                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex-shrink-0">
+                                <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30 flex-shrink-0">
                                   <CheckCircle className="h-3 w-3 mr-1" />Ativo
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 flex-shrink-0">
+                                <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/30 flex-shrink-0">
                                   <XCircle className="h-3 w-3 mr-1" />Inativo
                                 </Badge>
                               )}
@@ -440,7 +402,7 @@ export default function CeoUsuariosPage() {
                             {utSlug === "professor" && userSubjects.length > 0 && (
                               <div className="mt-1.5 flex flex-wrap gap-1">
                                 {userSubjects.map((s) => (
-                                  <span key={s.id} className="rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-[11px] text-green-700">
+                                  <span key={s.id} className="rounded-full bg-green-500/10 border border-green-500/30 px-2 py-0.5 text-[11px] text-green-500">
                                     {s.name}
                                   </span>
                                 ))}
@@ -450,7 +412,7 @@ export default function CeoUsuariosPage() {
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {utSlug === "professor" && (
-                            <Button variant="outline" size="sm" onClick={() => openEditSubjects(user)} className="border-green-200 text-green-700 hover:border-green-500 hover:bg-green-50">
+                            <Button variant="outline" size="sm" onClick={() => openEditSubjects(user)} className="border-green-500/30 text-green-500 hover:border-green-500 hover:bg-green-500/10">
                               <BookOpen className="h-3 w-3 mr-1" />Matérias
                             </Button>
                           )}
@@ -484,54 +446,6 @@ export default function CeoUsuariosPage() {
               )}
             </Card>
 
-            {/* Tipos de Usuário Table */}
-            <Card className="overflow-hidden">
-              <div className="border-b bg-gray-50/50 px-6 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-indigo-100 p-2">
-                    <Layers className="h-5 w-5 text-indigo-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground">Tipos de Usuário</h3>
-                    <p className="text-sm text-muted-foreground">Perfis de acesso vinculados aos usuários</p>
-                  </div>
-                </div>
-                <Button size="sm" onClick={openCreateType} className="bg-[#e8491d] hover:bg-[#d13a0f] text-white">
-                  <Plus className="h-4 w-4 mr-2" />Novo Tipo
-                </Button>
-              </div>
-
-              {loading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                </div>
-              ) : (
-                <div className="divide-y">
-                  {userTypes.map((ut) => (
-                    <div key={ut.id} className="flex items-center justify-between p-4 hover:bg-gray-50/50">
-                      <div className="flex items-center gap-4">
-                        <Badge className={`text-xs ${getRoleColor(ut.slug)}`}>{ut.slug}</Badge>
-                        <div>
-                          <p className="font-medium text-foreground">{ut.name}</p>
-                          {ut.description && (
-                            <p className="text-sm text-muted-foreground">{ut.description}</p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm text-muted-foreground">{ut.users_count} usuário{ut.users_count !== 1 ? "s" : ""}</span>
-                        <Button variant="ghost" size="sm" onClick={() => openEditType(ut)} className="hover:text-[#e8491d]">
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteType(ut)} className="hover:text-red-600" disabled={ut.users_count > 0}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
           </div>
 
           {/* Sidebar */}
@@ -547,7 +461,7 @@ export default function CeoUsuariosPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {userTypes.map((ut) => (
-                  <div key={ut.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                  <div key={ut.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{ut.name}</span>
                     </div>
@@ -609,14 +523,14 @@ export default function CeoUsuariosPage() {
                   <Label htmlFor="create-email" className="text-sm font-medium mb-2 block">
                     <Mail className="h-4 w-4 inline mr-2" />E-mail *
                   </Label>
-                  <Input id="create-email" type="email" placeholder="usuario@email.com" value={createEmail} onChange={(e) => setCreateEmail(e.target.value)} required className="border-gray-200 focus:border-[#e8491d]" />
+                  <Input id="create-email" type="email" placeholder="usuario@email.com" value={createEmail} onChange={(e) => setCreateEmail(e.target.value)} required className={fieldClass(createEmail, createEmail ? isValidEmail(createEmail) : null) || "border-gray-200 focus:border-[#e8491d]"} />
                 </div>
 
                 <div>
                   <Label htmlFor="create-cpf" className="text-sm font-medium mb-2 block">
                     <Shield className="h-4 w-4 inline mr-2" />CPF *
                   </Label>
-                  <Input id="create-cpf" placeholder="000.000.000-00" value={createCpf} onChange={(e) => setCreateCpf(e.target.value)} required className="border-gray-200 focus:border-[#e8491d]" />
+                  <Input id="create-cpf" placeholder="000.000.000-00" value={createCpf} onChange={(e) => setCreateCpf(applyCpfMask(e.target.value))} inputMode="numeric" maxLength={14} required className={fieldClass(createCpf, createCpf ? isValidCpf(createCpf) : null) || "border-gray-200 focus:border-[#e8491d]"} />
                 </div>
 
                 <div>
@@ -639,7 +553,7 @@ export default function CeoUsuariosPage() {
                       {userTypes.filter((ut) => ut.active).map((ut) => (
                         <SelectItem key={ut.id} value={String(ut.id)}>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-mono">{ut.slug}</span>
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">{ut.slug}</span>
                             {ut.name}
                           </div>
                         </SelectItem>
@@ -695,7 +609,7 @@ export default function CeoUsuariosPage() {
                         const s = subjects.find((s) => s.id === id)
                         if (!s) return null
                         return (
-                          <span key={id} className="flex items-center gap-1 rounded-full bg-green-50 border border-green-200 px-3 py-1 text-sm text-green-800">
+                          <span key={id} className="flex items-center gap-1 rounded-full bg-green-500/10 border border-green-500/30 px-3 py-1 text-sm text-green-500">
                             {s.name}
                             <button type="button" onClick={() => toggleSubject(id)} className="ml-1 text-green-600 hover:text-red-500">
                               <XCircle className="h-3.5 w-3.5" />
@@ -781,7 +695,7 @@ export default function CeoUsuariosPage() {
                     const checked = profSubjectIds.includes(s.id)
                     const otherProf = s.professor_id && s.professor_id !== editingProfessor?.id
                     return (
-                      <label key={s.id} className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${checked ? "border-green-300 bg-green-50" : "border-border hover:bg-muted/50"}`}>
+                      <label key={s.id} className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${checked ? "border-green-500 bg-green-500/10" : "border-border hover:bg-muted/50"}`}>
                         <input
                           type="checkbox"
                           checked={checked}
@@ -813,60 +727,6 @@ export default function CeoUsuariosPage() {
           </DialogContent>
         </Dialog>
 
-        {/* User Type Modal */}
-        <Dialog open={isTypeModalOpen} onOpenChange={(open) => { if (!open) { setEditingType(null); setTypeError("") }; setIsTypeModalOpen(open) }}>
-          <DialogContent className="max-w-md">
-            <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 p-6 rounded-t-lg">
-              <DialogHeader>
-                <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
-                  <Layers className="h-5 w-5" />
-                  {editingType ? "Editar Tipo de Usuário" : "Novo Tipo de Usuário"}
-                </DialogTitle>
-                <DialogDescription className="text-indigo-100">
-                  {editingType ? "Altere o nome ou descrição" : "Crie um novo tipo vinculado a um perfil de acesso"}
-                </DialogDescription>
-              </DialogHeader>
-            </div>
-
-            <form onSubmit={handleSaveType} className="p-6 space-y-4">
-              <div>
-                <Label className="text-sm font-medium mb-2 block">Nome *</Label>
-                <Input placeholder="Ex: Equipe Pedagógica" value={typeName} onChange={(e) => setTypeName(e.target.value)} required />
-              </div>
-
-              {!editingType && (
-                <div>
-                  <Label className="text-sm font-medium mb-2 block">Slug (perfil de acesso) *</Label>
-                  <Select value={typeSlug} onValueChange={setTypeSlug}>
-                    <SelectTrigger><SelectValue placeholder="Selecione o perfil" /></SelectTrigger>
-                    <SelectContent>
-                      {["ceo", "assistente_comercial", "equipe_pedagogica", "professor", "aluno", "diretor"].map((s) => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1">Define quais telas e permissões esse tipo terá.</p>
-                </div>
-              )}
-
-              <div>
-                <Label className="text-sm font-medium mb-2 block">Descrição</Label>
-                <Input placeholder="Descrição opcional" value={typeDescription} onChange={(e) => setTypeDescription(e.target.value)} />
-              </div>
-
-              {typeError && <p className="text-sm text-destructive">{typeError}</p>}
-
-              <div className="flex gap-3 pt-2">
-                <Button type="button" variant="outline" onClick={() => setIsTypeModalOpen(false)} className="flex-1">
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={savingType} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white">
-                  {savingType ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Salvando...</> : "Salvar"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   )

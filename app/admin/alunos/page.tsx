@@ -7,10 +7,43 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Plus, Search, Eye, Loader2, Trash2, AlertTriangle, Pencil, User, Mail, CreditCard, Phone, AtSign, BookOpen, ShieldCheck, Settings2, FileSpreadsheet, Printer, Filter } from "lucide-react"
+import { Plus, Search, Eye, Loader2, Trash2, Pencil, User, Mail, CreditCard, Phone, AtSign, BookOpen, ShieldCheck, Settings2, FileSpreadsheet, Printer, Filter, Send } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { api, type ApiStudent, type ApiEnrollment } from "@/lib/api"
 import { NewEnrollmentDialog } from "@/components/new-enrollment-dialog"
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog"
+import { isValidCpf } from "@/lib/cpf"
+
+const applyCpfMask = (value: string) => {
+  const n = value.replace(/\D/g, "").slice(0, 11)
+  if (n.length <= 3) return n
+  if (n.length <= 6) return n.replace(/(\d{3})(\d+)/, "$1.$2")
+  if (n.length <= 9) return n.replace(/(\d{3})(\d{3})(\d+)/, "$1.$2.$3")
+  return n.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, "$1.$2.$3-$4")
+}
+
+const applyPhoneMask = (value: string) => {
+  const n = value.replace(/\D/g, "").slice(0, 11)
+  if (n.length <= 2) return n
+  if (n.length <= 7) return n.replace(/(\d{2})(\d+)/, "($1) $2")
+  return n.replace(/(\d{2})(\d{5})(\d+)/, "($1) $2-$3")
+}
+
+function fieldClass(value: string, isValid: boolean | null): string {
+  if (!value) return ""
+  if (isValid === true) return "border-green-500 focus-visible:ring-green-500"
+  if (isValid === false) return "border-red-500 focus-visible:ring-red-500"
+  return ""
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+function isValidPhone(phone: string) {
+  const d = phone.replace(/\D/g, "")
+  return d.length === 10 || d.length === 11
+}
 
 const enrollmentStatusLabels: Record<string, string> = { active: "Ativa", canceled: "Cancelada", expired: "Expirada" }
 const enrollmentStatusColors: Record<string, string> = {
@@ -44,9 +77,14 @@ export default function AlunosPage() {
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState("")
 
-  // Delete student
-  const [confirmDeleteStudentId, setConfirmDeleteStudentId] = useState<number | null>(null)
-  const [deletingStudentId, setDeletingStudentId] = useState<number | null>(null)
+  // Delete student modal
+  const [deleteStudentTarget, setDeleteStudentTarget] = useState<ApiStudent | null>(null)
+  const [deletingStudent, setDeletingStudent] = useState(false)
+  const [deleteStudentError, setDeleteStudentError] = useState<string | null>(null)
+
+  // Resend enrollment email
+  const [resendingEmailId, setResendingEmailId] = useState<number | null>(null)
+  const [resendSuccess, setResendSuccess] = useState<number | null>(null)
 
   function openEditDialog(student: ApiStudent) {
     setEditStudent(student)
@@ -61,14 +99,23 @@ export default function AlunosPage() {
   async function handleEditSave(e: { preventDefault(): void }) {
     e.preventDefault()
     if (!editStudent) return
-    setEditSaving(true)
     setEditError("")
+    if (!isValidCpf(editCpf)) {
+      setEditError("CPF inválido. Verifique os dígitos e tente novamente.")
+      return
+    }
+    const phoneDigits = editWhatsapp.replace(/\D/g, "")
+    if (phoneDigits.length > 0 && (phoneDigits.length < 10 || phoneDigits.length > 11)) {
+      setEditError("WhatsApp inválido. Digite DDD + número (10 ou 11 dígitos).")
+      return
+    }
+    setEditSaving(true)
     try {
       const updated = await api.students.update(editStudent.id, {
         name: editName,
         email: editEmail,
-        cpf: editCpf,
-        whatsapp: editWhatsapp || undefined,
+        cpf: editCpf.replace(/\D/g, ""),
+        whatsapp: editWhatsapp.replace(/\D/g, "") || undefined,
         instagram: editInstagram || undefined,
       })
       setStudents((prev) => prev.map((s) => s.id === updated.id ? updated : s))
@@ -80,16 +127,32 @@ export default function AlunosPage() {
     }
   }
 
-  async function handleDeleteStudent(studentId: number) {
-    setDeletingStudentId(studentId)
+  async function handleDeleteStudent() {
+    if (!deleteStudentTarget) return
+    setDeletingStudent(true)
+    setDeleteStudentError(null)
     try {
-      await api.students.delete(studentId)
-      setStudents((prev) => prev.filter((s) => s.id !== studentId))
-      setConfirmDeleteStudentId(null)
+      await api.students.delete(deleteStudentTarget.id)
+      setStudents((prev) => prev.filter((s) => s.id !== deleteStudentTarget.id))
+      setDeleteStudentTarget(null)
+    } catch (err) {
+      setDeleteStudentError(err instanceof Error ? err.message : "Erro ao excluir aluno.")
+    } finally {
+      setDeletingStudent(false)
+    }
+  }
+
+  async function handleResendEmail(enrollmentId: number) {
+    setResendingEmailId(enrollmentId)
+    setResendSuccess(null)
+    try {
+      await api.enrollments.resendEmail(enrollmentId)
+      setResendSuccess(enrollmentId)
+      setTimeout(() => setResendSuccess(null), 3000)
     } catch (err) {
       console.error(err)
     } finally {
-      setDeletingStudentId(null)
+      setResendingEmailId(null)
     }
   }
 
@@ -300,28 +363,12 @@ export default function AlunosPage() {
                                 <Pencil className="h-4 w-4" /> Editar
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              {hasEnrollmentInTurma ? (
-                                <DropdownMenuItem disabled className="gap-2 text-muted-foreground cursor-not-allowed">
-                                  <Trash2 className="h-4 w-4" /> Excluir (vinculado a turma)
-                                </DropdownMenuItem>
-                              ) : confirmDeleteStudentId === student.id ? (
-                                <DropdownMenuItem
-                                  onClick={() => handleDeleteStudent(student.id)}
-                                  disabled={deletingStudentId === student.id}
-                                  className="gap-2 cursor-pointer text-destructive focus:text-destructive"
-                                >
-                                  {deletingStudentId === student.id
-                                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Excluindo...</>
-                                    : <><AlertTriangle className="h-4 w-4" /> Confirmar exclusão</>}
-                                </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem
-                                  onClick={() => setConfirmDeleteStudentId(student.id)}
-                                  className="gap-2 cursor-pointer text-destructive focus:text-destructive"
-                                >
-                                  <Trash2 className="h-4 w-4" /> Excluir
-                                </DropdownMenuItem>
-                              )}
+                              <DropdownMenuItem
+                                onClick={() => { setDeleteStudentTarget(student); setDeleteStudentError(null) }}
+                                className="gap-2 cursor-pointer text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" /> Excluir
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </td>
@@ -363,18 +410,38 @@ export default function AlunosPage() {
                 <Input value={editName} onChange={(e) => setEditName(e.target.value)} required />
               </div>
               <div className="space-y-2">
-                <Label>CPF</Label>
-                <Input placeholder="000.000.000-00" value={editCpf} onChange={(e) => setEditCpf(e.target.value)} />
+                <Label>CPF *</Label>
+                <Input
+                  placeholder="000.000.000-00"
+                  value={editCpf}
+                  onChange={(e) => setEditCpf(applyCpfMask(e.target.value))}
+                  inputMode="numeric"
+                  maxLength={14}
+                  className={fieldClass(editCpf, editCpf ? isValidCpf(editCpf) : null)}
+                />
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Email *</Label>
-                <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} required />
+                <Input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className={fieldClass(editEmail, editEmail ? isValidEmail(editEmail) : null)}
+                  required
+                />
               </div>
               <div className="space-y-2">
                 <Label>WhatsApp</Label>
-                <Input placeholder="(00) 00000-0000" value={editWhatsapp} onChange={(e) => setEditWhatsapp(e.target.value)} />
+                <Input
+                  placeholder="(00) 00000-0000"
+                  value={editWhatsapp}
+                  onChange={(e) => setEditWhatsapp(applyPhoneMask(e.target.value))}
+                  inputMode="numeric"
+                  maxLength={15}
+                  className={fieldClass(editWhatsapp, editWhatsapp ? isValidPhone(editWhatsapp) : null)}
+                />
               </div>
             </div>
             <div className="space-y-2">
@@ -437,32 +504,50 @@ export default function AlunosPage() {
                           </Badge>
                         </div>
 
-                        {confirmDeleteId === enr.id ? (
-                          <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
-                            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" />
-                            <p className="flex-1 text-xs text-destructive">Cancelar esta matrícula?</p>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {resendSuccess === enr.id ? (
+                            <span className="flex items-center gap-1.5 text-xs text-green-600">
+                              <Send className="h-3.5 w-3.5" /> E-mail enviado!
+                            </span>
+                          ) : (
                             <button
-                              onClick={() => handleDeleteEnrollment(enr.id)}
-                              disabled={deletingEnrollmentId === enr.id}
-                              className="rounded px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                              onClick={() => handleResendEmail(enr.id)}
+                              disabled={resendingEmailId === enr.id}
+                              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
                             >
-                              {deletingEnrollmentId === enr.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Excluir"}
+                              {resendingEmailId === enr.id
+                                ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Enviando...</>
+                                : <><Send className="h-3.5 w-3.5" /> Reenviar e-mail</>}
                             </button>
+                          )}
+
+                          {confirmDeleteId === enr.id ? (
+                            <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
+                              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                              <p className="flex-1 text-xs text-destructive">Cancelar esta matrícula?</p>
+                              <button
+                                onClick={() => handleDeleteEnrollment(enr.id)}
+                                disabled={deletingEnrollmentId === enr.id}
+                                className="rounded px-2 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                              >
+                                {deletingEnrollmentId === enr.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Excluir"}
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteId(null)}
+                                className="rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          ) : (
                             <button
-                              onClick={() => setConfirmDeleteId(null)}
-                              className="rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                              onClick={() => setConfirmDeleteId(enr.id)}
+                              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors"
                             >
-                              Cancelar
+                              <Trash2 className="h-3.5 w-3.5" /> Cancelar matrícula
                             </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setConfirmDeleteId(enr.id)}
-                            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> Cancelar matrícula
-                          </button>
-                        )}
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -472,6 +557,16 @@ export default function AlunosPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={!!deleteStudentTarget}
+        onOpenChange={(open) => { if (!open) setDeleteStudentTarget(null) }}
+        title="Excluir aluno"
+        description={`Tem certeza que deseja excluir o aluno "${deleteStudentTarget?.name}"? Esta ação não pode ser desfeita.`}
+        onConfirm={handleDeleteStudent}
+        loading={deletingStudent}
+        error={deleteStudentError}
+      />
     </div>
   )
 }

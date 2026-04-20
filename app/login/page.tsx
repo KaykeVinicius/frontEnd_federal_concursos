@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [sessionMsg, setSessionMsg] = useState("")
+  const [blockedSeconds, setBlockedSeconds] = useState(0)
   const [forgotOpen, setForgotOpen] = useState(false)
   const [forgotCpf, setForgotCpf] = useState("")
   const [forgotLoading, setForgotLoading] = useState(false)
@@ -29,9 +30,17 @@ export default function LoginPage() {
     if (msg) { setSessionMsg(msg); sessionStorage.removeItem("session_msg") }
   }, [])
 
+  useEffect(() => {
+    if (blockedSeconds <= 0) return
+    const timer = setTimeout(() => setBlockedSeconds((s) => s - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [blockedSeconds])
+
   async function handleLogin(e: { preventDefault(): void }) {
     e.preventDefault()
     setError("")
+
+    if (blockedSeconds > 0) return
 
     if (!email || !password) {
       setError("Preencha todos os campos.")
@@ -70,6 +79,9 @@ export default function LoginPage() {
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Erro ao conectar com o servidor."
+      if (message.toLowerCase().includes("muitas tentativas")) {
+        setBlockedSeconds(60)
+      }
       setError(message)
       setLoading(false)
     }
@@ -296,13 +308,18 @@ export default function LoginPage() {
 
                   <Button
                     type="submit"
-                    className="mt-2 h-11 w-full bg-primary text-white font-semibold hover:bg-primary/90 transition-all duration-200"
-                    disabled={loading}
+                    className="mt-2 h-11 w-full bg-primary text-white font-semibold hover:bg-primary/90 transition-all duration-200 disabled:opacity-60"
+                    disabled={loading || blockedSeconds > 0}
                   >
                     {loading ? (
                       <span className="flex items-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Entrando...
+                      </span>
+                    ) : blockedSeconds > 0 ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4" />
+                        Aguarde {blockedSeconds}s
                       </span>
                     ) : (
                       "Entrar"

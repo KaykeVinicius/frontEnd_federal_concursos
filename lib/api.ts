@@ -127,6 +127,8 @@ export interface ApiCourse {
   start_date: string
   end_date: string
   online_url?: string | null
+  workload_hours?: number | null
+  cover_image_url?: string | null
   created_at?: string
   career_id?: number
   career?: ApiCareer
@@ -495,8 +497,8 @@ export const api = {
   courses: {
     list: (q?: RansackQ) => req<ApiCourse[]>("GET", `/courses${buildRansackQuery(q)}`),
     get: (id: number) => req<ApiCourse>("GET", `/courses/${id}`),
-    create: (body: Partial<ApiCourse>) => req<ApiCourse>("POST", "/courses", body),
-    update: (id: number, body: Partial<ApiCourse>) => req<ApiCourse>("PATCH", `/courses/${id}`, body),
+    create: (body: Partial<ApiCourse> | FormData) => req<ApiCourse>("POST", "/courses", body),
+    update: (id: number, body: Partial<ApiCourse> | FormData) => req<ApiCourse>("PATCH", `/courses/${id}`, body),
     delete: (id: number) => req<void>("DELETE", `/courses/${id}`),
   },
 
@@ -605,6 +607,7 @@ export const api = {
     update: (id: number, body: Partial<ApiEnrollment>) =>
       req<ApiEnrollment>("PATCH", `/enrollments/${id}`, body),
     delete: (id: number) => req<void>("DELETE", `/enrollments/${id}`),
+    resendEmail: (id: number) => req<{ message: string }>("POST", `/enrollments/${id}/resend_email`),
   },
 
   events: {

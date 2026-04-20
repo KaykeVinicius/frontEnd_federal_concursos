@@ -16,6 +16,7 @@ import {
   api,
   type ApiCourse, type ApiSubject, type ApiTopic, type ApiLesson, type ApiLessonPdf, type ApiUser,
 } from "@/lib/api"
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog"
 
 // ─── Inline add helper ────────────────────────────────────
 function InlineAdd({ placeholder, onAdd, onCancel }: {
@@ -331,6 +332,9 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
   const [editingProf, setEditingProf] = useState(false)
   const [newProfId, setNewProfId] = useState("")
   const [savingProf, setSavingProf] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   // Professores que já lecionam esta disciplina (mesmo nome) globalmente
   const eligibleProfessorIds = new Set(
@@ -404,7 +408,7 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
           </button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+          <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); setDeleteError(null) }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </div>
       </div>
@@ -452,6 +456,27 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
           )}
         </div>
       )}
+
+      <ConfirmDeleteDialog
+        open={confirmDelete}
+        onOpenChange={(open) => { if (!open) setConfirmDelete(false) }}
+        title="Excluir disciplina"
+        description={`Tem certeza que deseja excluir a disciplina "${subject.name}" deste curso? Esta ação não pode ser desfeita.`}
+        onConfirm={async () => {
+          setDeleting(true)
+          setDeleteError(null)
+          try {
+            await onDelete()
+            setConfirmDelete(false)
+          } catch (err) {
+            setDeleteError(err instanceof Error ? err.message : "Erro ao excluir disciplina.")
+          } finally {
+            setDeleting(false)
+          }
+        }}
+        loading={deleting}
+        error={deleteError}
+      />
     </div>
   )
 }
@@ -555,8 +580,12 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
   }
 
   async function unlinkSubject(subjectId: number) {
-    await api.subjects.delete(subjectId)
-    onUpdate({ ...course, subjects: course.subjects.filter((s) => s.id !== subjectId) })
+    try {
+      await api.subjects.delete(subjectId)
+      onUpdate({ ...course, subjects: course.subjects.filter((s) => s.id !== subjectId) })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao excluir disciplina.")
+    }
   }
 
   const totalAulas = course.subjects.flatMap((s) => s.topics).flatMap((t) => t.lessons).length

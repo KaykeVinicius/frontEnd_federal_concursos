@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   PlusCircle, ChevronRight, ChevronDown, BookOpen, GraduationCap,
   FileText, Trash2, Check, X, Link2, PlayCircle,
@@ -16,6 +16,7 @@ import {
   api,
   type ApiCourse, type ApiSubject, type ApiTopic, type ApiLesson, type ApiLessonPdf, type ApiUser,
 } from "@/lib/api"
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog"
 
 // ─── Inline add helper ────────────────────────────────────
 function InlineAdd({ placeholder, onAdd, onCancel }: {
@@ -344,6 +345,9 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
   const [editingProf, setEditingProf] = useState(false)
   const [newProfId, setNewProfId] = useState("")
   const [savingProf, setSavingProf] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const eligibleProfessorIds = new Set(
     allGlobalSubjects
@@ -410,7 +414,7 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
           </button>
-          <button onClick={() => onDelete()} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+          <button onClick={() => { setConfirmDelete(true); setDeleteError(null) }} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </div>
       </div>
@@ -458,6 +462,27 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
           )}
         </div>
       )}
+
+      <ConfirmDeleteDialog
+        open={confirmDelete}
+        onOpenChange={(open) => { if (!open) setConfirmDelete(false) }}
+        title="Excluir disciplina"
+        description={`Tem certeza que deseja excluir a disciplina "${subject.name}" deste curso? Esta ação não pode ser desfeita.`}
+        onConfirm={async () => {
+          setDeleting(true)
+          setDeleteError(null)
+          try {
+            await onDelete()
+            setConfirmDelete(false)
+          } catch (err) {
+            setDeleteError(err instanceof Error ? err.message : "Erro ao excluir disciplina.")
+          } finally {
+            setDeleting(false)
+          }
+        }}
+        loading={deleting}
+        error={deleteError}
+      />
     </div>
   )
 }
@@ -576,8 +601,12 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
   }
 
   async function unlinkSubject(subjectId: number) {
-    await api.subjects.delete(subjectId)
-    onUpdate({ ...course, subjects: course.subjects.filter((s) => s.id !== subjectId) })
+    try {
+      await api.subjects.delete(subjectId)
+      onUpdate({ ...course, subjects: course.subjects.filter((s) => s.id !== subjectId) })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao excluir disciplina.")
+    }
   }
 
   const totalAulas = course.subjects.flatMap((s) => s.topics).flatMap((t) => t.lessons).length
@@ -586,8 +615,11 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
     <div className="rounded-xl border border-border bg-card shadow-sm">
       <div className="flex items-center justify-between border-b border-border px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <BookOpen className="h-5 w-5 text-primary" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 overflow-hidden">
+            {course.cover_image_url
+              ? <img src={course.cover_image_url} alt={course.title} className="h-full w-full object-cover" />
+              : <BookOpen className="h-5 w-5 text-primary" />
+            }
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -755,8 +787,12 @@ function NovoCursoForm({ onCreated, onCancel }: {
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
   const [onlineUrl, setOnlineUrl] = useState("")
+  const [workloadHours, setWorkloadHours] = useState("")
+  const [coverImage, setCoverImage] = useState<File | null>(null)
+  const [coverImagePreview, setCoverImagePreview] = useState<string>("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const submittingRef = useRef(false)
 
   useEffect(() => {
     api.careers.list().then(setCareers).catch(console.error)
@@ -764,23 +800,27 @@ function NovoCursoForm({ onCreated, onCancel }: {
 
   async function submit() {
     if (!title.trim()) { setError("Título é obrigatório."); return }
+    if (submittingRef.current) return
+    submittingRef.current = true
     setSaving(true); setError("")
     try {
-      const novo = await api.courses.create({
-        title: title.trim(),
-        description: description.trim(),
-        price: parseFloat(price) || 0,
-        career_id: careerId ? parseInt(careerId) : undefined,
-        status,
-        access_type: accessType,
-        duration_in_days: parseInt(durationDays) || 0,
-        start_date: startDate || undefined,
-        end_date: endDate || undefined,
-        online_url: (accessType === "online" || accessType === "hibrido") && onlineUrl.trim() ? onlineUrl.trim() : undefined,
-      })
+      const fd = new FormData()
+      fd.append("title", title.trim())
+      fd.append("description", description.trim())
+      fd.append("price", String(parseFloat(price) || 0))
+      fd.append("status", status)
+      fd.append("access_type", accessType)
+      fd.append("duration_in_days", String(parseInt(durationDays) || 0))
+      if (startDate) fd.append("start_date", startDate)
+      if (endDate) fd.append("end_date", endDate)
+      if (careerId) fd.append("career_id", careerId)
+      if ((accessType === "online" || accessType === "hibrido") && onlineUrl.trim()) fd.append("online_url", onlineUrl.trim())
+      if (accessType === "presencial" && workloadHours) fd.append("workload_hours", workloadHours)
+      if (coverImage) fd.append("cover_image", coverImage)
+      const novo = await api.courses.create(fd)
       onCreated({ ...novo, subjects: [] })
     } catch (e: unknown) { setError(e instanceof Error ? e.message : "Erro ao criar curso") }
-    finally { setSaving(false) }
+    finally { setSaving(false); submittingRef.current = false }
   }
 
   return (
@@ -855,6 +895,34 @@ function NovoCursoForm({ onCreated, onCancel }: {
             <p className="text-[11px] text-muted-foreground">Link do Meet, Zoom ou plataforma utilizada nas aulas ao vivo.</p>
           </div>
         )}
+
+        {accessType === "presencial" && (
+          <div className="space-y-1">
+            <Label className="text-xs flex items-center gap-1"><Clock className="h-3 w-3" /> Carga Horária (horas)</Label>
+            <Input type="number" placeholder="40" value={workloadHours} onChange={(e) => setWorkloadHours(e.target.value)} disabled={saving} />
+          </div>
+        )}
+
+        <div className="sm:col-span-2 space-y-1">
+          <Label className="text-xs">Imagem de Capa</Label>
+          <input
+            type="file"
+            accept="image/*"
+            disabled={saving}
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null
+              setCoverImage(file)
+              setCoverImagePreview(file ? URL.createObjectURL(file) : "")
+            }}
+            className="block w-full text-sm text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
+          />
+          {coverImagePreview && (
+            <div className="mt-2 flex items-center gap-3">
+              <img src={coverImagePreview} alt="Preview" className="h-10 w-10 rounded-lg object-cover border" />
+              <span className="text-xs text-muted-foreground">Prévia do ícone no card</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {error && <p className="text-xs text-destructive">{error}</p>}

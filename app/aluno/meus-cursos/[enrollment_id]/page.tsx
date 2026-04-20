@@ -10,6 +10,23 @@ import {
 } from "lucide-react"
 import { api, type ApiEnrollment, type ApiSubject, type ApiMaterial } from "@/lib/api"
 
+async function openProtectedMaterial(materialId: number) {
+  const token = localStorage.getItem("auth_token")
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/aluno/materials/${materialId}/download`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    alert(err?.error ?? "Erro ao abrir o material.")
+    return
+  }
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  window.open(url, "_blank")
+  setTimeout(() => URL.revokeObjectURL(url), 10000)
+}
+
 function modalityMeta(type: string | number) {
   if (type === "online"  || type === 1) return { text: "Online",    color: "bg-blue-500/10 text-blue-500",    ctaText: "Assistir aulas",  CtaIcon: PlayCircle }
   if (type === "hibrido" || type === 2) return { text: "Híbrido",   color: "bg-violet-500/10 text-violet-500", ctaText: "Ver conteúdo",   CtaIcon: Monitor }
@@ -87,15 +104,35 @@ function SubjectAccordion({ subject, idx }: { subject: SubjectWithMaterials; idx
                       </div>
                     </div>
                     {mat.file_url && (
-                      <a
-                        href={mat.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-primary hover:bg-primary/5 hover:text-primary"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        {isLink ? "Acessar" : "Abrir"}
-                      </a>
+                      isLink ? (
+                        <a
+                          href={mat.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-primary hover:bg-primary/5 hover:text-primary"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Acessar
+                        </a>
+                      ) : mat.material_type === "pdf" ? (
+                        <button
+                          onClick={() => openProtectedMaterial(mat.id)}
+                          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-primary hover:bg-primary/5 hover:text-primary"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Abrir
+                        </button>
+                      ) : (
+                        <a
+                          href={mat.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-primary hover:bg-primary/5 hover:text-primary"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Abrir
+                        </a>
+                      )
                     )}
                   </div>
                 )

@@ -1,5 +1,8 @@
-node_modules
-npm-debug.log
 .git
-.env
-.next
+node_modules/
+.next/
+.next.poc/
+.next.prod/
+.env*
+*.md
+.DS_Store

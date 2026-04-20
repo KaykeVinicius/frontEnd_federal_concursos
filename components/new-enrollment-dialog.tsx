@@ -29,6 +29,7 @@ import { format, addDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
 import { api, type ApiStudent, type ApiCourse, type ApiCareer, type ApiTurma, type ApiEnrollment, type ApiCity } from "@/lib/api"
+import { isValidCpf } from "@/lib/cpf"
 import { CityCombobox } from "@/components/city-combobox"
 
 // ─── ViaCEP ──────────────────────────────────────────────────
@@ -93,7 +94,7 @@ const EX_ALUNO_DISCOUNT = 0.15
 
 // Mask functions
 const applyCpfMask = (value: string) => {
-  const numbers = value.replace(/\D/g, '')
+  const numbers = value.replace(/\D/g, '').slice(0, 11)
   if (numbers.length <= 3) return numbers
   if (numbers.length <= 6) return numbers.replace(/(\d{3})(\d{1,3})/, '$1.$2')
   if (numbers.length <= 9) return numbers.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3')
@@ -101,10 +102,26 @@ const applyCpfMask = (value: string) => {
 }
 
 const applyPhoneMask = (value: string) => {
-  const numbers = value.replace(/\D/g, '')
+  const numbers = value.replace(/\D/g, '').slice(0, 11)
   if (numbers.length <= 2) return numbers
   if (numbers.length <= 7) return numbers.replace(/(\d{2})(\d{1,5})/, '($1) $2')
   return numbers.replace(/(\d{2})(\d{5})(\d{1,4})/, '($1) $2-$3')
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+function isValidPhone(phone: string) {
+  const d = phone.replace(/\D/g, '')
+  return d.length === 10 || d.length === 11
+}
+
+function fieldCls(value: string, valid: boolean): string {
+  if (!value) return "border-gray-200 dark:border-gray-600 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+  return valid
+    ? "border-green-500 focus:border-green-500 focus:ring-green-500 transition-all duration-300"
+    : "border-red-500 focus:border-red-500 focus:ring-red-500 transition-all duration-300"
 }
 
 const applyCepMask = (value: string) => {
@@ -197,6 +214,7 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
   const [selectedTurmaId, setSelectedTurmaId] = useState("")
 
   const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   const [newName, setNewName] = useState("")
   const [newCpf, setNewCpf] = useState("")
@@ -329,12 +347,27 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
   }
 
   function handleClose(val: boolean) {
-    if (!val) resetAll()
+    if (!val) { resetAll(); setFormError(null) }
     onOpenChange(val)
   }
 
   async function handleFinalize(e: React.FormEvent) {
     e.preventDefault()
+    setFormError(null)
+
+    // Validação frontend para aluno novo (dupla verificação antes de enviar)
+    if (studentType === "novato") {
+      if (!isValidCpf(newCpf)) {
+        setFormError("CPF inválido. Verifique os dígitos e tente novamente.")
+        return
+      }
+      const phoneDigits = newWhatsapp.replace(/\D/g, "")
+      if (phoneDigits.length > 0 && (phoneDigits.length < 10 || phoneDigits.length > 11)) {
+        setFormError("WhatsApp inválido. Digite DDD + número (10 ou 11 dígitos).")
+        return
+      }
+    }
+
     setSaving(true)
 
     const paymentMethodMap: Record<PaymentMethodType, string> = {
@@ -386,8 +419,23 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
     } catch (error) {
       console.error("Erro ao finalizar matrícula:", error)
       setSaving(false)
-      alert("Erro ao processar matrícula. Tente novamente.")
+      setFormError(error instanceof Error ? error.message : "Erro ao processar matrícula. Tente novamente.")
     }
+  }
+
+  function handleNewStudentSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setFormError(null)
+    if (!isValidCpf(newCpf)) {
+      setFormError("CPF inválido. Verifique os dígitos e tente novamente.")
+      return
+    }
+    const phoneDigits = newWhatsapp.replace(/\D/g, "")
+    if (phoneDigits.length > 0 && (phoneDigits.length < 10 || phoneDigits.length > 11)) {
+      setFormError("WhatsApp inválido. Digite DDD + número (10 ou 11 dígitos).")
+      return
+    }
+    setStep("course_payment")
   }
 
   function handleCourseSelection(e: React.FormEvent) {
@@ -439,15 +487,15 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                     setStudentType("novato")
                     setStep("new_student_form")
                   }}
-                  className="group relative overflow-hidden rounded-xl border-2 border-gray-200 bg-white p-6 transition-all duration-300 hover:border-[#e8491d] hover:shadow-xl hover:-translate-y-1 cursor-pointer"
+                  className="group relative overflow-hidden rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:bg-gray-800 p-6 transition-all duration-300 hover:border-[#e8491d] hover:shadow-xl hover:-translate-y-1 cursor-pointer"
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-[#e8491d] to-[#f97316] opacity-0 transition-opacity duration-300 group-hover:opacity-5" />
                   <div className="relative flex flex-col items-center gap-3">
-                    <div className="rounded-full bg-orange-100 p-3 text-[#e8491d] transition-all duration-300 group-hover:bg-[#e8491d] group-hover:text-white group-hover:scale-110">
+                    <div className="rounded-full bg-orange-100 dark:bg-orange-900/30 p-3 text-[#e8491d] transition-all duration-300 group-hover:bg-[#e8491d] group-hover:text-white group-hover:scale-110">
                       <UserPlus className="h-8 w-8" />
                     </div>
-                    <span className="text-lg font-semibold text-gray-900">Aluno Novo</span>
-                    <p className="text-sm text-gray-500">Cadastre um novo aluno</p>
+                    <span className="text-lg font-semibold text-gray-900 dark:text-white">Aluno Novo</span>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Cadastre um novo aluno</p>
                   </div>
                 </button>
 
@@ -456,14 +504,14 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                     setStudentType("ex_aluno")
                     setStep("select_existing")
                   }}
-                  className="group relative overflow-hidden rounded-xl border-2 border-gray-200 bg-white p-6 transition-all duration-300 hover:border-[#e8491d] hover:shadow-xl hover:-translate-y-1 cursor-pointer"
+                  className="group relative overflow-hidden rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 dark:bg-gray-800 p-6 transition-all duration-300 hover:border-[#e8491d] hover:shadow-xl hover:-translate-y-1 cursor-pointer"
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-[#e8491d] to-[#f97316] opacity-0 transition-opacity duration-300 group-hover:opacity-5" />
                   <div className="relative flex flex-col items-center gap-3">
-                    <div className="rounded-full bg-orange-100 p-3 text-[#e8491d] transition-all duration-300 group-hover:bg-[#e8491d] group-hover:text-white group-hover:scale-110">
+                    <div className="rounded-full bg-orange-100 dark:bg-orange-900/30 p-3 text-[#e8491d] transition-all duration-300 group-hover:bg-[#e8491d] group-hover:text-white group-hover:scale-110">
                       <UserCheck className="h-8 w-8" />
                     </div>
-                    <span className="text-lg font-semibold text-gray-900">Ex-Aluno</span>
+                    <span className="text-lg font-semibold text-gray-900 dark:text-white">Ex-Aluno</span>
                     <Badge className="bg-orange-100 text-[#e8491d] border-orange-200">
                       <Percent className="h-3 w-3 mr-1" />
                       15% OFF
@@ -480,7 +528,7 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <Input
-                  className="pl-10 border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                  className="pl-10 border-gray-200 dark:border-gray-600 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
                   placeholder="Buscar por nome, email ou CPF..."
                   value={studentSearch}
                   onChange={(e) => setStudentSearch(e.target.value)}
@@ -496,21 +544,21 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                         setSelectedStudent(s)
                         setStep("course_payment")
                       }}
-                      className="w-full flex items-center gap-3 p-4 rounded-lg border border-gray-200 transition-all duration-300 hover:border-[#e8491d] hover:bg-orange-50 hover:shadow-md hover:-translate-y-0.5 text-left cursor-pointer group"
+                      className="w-full flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 transition-all duration-300 hover:border-[#e8491d] hover:bg-orange-50 dark:hover:bg-orange-900/20 hover:shadow-md hover:-translate-y-0.5 text-left cursor-pointer group"
                     >
                       <div className="h-12 w-12 rounded-full bg-gradient-to-r from-[#e8491d] to-[#f97316] flex items-center justify-center font-bold text-white">
                         {s.name.charAt(0)}
                       </div>
                       <div className="flex-1">
-                        <p className="font-semibold text-gray-900">{s.name}</p>
-                        <p className="text-sm text-gray-500">{s.email}</p>
+                        <p className="font-semibold text-gray-900 dark:text-white">{s.name}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{s.email}</p>
                         <p className="text-xs text-gray-400">{s.cpf}</p>
                       </div>
                       <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-[#e8491d] transition-all duration-300" />
                     </button>
                   ))
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                     Nenhum aluno encontrado
                   </div>
                 )}
@@ -519,7 +567,7 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
               <Button 
                 variant="ghost" 
                 onClick={() => setStep("choose_type")} 
-                className="hover:bg-orange-50 hover:text-[#e8491d] transition-all duration-300 cursor-pointer"
+                className="hover:bg-orange-50 dark:hover:bg-orange-900/20 hover:text-[#e8491d] transition-all duration-300 cursor-pointer"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Voltar
@@ -529,11 +577,11 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
 
           {/* STEP 3 - New Student Form */}
           {step === "new_student_form" && (
-            <form onSubmit={(e) => { e.preventDefault(); setStep("course_payment") }} className="space-y-6">
-              <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-4 transition-all duration-300 hover:shadow-lg">
+            <form onSubmit={handleNewStudentSubmit} className="space-y-6">
+              <div className="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-6 space-y-4 transition-all duration-300 hover:shadow-lg">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="h-8 w-1 bg-gradient-to-b from-[#e8491d] to-[#f97316] rounded-full" />
-                  <h3 className="text-lg font-semibold text-gray-900">Dados Pessoais</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Dados Pessoais</h3>
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-4">
@@ -548,34 +596,37 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                     />
                   </div>
                   <div>
-                    <Label className="text-sm font-medium mb-2 block">CPF</Label>
-                    <Input 
-                      placeholder="000.000.000-00" 
-                      value={newCpf} 
-                      onChange={(e) => setNewCpf(applyCpfMask(e.target.value))}
-                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                    <Label className="text-sm font-medium mb-2 block">CPF *</Label>
+                    <Input
+                      placeholder="000.000.000-00"
+                      value={newCpf}
+                      onChange={(e) => { setNewCpf(applyCpfMask(e.target.value)); setFormError(null) }}
+                      className={fieldCls(newCpf, isValidCpf(newCpf))}
+                      inputMode="numeric"
+                      maxLength={14}
                       required
                     />
                   </div>
                   <div>
-                    <Label className="text-sm font-medium mb-2 block">Email</Label>
-                    <Input 
-                      placeholder="email@exemplo.com" 
-                      value={newEmail} 
+                    <Label className="text-sm font-medium mb-2 block">Email *</Label>
+                    <Input
+                      placeholder="email@exemplo.com"
+                      value={newEmail}
                       onChange={(e) => setNewEmail(e.target.value)}
-                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                      className={fieldCls(newEmail, isValidEmail(newEmail))}
                       required
                       type="email"
                     />
                   </div>
                   <div>
                     <Label className="text-sm font-medium mb-2 block">WhatsApp</Label>
-                    <Input 
-                      placeholder="(00) 00000-0000" 
-                      value={newWhatsapp} 
-                      onChange={(e) => setNewWhatsapp(applyPhoneMask(e.target.value))}
-                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
-                      required
+                    <Input
+                      placeholder="(00) 00000-0000"
+                      value={newWhatsapp}
+                      onChange={(e) => { setNewWhatsapp(applyPhoneMask(e.target.value)); setFormError(null) }}
+                      className={fieldCls(newWhatsapp, isValidPhone(newWhatsapp))}
+                      inputMode="numeric"
+                      maxLength={15}
                     />
                   </div>
                   <div>
@@ -590,10 +641,10 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-4 transition-all duration-300 hover:shadow-lg">
+              <div className="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-6 space-y-4 transition-all duration-300 hover:shadow-lg">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="h-8 w-1 bg-gradient-to-b from-[#e8491d] to-[#f97316] rounded-full" />
-                  <h3 className="text-lg font-semibold text-gray-900">Endereço</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Endereço</h3>
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-4">
@@ -676,29 +727,34 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                 <Button 
                   variant="ghost" 
                   onClick={() => setStep("choose_type")} 
-                  className="hover:bg-orange-50 hover:text-[#e8491d] transition-all duration-300 cursor-pointer"
+                  className="hover:bg-orange-50 dark:hover:bg-orange-900/20 hover:text-[#e8491d] transition-all duration-300 cursor-pointer"
                 >
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Voltar
                 </Button>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   className="bg-gradient-to-r from-[#e8491d] to-[#f97316] hover:from-[#d43d15] hover:to-[#e86a0f] text-white transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer"
                 >
                   Continuar
                   <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
+              {formError && (
+                <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+                  {formError}
+                </div>
+              )}
             </form>
           )}
 
           {/* STEP 4 - Course Selection */}
           {step === "course_payment" && (
             <form onSubmit={handleCourseSelection} className="space-y-6">
-              <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-6 transition-all duration-300 hover:shadow-lg">
+              <div className="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-6 space-y-6 transition-all duration-300 hover:shadow-lg">
                 <div className="flex items-center gap-2 mb-4">
                   <GraduationCap className="h-5 w-5 text-[#e8491d]" />
-                  <h3 className="text-lg font-semibold text-gray-900">Seleção de Curso</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Seleção de Curso</h3>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -778,7 +834,7 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                           : selectedModality === "online"
                           ? "border-blue-300 bg-blue-50 text-blue-700"
                           : "border-violet-300 bg-violet-50 text-violet-700"
-                        : "border-gray-200 bg-gray-50 text-gray-400"
+                        : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-400 dark:text-gray-500"
                     }`}>
                       {selectedModality === "presencial" && <Building2 className="h-4 w-4 shrink-0" />}
                       {selectedModality === "online"     && <Monitor   className="h-4 w-4 shrink-0" />}
@@ -843,11 +899,11 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
               </div>
 
               {selectedCourse && isCourseSelectionComplete() && (
-                <div className="rounded-xl bg-gradient-to-r from-orange-50 to-orange-100 p-6 border border-orange-200 transition-all duration-300 hover:shadow-lg">
+                <div className="rounded-xl bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 p-6 border border-orange-200 dark:border-orange-800 transition-all duration-300 hover:shadow-lg">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <FileText className="h-5 w-5 text-[#e8491d]" />
-                      <p className="text-sm font-medium text-gray-700">Resumo da Matrícula</p>
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Resumo da Matrícula</p>
                     </div>
                     {studentType === "ex_aluno" && (
                       <Badge className="bg-orange-200 text-[#e8491d] border-orange-300">
@@ -857,7 +913,7 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <p className="text-3xl font-bold text-gray-900">
+                    <p className="text-3xl font-bold text-gray-900 dark:text-white">
                       {formatCurrency(finalPrice)}
                     </p>
                     {discount > 0 && (
@@ -865,7 +921,7 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                         De {formatCurrency(originalPrice)}
                       </p>
                     )}
-                    <div className="text-sm text-gray-600 mt-2 pt-2 border-t border-orange-200 space-y-1">
+                    <div className="text-sm text-gray-600 mt-2 pt-2 border-t border-orange-200 dark:border-orange-800 dark:border-orange-800 space-y-1">
                       <p className="flex items-center gap-2">
                         <Briefcase className="h-3 w-3" />
                         Carreira: {allCareers.find(c => String(c.id) === selectedCareerId)?.name}
@@ -893,7 +949,7 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                 <Button 
                   variant="ghost" 
                   onClick={() => setStep(studentType === "novato" ? "new_student_form" : "select_existing")} 
-                  className="hover:bg-orange-50 hover:text-[#e8491d] transition-all duration-300 cursor-pointer"
+                  className="hover:bg-orange-50 dark:hover:bg-orange-900/20 hover:text-[#e8491d] transition-all duration-300 cursor-pointer"
                 >
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Voltar
@@ -913,10 +969,10 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
           {/* STEP 5 - Payment Method */}
           {step === "payment_method" && (
             <form onSubmit={handleFinalize} className="space-y-6">
-              <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-6 transition-all duration-300 hover:shadow-lg">
+              <div className="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-6 space-y-6 transition-all duration-300 hover:shadow-lg">
                 <div className="flex items-center gap-2 mb-4">
                   <CreditCard className="h-5 w-5 text-[#e8491d]" />
-                  <h3 className="text-lg font-semibold text-gray-900">Forma de Pagamento</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Forma de Pagamento</h3>
                 </div>
 
                 <div className="grid gap-4">
@@ -928,16 +984,16 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                     }}
                     className={`flex items-center gap-4 p-4 rounded-lg border-2 transition-all duration-300 cursor-pointer ${
                       paymentMethod === "pix" 
-                        ? "border-[#e8491d] bg-orange-50" 
-                        : "border-gray-200 hover:border-[#e8491d] hover:bg-orange-50"
+                        ? "border-[#e8491d] bg-orange-50 dark:bg-orange-900/20"
+                        : "border-gray-200 dark:border-gray-600 hover:border-[#e8491d] hover:bg-orange-50 dark:hover:bg-orange-900/20"
                     }`}
                   >
-                    <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                    <div className="h-12 w-12 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
                       <div className="text-2xl">💰</div>
                     </div>
                     <div className="flex-1 text-left">
-                      <p className="font-semibold text-gray-900">PIX</p>
-                      <p className="text-sm text-gray-500">Pagamento instantâneo com desconto</p>
+                      <p className="font-semibold text-gray-900 dark:text-white">PIX</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Pagamento instantâneo com desconto</p>
                     </div>
                     {paymentMethod === "pix" && (
                       <div className="h-5 w-5 rounded-full bg-[#e8491d] animate-pulse" />
@@ -952,16 +1008,16 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                     }}
                     className={`flex items-center gap-4 p-4 rounded-lg border-2 transition-all duration-300 cursor-pointer ${
                       paymentMethod === "credit" 
-                        ? "border-[#e8491d] bg-orange-50" 
-                        : "border-gray-200 hover:border-[#e8491d] hover:bg-orange-50"
+                        ? "border-[#e8491d] bg-orange-50 dark:bg-orange-900/20"
+                        : "border-gray-200 dark:border-gray-600 hover:border-[#e8491d] hover:bg-orange-50 dark:hover:bg-orange-900/20"
                     }`}
                   >
-                    <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                    <div className="h-12 w-12 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
                       <CreditCardIcon className="h-6 w-6 text-[#e8491d]" />
                     </div>
                     <div className="flex-1 text-left">
-                      <p className="font-semibold text-gray-900">Cartão de Crédito</p>
-                      <p className="text-sm text-gray-500">Parcele em até 12x</p>
+                      <p className="font-semibold text-gray-900 dark:text-white">Cartão de Crédito</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Parcele em até 12x</p>
                     </div>
                     {paymentMethod === "credit" && (
                       <div className="h-5 w-5 rounded-full bg-[#e8491d] animate-pulse" />
@@ -976,16 +1032,16 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                     }}
                     className={`flex items-center gap-4 p-4 rounded-lg border-2 transition-all duration-300 cursor-pointer ${
                       paymentMethod === "debit" 
-                        ? "border-[#e8491d] bg-orange-50" 
-                        : "border-gray-200 hover:border-[#e8491d] hover:bg-orange-50"
+                        ? "border-[#e8491d] bg-orange-50 dark:bg-orange-900/20"
+                        : "border-gray-200 dark:border-gray-600 hover:border-[#e8491d] hover:bg-orange-50 dark:hover:bg-orange-900/20"
                     }`}
                   >
-                    <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                    <div className="h-12 w-12 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
                       <CreditCardIcon className="h-6 w-6 text-[#e8491d]" />
                     </div>
                     <div className="flex-1 text-left">
-                      <p className="font-semibold text-gray-900">Cartão de Débito</p>
-                      <p className="text-sm text-gray-500">Pagamento à vista</p>
+                      <p className="font-semibold text-gray-900 dark:text-white">Cartão de Débito</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Pagamento à vista</p>
                     </div>
                     {paymentMethod === "debit" && (
                       <div className="h-5 w-5 rounded-full bg-[#e8491d] animate-pulse" />
@@ -1000,16 +1056,16 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                     }}
                     className={`flex items-center gap-4 p-4 rounded-lg border-2 transition-all duration-300 cursor-pointer ${
                       paymentMethod === "boleto" 
-                        ? "border-[#e8491d] bg-orange-50" 
-                        : "border-gray-200 hover:border-[#e8491d] hover:bg-orange-50"
+                        ? "border-[#e8491d] bg-orange-50 dark:bg-orange-900/20"
+                        : "border-gray-200 dark:border-gray-600 hover:border-[#e8491d] hover:bg-orange-50 dark:hover:bg-orange-900/20"
                     }`}
                   >
-                    <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                    <div className="h-12 w-12 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
                       <div className="text-2xl">📄</div>
                     </div>
                     <div className="flex-1 text-left">
-                      <p className="font-semibold text-gray-900">Boleto Bancário</p>
-                      <p className="text-sm text-gray-500">Vencimento em 3 dias úteis</p>
+                      <p className="font-semibold text-gray-900 dark:text-white">Boleto Bancário</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Vencimento em 3 dias úteis</p>
                     </div>
                     {paymentMethod === "boleto" && (
                       <div className="h-5 w-5 rounded-full bg-[#e8491d] animate-pulse" />
@@ -1026,16 +1082,16 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                     }}
                     className={`flex items-center gap-4 p-4 rounded-lg border-2 transition-all duration-300 cursor-pointer ${
                       paymentMethod === "prazo" 
-                        ? "border-[#e8491d] bg-orange-50" 
-                        : "border-gray-200 hover:border-[#e8491d] hover:bg-orange-50"
+                        ? "border-[#e8491d] bg-orange-50 dark:bg-orange-900/20"
+                        : "border-gray-200 dark:border-gray-600 hover:border-[#e8491d] hover:bg-orange-50 dark:hover:bg-orange-900/20"
                     }`}
                   >
-                    <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                    <div className="h-12 w-12 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
                       <Timer className="h-6 w-6 text-[#e8491d]" />
                     </div>
                     <div className="flex-1 text-left">
-                      <p className="font-semibold text-gray-900">Pagamento a Prazo</p>
-                      <p className="text-sm text-gray-500">Selecione a data de vencimento</p>
+                      <p className="font-semibold text-gray-900 dark:text-white">Pagamento a Prazo</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Selecione a data de vencimento</p>
                     </div>
                     {paymentMethod === "prazo" && (
                       <div className="h-5 w-5 rounded-full bg-[#e8491d] animate-pulse" />
@@ -1096,8 +1152,8 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                       </PopoverContent>
                     </Popover>
                     {paymentDeadline && (
-                      <div className="mt-2 p-3 bg-orange-50 rounded-lg border border-orange-200">
-                        <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <div className="mt-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                        <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                           <Bell className="h-4 w-4 text-[#e8491d]" />
                           <span>
                             Notificações serão enviadas para o aluno e financeiro 
@@ -1115,13 +1171,13 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                     <span className="text-2xl font-bold text-[#e8491d]">{formatCurrency(finalPrice)}</span>
                   </div>
                   {paymentMethod === "credit" && installments > 1 && (
-                    <div className="flex justify-between items-center text-sm text-gray-500">
+                    <div className="flex justify-between items-center text-sm text-gray-500 dark:text-gray-400">
                       <span>{installments}x de {formatCurrency(installmentPrice)}</span>
                       <span>sem juros</span>
                     </div>
                   )}
                   {paymentMethod === "prazo" && paymentDeadline && (
-                    <div className="flex justify-between items-center text-sm text-gray-500 mt-2 pt-2 border-t border-orange-200">
+                    <div className="flex justify-between items-center text-sm text-gray-500 mt-2 pt-2 border-t border-orange-200 dark:border-orange-800">
                       <span>Vencimento:</span>
                       <span className="font-medium text-[#e8491d]">
                         {format(paymentDeadline, "dd/MM/yyyy", { locale: ptBR })}
@@ -1135,13 +1191,13 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                 <Button 
                   variant="ghost" 
                   onClick={() => setStep("course_payment")} 
-                  className="hover:bg-orange-50 hover:text-[#e8491d] transition-all duration-300 cursor-pointer"
+                  className="hover:bg-orange-50 dark:hover:bg-orange-900/20 hover:text-[#e8491d] transition-all duration-300 cursor-pointer"
                 >
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Voltar
                 </Button>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   disabled={saving || !isPaymentMethodValid()}
                   className="bg-gradient-to-r from-[#e8491d] to-[#f97316] hover:from-[#d43d15] hover:to-[#e86a0f] text-white px-8 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer disabled:opacity-50"
                 >
@@ -1149,6 +1205,11 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                   {saving ? "Processando..." : "Confirmar e Enviar Contrato"}
                 </Button>
               </div>
+              {formError && (
+                <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+                  {formError}
+                </div>
+              )}
             </form>
           )}
 
@@ -1161,18 +1222,18 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 Matrícula realizada com sucesso!
               </h2>
-              <div className="bg-orange-50 rounded-lg p-4 mb-6 text-left space-y-2">
-                <p className="flex items-center gap-2 text-sm text-gray-700">
+              <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-4 mb-6 text-left space-y-2">
+                <p className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                   <Send className="h-4 w-4 text-[#e8491d]" />
                   Contrato enviado por e-mail
                 </p>
                 {paymentMethod === "prazo" && paymentDeadline && (
-                  <p className="flex items-center gap-2 text-sm text-gray-700">
+                  <p className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                     <Bell className="h-4 w-4 text-[#e8491d]" />
                     Notificação agendada para {format(paymentDeadline, "dd/MM/yyyy", { locale: ptBR })}
                   </p>
                 )}
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   Um contrato foi enviado para o e-mail do aluno com todos os detalhes da matrícula.
                   {paymentMethod === "prazo" && " O sistema enviará lembretes automáticos na data de vencimento."}
                   Por favor, verifique a caixa de entrada e o spam.

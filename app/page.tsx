@@ -19,68 +19,90 @@ import {
   ShieldCheck,
   Phone,
   Calculator,
+  Monitor,
+  MapPin,
 } from "lucide-react"
 
 const cursos = [
   {
-    titulo: "Concurso IPERON 2026",
-    categoria: "Previdenciário",
-    nivel: "Médio e Superior",
-    aulas: 180,
-    duracao: "6 meses",
-    vagas: "7.000 vagas",
+    titulo: "GCM Porto Velho — RO",
+    categoria: "Municipal",
+    nivel: "Superior",
+    modalidade: "presencial",
+    duracao: "4 meses",
+    vagas: "Aprox. 250 vagas",
     destaque: true,
     cor: "#e84a20",
+  },
+  {
+    titulo: "IPERON",
+    categoria: "Estadual",
+    nivel: "Médio e Superior",
+    modalidade: "online",
+    duracao: "5 meses",
+    vagas: "Aprox. 200 vagas",
+    destaque: false,
+    cor: "#16a34a",
+  },
+  {
+    titulo: "SESAU — RO",
+    categoria: "Estadual",
+    nivel: "Médio e Superior",
+    modalidade: "presencial",
+    duracao: "4 meses",
+    vagas: "Diversas vagas",
+    destaque: false,
+    cor: "#0891b2",
+  },
+  {
+    titulo: "Prefeitura de Candeias do Jamari — RO",
+    categoria: "Municipal",
+    nivel: "Todos os níveis",
+    modalidade: "presencial",
+    duracao: "3 meses",
+    vagas: "Diversas vagas",
+    destaque: false,
+    cor: "#ca8a04",
   },
   {
     titulo: "OAB — 1ª e 2ª Fase",
     categoria: "OAB",
     nivel: "Superior",
-    aulas: 220,
+    modalidade: "presencial",
     duracao: "8 meses",
     vagas: "Próxima turma",
     destaque: false,
     cor: "#2563eb",
   },
   {
-    titulo: "Seduc - AM",
-    categoria: "ESTADUAL",
-    nivel: "Ensino Médio",
-    aulas: 90,
-    duracao: "3 meses",
-    vagas: "Turma aberta",
-    destaque: false,
-    cor: "#16a34a",
-  },
-  {
-    titulo: "Banco do Brasil 2025",
-    categoria: "Bancário",
-    nivel: "Médio e Superior",
-    aulas: 150,
-    duracao: "5 meses",
-    vagas: "4.000 vagas",
-    destaque: true,
-    cor: "#ca8a04",
-  },
-  {
-    titulo: "Polícia Federal",
-    categoria: "Federal",
-    nivel: "Superior",
-    aulas: 200,
-    duracao: "7 meses",
-    vagas: "Edital previsto",
+    titulo: "Português — Nova Turma",
+    categoria: "Curso Livre",
+    nivel: "Todos os níveis",
+    modalidade: "presencial",
+    duracao: "2 meses",
+    vagas: "Turma abrindo",
     destaque: false,
     cor: "#7c3aed",
   },
   {
-    titulo: "Prefeituras — Pacote Municipal",
-    categoria: "Municipal",
-    nivel: "Todos os níveis",
-    aulas: 130,
-    duracao: "4 meses",
-    vagas: "Diversas vagas",
+    titulo: "INSS",
+    categoria: "Federal",
+    nivel: "Médio e Superior",
+    modalidade: "online",
+    duracao: "5 meses",
+    vagas: "Edital previsto",
     destaque: false,
-    cor: "#0891b2",
+    cor: "#0e7490",
+  },
+  {
+    titulo: "CFC — Conselho Federal de Contabilidade",
+    categoria: "CFC",
+    nivel: "Superior",
+    modalidade: "presencial",
+    duracao: "4 meses",
+    vagas: "Turma aberta",
+    destaque: false,
+    cor: "#be185d",
   },
 ]
 
@@ -126,18 +148,15 @@ export default function LandingPage() {
           />
 
           <nav className="hidden items-center gap-8 md:flex">
-            <a href="#cursos" className="text-sm text-[#9ca3af] transition-colors hover:text-[#e84a20]">
-              Cursos
-            </a>
-            <a href="#carreiras" className="text-sm text-[#9ca3af] transition-colors hover:text-[#e84a20]">
-              Carreiras
-            </a>
-            <a href="#sobre" className="text-sm text-[#9ca3af] transition-colors hover:text-[#e84a20]">
-              Sobre
-            </a>
-            <a href="#contato" className="text-sm text-[#9ca3af] transition-colors hover:text-[#e84a20]">
-              Contato
-            </a>
+            {[["cursos","Cursos"],["carreiras","Carreiras"],["sobre","Sobre"],["contato","Contato"]].map(([id,label]) => (
+              <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" })}
+                className="text-sm text-white/80 transition-colors hover:text-[#e84a20] cursor-pointer">
+                {label}
+              </button>
+            ))}
+            <Link href="/depoimentos" className="text-sm text-white/80 transition-colors hover:text-[#e84a20]">
+              Depoimentos
+            </Link>
           </nav>
 
           <Link
@@ -197,13 +216,13 @@ export default function LandingPage() {
                 Quero ser aprovado!
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <a
-                href="#cursos"
-                className="flex items-center gap-2 rounded-md border border-[#2a2a2a] px-8 py-4 text-sm font-semibold text-[#d1d5db] transition-all hover:border-[#e84a20]/40 hover:text-white"
+              <button
+                onClick={() => document.getElementById("cursos")?.scrollIntoView({ behavior: "smooth" })}
+                className="flex items-center gap-2 rounded-md border border-[#2a2a2a] px-8 py-4 text-sm font-semibold text-[#d1d5db] transition-all hover:border-[#e84a20]/40 hover:text-white cursor-pointer"
               >
                 <PlayCircle className="h-4 w-4 text-[#e84a20]" />
                 Ver cursos disponíveis
-              </a>
+              </button>
             </div>
 
             {/* Trust icons */}
@@ -318,12 +337,14 @@ export default function LandingPage() {
 
                     <div className="mb-5 space-y-2">
                       <div className="flex items-center gap-2 text-sm text-[#9ca3af]">
-                        <PlayCircle className="h-4 w-4" style={{ color: curso.cor }} />
-                        {curso.aulas} videoaulas
+                        {curso.modalidade === "online"
+                          ? <Monitor className="h-4 w-4" style={{ color: curso.cor }} />
+                          : <MapPin className="h-4 w-4" style={{ color: curso.cor }} />}
+                        {curso.modalidade === "online" ? "Online" : "Presencial"}
                       </div>
                       <div className="flex items-center gap-2 text-sm text-[#9ca3af]">
                         <Clock className="h-4 w-4" style={{ color: curso.cor }} />
-                        {curso.duracao} de acesso
+                        Acesso conforme o curso
                       </div>
                       <div className="flex items-center gap-2 text-sm text-[#9ca3af]">
                         <BarChart className="h-4 w-4" style={{ color: curso.cor }} />
@@ -395,6 +416,11 @@ export default function LandingPage() {
                 icon: Award,
                 title: "Metodologia focada em resultados",
                 desc: "Desenvolvida para maximizar seu desempenho nas provas com eficiência.",
+              },
+              {
+                icon: ShieldCheck,
+                title: "Simulados e questões comentadas",
+                desc: "Pratique com questões de provas anteriores e gabarito comentado para fixar o conteúdo.",
               },
               {
                 icon: Users,
@@ -498,7 +524,52 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="mt-auto border-t border-[#1e1e1e] px-4 py-10 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl space-y-6">
-          <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-[#6b7280]">
+
+          {/* Mobile footer */}
+          <div className="sm:hidden space-y-5">
+            <div className="rounded-2xl border border-[#1e1e1e] overflow-hidden divide-y divide-[#1e1e1e]">
+              <a href="https://wa.me/5569993697213" target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 px-5 py-3.5 text-sm text-[#9ca3af] hover:bg-[#1a1a1a] hover:text-white transition-colors">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e84a20]/10 shrink-0">
+                  <Phone className="h-4 w-4 text-[#e84a20]" />
+                </span>
+                (69) 99369-7213
+              </a>
+              <a href="https://instagram.com/federalcursos" target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-3 px-5 py-3.5 text-sm text-[#9ca3af] hover:bg-[#1a1a1a] hover:text-white transition-colors">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e84a20]/10 shrink-0">
+                  <svg className="h-4 w-4 text-[#e84a20]" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+                  </svg>
+                </span>
+                @federalcursos
+              </a>
+              <a href="mailto:federal@federalcursos.com"
+                className="flex items-center gap-3 px-5 py-3.5 text-sm text-[#9ca3af] hover:bg-[#1a1a1a] hover:text-white transition-colors">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e84a20]/10 shrink-0">
+                  <svg className="h-4 w-4 text-[#e84a20]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </span>
+                federal@federalcursos.com
+              </a>
+              <div className="flex items-center gap-3 px-5 py-3.5 text-sm text-[#9ca3af]">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e84a20]/10 shrink-0">
+                  <svg className="h-4 w-4 text-[#e84a20]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </span>
+                R. Getúlio Vargas, 2634 — São Cristóvão, Porto Velho – RO
+              </div>
+            </div>
+            <p className="text-center text-xs text-[#3a3a3a]">
+              © {new Date().getFullYear()} Federal Cursos. Todos os direitos reservados.
+            </p>
+          </div>
+
+          {/* Desktop footer */}
+          <div className="hidden sm:flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-sm text-[#6b7280]">
             <a href="https://wa.me/5569993697213" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 transition-colors hover:text-white">
               <Phone className="h-4 w-4 text-[#e84a20]" />
               (69) 99369-7213
@@ -520,11 +591,11 @@ export default function LandingPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              R. Getúlio Vargas, 2634 — São Cristóvão, Porto Velho – RO, 76804-060
+              R. Getúlio Vargas, 2634 — São Cristóvão, Porto Velho – RO
             </span>
           </div>
 
-          <p className="text-center text-xs text-[#3a3a3a]">
+          <p className="hidden sm:block text-center text-xs text-[#3a3a3a]">
             © {new Date().getFullYear()} Federal Cursos. Todos os direitos reservados.
           </p>
         </div>

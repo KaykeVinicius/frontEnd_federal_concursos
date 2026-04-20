@@ -20,15 +20,15 @@ import { cn } from "@/lib/utils"
 import { useState } from "react"
 
 const navItems = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/alunos", label: "Alunos", icon: Users },
-  { href: "/admin/cursos", label: "Cursos", icon: BookOpen },
-  { href: "/admin/turmas", label: "Turmas", icon: Layers },
-  { href: "/admin/materias", label: "Matérias", icon: GraduationCap },
-  { href: "/admin/eventos", label: "Eventos", icon: CalendarDays },
+  { href: "/admin",                label: "Dashboard",        icon: LayoutDashboard },
+  { href: "/admin/alunos",         label: "Alunos",           icon: Users },
+  { href: "/admin/contratos",      label: "Contratos",        icon: FileText },
+  { href: "/admin/cursos",         label: "Cursos",           icon: BookOpen },
+  { href: "/admin/turmas",         label: "Turmas",           icon: Layers },
+  { href: "/admin/materias",       label: "Matérias",         icon: GraduationCap },
+  { href: "/admin/eventos",        label: "Eventos",          icon: CalendarDays },
   { href: "/admin/vendas-eventos", label: "Vendas de Eventos", icon: ShoppingBag },
-  { href: "/admin/contratos", label: "Contratos", icon: FileText },
-  { href: "/admin/configuracoes", label: "Configurações", icon: Settings },
+  { href: "/admin/configuracoes",  label: "Configurações",    icon: Settings },
 ]
 
 export function AdminSidebar() {

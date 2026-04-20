@@ -8,8 +8,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Federal Cursos - Sistema de Gestao',
-  description: 'Sistema administrativo Federal Cursos - Concursos Publicos, CFC e OAB',
+  title: 'Federal Cursos - Online',
+  description: 'Sistema administrativo Federal Cursos - Concursos Públicos, CFC e OAB',
   generator: 'v0.app',
   icons: {
     icon: '/images/tigre_proporcional.png',

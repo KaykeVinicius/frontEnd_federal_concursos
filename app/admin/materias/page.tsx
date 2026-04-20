@@ -8,12 +8,11 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Plus, Search, Loader2, GraduationCap, Trash2, Pencil, User, BookOpen, Settings2, AlertTriangle } from "lucide-react"
-import { api, type ApiSubject, type ApiCourse } from "@/lib/api"
+import { Plus, Search, Loader2, GraduationCap, Trash2, Pencil, User, Settings2, AlertTriangle } from "lucide-react"
+import { api, type ApiSubject } from "@/lib/api"
 
 export default function MateriasPage() {
   const [subjects, setSubjects] = useState<ApiSubject[]>([])
-  const [courses, setCourses] = useState<ApiCourse[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
 
@@ -41,8 +40,8 @@ export default function MateriasPage() {
 
   useEffect(() => {
     setLoading(true)
-    Promise.all([fetchSubjects(), api.courses.list()])
-      .then(([s, c]) => { setSubjects(s); setCourses(c) })
+    fetchSubjects()
+      .then(setSubjects)
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [fetchSubjects])
@@ -53,11 +52,6 @@ export default function MateriasPage() {
     }, 300)
     return () => clearTimeout(t)
   }, [search, fetchSubjects])
-
-  function getCourseTitle(courseId?: number | null) {
-    if (!courseId) return null
-    return courses.find((c) => c.id === courseId)?.title ?? null
-  }
 
   function openEditDialog(subject: ApiSubject) {
     setEditSubject(subject)
@@ -145,17 +139,14 @@ export default function MateriasPage() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b text-left text-sm text-muted-foreground">
-                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5" />Matéria</span></th>
-                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Professor</span></th>
-                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Curso</span></th>
-                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><Settings2 className="h-3.5 w-3.5" />Ações</span></th>
+                  <tr className="border-b text-sm text-muted-foreground">
+                    <th className="pb-3 font-medium text-left w-1/2"><span className="flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5" />Matéria</span></th>
+                    <th className="pb-3 font-medium text-center w-1/3"><span className="flex items-center justify-center gap-1.5"><User className="h-3.5 w-3.5" />Professor</span></th>
+                    <th className="pb-3 font-medium text-right w-1/6"><span className="flex items-center justify-end gap-1.5"><Settings2 className="h-3.5 w-3.5" />Ações</span></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {subjects.map((sub) => {
-                    const courseTitle = getCourseTitle(sub.course_id)
-                    return (
+                  {subjects.map((sub) => (
                       <tr key={sub.id} className="border-b last:border-0 hover:bg-muted/40 transition-colors">
                         <td className="py-4">
                           <div className="flex items-center gap-3">
@@ -170,13 +161,10 @@ export default function MateriasPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="py-4 text-sm text-muted-foreground">
+                        <td className="py-4 text-sm text-muted-foreground text-center">
                           {sub.professor?.name ?? <span className="text-muted-foreground/50">—</span>}
                         </td>
-                        <td className="py-4 text-sm text-muted-foreground">
-                          {courseTitle ?? <span className="text-muted-foreground/50">—</span>}
-                        </td>
-                        <td className="py-4">
+                        <td className="py-4 text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -210,8 +198,7 @@ export default function MateriasPage() {
                           </DropdownMenu>
                         </td>
                       </tr>
-                    )
-                  })}
+                  ))}
                 </tbody>
               </table>
               {subjects.length === 0 && (

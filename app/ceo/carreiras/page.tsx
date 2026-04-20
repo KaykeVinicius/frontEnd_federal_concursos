@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { api, type ApiCareer } from "@/lib/api"
 import { Briefcase, Plus, Search, Filter, Calendar, Edit3, Trash2, Loader2 } from "lucide-react"
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog"
 
 export default function CeoCarreirasPage() {
   const [careers, setCareers] = useState<ApiCareer[]>([])
@@ -15,6 +16,10 @@ export default function CeoCarreirasPage() {
   const [saving, setSaving] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+
+  const [deleteTarget, setDeleteTarget] = useState<ApiCareer | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const [createName, setCreateName] = useState("")
   const [createDescription, setCreateDescription] = useState("")
@@ -60,12 +65,18 @@ export default function CeoCarreirasPage() {
     setCreateDescription("")
   }
 
-  const deleteCareer = async (careerId: number) => {
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    setDeleteError(null)
     try {
-      await api.careers.delete(careerId)
-      setCareers((prev) => prev.filter((c) => c.id !== careerId))
+      await api.careers.delete(deleteTarget.id)
+      setCareers((prev) => prev.filter((c) => c.id !== deleteTarget.id))
+      setDeleteTarget(null)
     } catch (err) {
-      console.error(err)
+      setDeleteError(err instanceof Error ? err.message : "Erro ao excluir carreira.")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -188,7 +199,7 @@ export default function CeoCarreirasPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => deleteCareer(career.id)}
+                      onClick={() => { setDeleteTarget(career); setDeleteError(null) }}
                       className="hover:bg-red-100/50 hover:text-red-600"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -280,6 +291,16 @@ export default function CeoCarreirasPage() {
             </form>
           </DialogContent>
         </Dialog>
+
+        <ConfirmDeleteDialog
+          open={!!deleteTarget}
+          onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}
+          title="Excluir carreira"
+          description={`Tem certeza que deseja excluir a carreira "${deleteTarget?.name}"? Esta ação não pode ser desfeita.`}
+          onConfirm={confirmDelete}
+          loading={deleting}
+          error={deleteError}
+        />
       </div>
     </div>
   )

@@ -3,7 +3,7 @@ import { renderToBuffer } from "@react-pdf/renderer"
 import { createElement } from "react"
 import path from "path"
 import fs from "fs"
-import IngressoPDF from "@/components/ingresso-pdf"
+import IngressoPDF from "@/components/ingresso-evento-pdf"
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"
 

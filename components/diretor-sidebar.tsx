@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   Users,
   BookOpen,
+  BookMarked,
   Layers,
   GraduationCap,
   FileText,
@@ -21,25 +22,26 @@ import {
   ShieldCheck,
   Megaphone,
   CalendarRange,
+  Briefcase,
 } from "lucide-react"
 import { useState } from "react"
 
 const navItems = [
-  { href: "/ceo", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/ceo/financeiro", label: "Financeiro", icon: DollarSign },
-  { href: "/ceo/relatorios", label: "Relatorios", icon: BarChart3 },
-  { href: "/ceo/alunos", label: "Alunos", icon: Users },
-  { href: "/ceo/cursos", label: "Cursos", icon: BookOpen },
-  { href: "/ceo/turmas", label: "Turmas", icon: Layers },
-  { href: "/ceo/materias", label: "Materias", icon: GraduationCap },
-  { href: "/ceo/eventos", label: "Eventos", icon: CalendarDays },
-  { href: "/ceo/contratos", label: "Contratos", icon: FileText },
-  { href: "/ceo/usuarios", label: "Usuários", icon: Users },
-  { href: "/ceo/carreiras", label: "Carreiras", icon: GraduationCap },
+  { href: "/ceo",             label: "Dashboard",     icon: LayoutDashboard },
+  { href: "/ceo/carreiras",   label: "Carreiras",     icon: Briefcase },
+  { href: "/ceo/materias",    label: "Matérias",      icon: BookMarked },
+  { href: "/ceo/cursos",      label: "Cursos",        icon: BookOpen },
+  { href: "/ceo/turmas",      label: "Turmas",        icon: Layers },
+  { href: "/ceo/alunos",      label: "Alunos",        icon: Users },
+  { href: "/ceo/contratos",   label: "Contratos",     icon: FileText },
+  { href: "/ceo/financeiro",  label: "Financeiro",    icon: DollarSign },
+  { href: "/ceo/eventos",     label: "Eventos",       icon: CalendarDays },
+  { href: "/ceo/agenda",      label: "Agenda",        icon: CalendarRange },
+  { href: "/ceo/avisos",      label: "Avisos",        icon: Megaphone },
+  { href: "/ceo/usuarios",    label: "Usuários",      icon: Users },
+  { href: "/ceo/relatorios",  label: "Relatórios",    icon: BarChart3 },
   { href: "/ceo/logs-acesso", label: "Logs de Acesso", icon: ShieldCheck },
-  { href: "/ceo/avisos", label: "Central de Avisos", icon: Megaphone },
-  { href: "/ceo/agenda", label: "Agenda", icon: CalendarRange },
-  { href: "/ceo/configuracoes", label: "Configuracoes", icon: Settings },
+  { href: "/ceo/configuracoes", label: "Configurações", icon: Settings },
 ]
 
 export function DiretorSidebar() {
