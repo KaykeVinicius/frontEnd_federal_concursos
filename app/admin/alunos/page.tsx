@@ -186,6 +186,11 @@ export default function AlunosPage() {
   }, [])
 
 
+  // Resetar para página 1 ao mudar busca ou filtro
+  useEffect(() => {
+    setPage(1)
+  }, [search, filterStatus])
+
   // Debounced re-fetch em qualquer mudança de busca/filtro/página
   useEffect(() => {
     const t = setTimeout(() => {
@@ -194,7 +199,7 @@ export default function AlunosPage() {
         .then((res) => { setStudents(res.data); setTotalPages(res.totalPages); setTotalCount(res.total) })
         .catch(console.error)
         .finally(() => setLoading(false))
-    }, page === 1 ? 300 : 0)
+    }, 300)
     return () => clearTimeout(t)
   }, [search, filterStatus, page, fetchStudents])
 
