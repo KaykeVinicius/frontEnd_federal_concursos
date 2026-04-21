@@ -196,7 +196,7 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
   useEffect(() => {
     if (!open) return
     Promise.all([
-      api.students.list(),
+      api.students.list(undefined, 1, 2000).then(r => r.data),
       api.courses.list(),
       api.careers.list(),
       api.turmas.list(),
@@ -221,6 +221,7 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
   const [newEmail, setNewEmail] = useState("")
   const [newWhatsapp, setNewWhatsapp] = useState("")
   const [newInstagram, setNewInstagram] = useState("")
+  const [newBirthDate, setNewBirthDate] = useState("")
 
   const [rua, setRua] = useState("")
   const [numero, setNumero] = useState("")
@@ -334,6 +335,7 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
     setNewEmail("")
     setNewWhatsapp("")
     setNewInstagram("")
+    setNewBirthDate("")
     setRua("")
     setNumero("")
     setComplemento("")
@@ -388,6 +390,7 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
           cpf: newCpf.replace(/\D/g, ""),
           whatsapp: newWhatsapp.replace(/\D/g, "") || undefined,
           instagram: newInstagram || undefined,
+          birth_date: newBirthDate || undefined,
           street: rua || undefined,
           address_number: numero || undefined,
           address_complement: complemento || undefined,
@@ -631,10 +634,19 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                   </div>
                   <div>
                     <Label className="text-sm font-medium mb-2 block">Instagram</Label>
-                    <Input 
-                      placeholder="@usuario" 
-                      value={newInstagram} 
+                    <Input
+                      placeholder="@usuario"
+                      value={newInstagram}
                       onChange={(e) => setNewInstagram(e.target.value)}
+                      className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">Data de Nascimento</Label>
+                    <Input
+                      type="date"
+                      value={newBirthDate}
+                      onChange={(e) => setNewBirthDate(e.target.value)}
                       className="border-gray-200 focus:border-[#e8491d] focus:ring-[#e8491d] transition-all duration-300"
                     />
                   </div>

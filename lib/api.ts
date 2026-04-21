@@ -58,6 +58,21 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   return res.json() as Promise<T>
 }
 
+async function reqPaginated<T>(path: string): Promise<{ data: T[]; total: number; totalPages: number; page: number }> {
+  const token = getToken()
+  const headers: Record<string, string> = { "Content-Type": "application/json" }
+  if (token) headers["Authorization"] = `Bearer ${token}`
+  const res = await fetch(`${BASE_URL}${path}`, { headers })
+  if (!res.ok) throw new Error(`Erro ${res.status}`)
+  const data = await res.json() as T[]
+  return {
+    data,
+    total: parseInt(res.headers.get("X-Total-Count") ?? "0"),
+    totalPages: parseInt(res.headers.get("X-Total-Pages") ?? "1"),
+    page: parseInt(res.headers.get("X-Page") ?? "1"),
+  }
+}
+
 // ─── Types ───────────────────────────────────────────────
 
 export interface ApiCity {
@@ -106,7 +121,21 @@ export interface ApiStudent {
   cep?: string
   city_id?: number | null
   city?: { id: number; name: string; state: string } | null
+  birth_date?: string | null
   user?: ApiUser
+  enrollments?: {
+    id: number
+    status: string
+    started_at?: string
+    expires_at?: string
+    enrollment_type?: string
+    payment_method?: string
+    total_paid?: number | null
+    contract_signed?: boolean
+    created_at?: string
+    course?: { id: number; title: string } | null
+    turma?: { id: number; name: string } | null
+  }[]
 }
 
 export interface ApiCareer {
@@ -573,7 +602,11 @@ export const api = {
   },
 
   students: {
-    list: (q?: RansackQ) => req<ApiStudent[]>("GET", `/students${buildRansackQuery(q)}`),
+    list: (q?: RansackQ, page = 1, perPage = 10) => {
+      const qs = buildRansackQuery(q)
+      const sep = qs ? "&" : "?"
+      return reqPaginated<ApiStudent>(`/students${qs}${sep}page=${page}&per_page=${perPage}`)
+    },
     get: (id: number) => req<ApiStudent>("GET", `/students/${id}`),
     create: (body: Partial<ApiStudent> & { city_name?: string; city_state?: string; ibge_code?: string }) =>
       req<ApiStudent>("POST", "/students", body),

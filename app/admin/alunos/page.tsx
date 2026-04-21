@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Plus, Search, Eye, Loader2, Trash2, Pencil, User, Mail, CreditCard, Phone, AtSign, BookOpen, ShieldCheck, Settings2, FileSpreadsheet, Printer, Filter, Send } from "lucide-react"
+import { Plus, Search, Eye, Loader2, Trash2, Pencil, User, Mail, CreditCard, Phone, AtSign, BookOpen, ShieldCheck, Settings2, FileSpreadsheet, Printer, Filter, Send, AlertTriangle, CalendarDays } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { api, type ApiStudent, type ApiEnrollment } from "@/lib/api"
+import { api, type ApiStudent } from "@/lib/api"
 import { NewEnrollmentDialog } from "@/components/new-enrollment-dialog"
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog"
 import { isValidCpf } from "@/lib/cpf"
@@ -54,10 +54,12 @@ const enrollmentStatusColors: Record<string, string> = {
 
 export default function AlunosPage() {
   const [students, setStudents] = useState<ApiStudent[]>([])
-  const [enrollments, setEnrollments] = useState<ApiEnrollment[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all")
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
 
   // New enrollment dialog
   const [showNewEnrollment, setShowNewEnrollment] = useState(false)
@@ -74,6 +76,7 @@ export default function AlunosPage() {
   const [editCpf, setEditCpf] = useState("")
   const [editWhatsapp, setEditWhatsapp] = useState("")
   const [editInstagram, setEditInstagram] = useState("")
+  const [editBirthDate, setEditBirthDate] = useState("")
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState("")
 
@@ -93,6 +96,7 @@ export default function AlunosPage() {
     setEditCpf(student.cpf ?? "")
     setEditWhatsapp(student.whatsapp ?? "")
     setEditInstagram(student.instagram ?? "")
+    setEditBirthDate(student.birth_date ?? "")
     setEditError("")
   }
 
@@ -117,6 +121,7 @@ export default function AlunosPage() {
         cpf: editCpf.replace(/\D/g, ""),
         whatsapp: editWhatsapp.replace(/\D/g, "") || undefined,
         instagram: editInstagram || undefined,
+        birth_date: editBirthDate || undefined,
       })
       setStudents((prev) => prev.map((s) => s.id === updated.id ? updated : s))
       setEditStudent(null)
@@ -159,8 +164,11 @@ export default function AlunosPage() {
   async function handleDeleteEnrollment(enrollmentId: number) {
     setDeletingEnrollmentId(enrollmentId)
     try {
-      const updated = await api.enrollments.update(enrollmentId, { status: "canceled" })
-      setEnrollments((prev) => prev.map((en) => en.id === enrollmentId ? updated : en))
+      await api.enrollments.update(enrollmentId, { status: "canceled" })
+      setStudents((prev) => prev.map((s) => ({
+        ...s,
+        enrollments: s.enrollments?.map((e) => e.id === enrollmentId ? { ...e, status: "canceled" } : e),
+      })))
       setConfirmDeleteId(null)
     } catch (err) {
       console.error(err)
@@ -169,40 +177,40 @@ export default function AlunosPage() {
     }
   }
 
-  const fetchStudents = useCallback((q?: string, status?: typeof filterStatus) => {
+  const fetchStudents = useCallback((q?: string, status?: typeof filterStatus, p = 1) => {
     const ransackQ: Record<string, string> = {}
     if (q) ransackQ["name_or_email_or_cpf_cont"] = q
     if (status === "active") ransackQ["active_eq"] = "true"
     if (status === "inactive") ransackQ["active_eq"] = "false"
-    return api.students.list(Object.keys(ransackQ).length ? ransackQ : undefined)
+    return api.students.list(Object.keys(ransackQ).length ? ransackQ : undefined, p, 10)
   }, [])
 
-  useEffect(() => {
-    setLoading(true)
-    Promise.all([fetchStudents(), api.enrollments.list()])
-      .then(([s, e]) => { setStudents(s); setEnrollments(e) })
-      .catch(console.error)
-      .finally(() => setLoading(false))
-  }, [fetchStudents])
 
-  // Debounced Ransack re-fetch on search/filter change
+  // Debounced re-fetch em qualquer mudança de busca/filtro/página
   useEffect(() => {
     const t = setTimeout(() => {
       setLoading(true)
-      fetchStudents(search || undefined, filterStatus)
-        .then(setStudents)
+      fetchStudents(search || undefined, filterStatus, page)
+        .then((res) => { setStudents(res.data); setTotalPages(res.totalPages); setTotalCount(res.total) })
         .catch(console.error)
         .finally(() => setLoading(false))
-    }, 300)
+    }, page === 1 ? 300 : 0)
     return () => clearTimeout(t)
-  }, [search, filterStatus, fetchStudents])
+  }, [search, filterStatus, page, fetchStudents])
 
   const filtered = students
 
-  function handleExportCSV() {
+  async function handleExportCSV() {
+    const ransackQ: Record<string, string> = {}
+    if (search) ransackQ["name_or_email_or_cpf_cont"] = search
+    if (filterStatus === "active") ransackQ["active_eq"] = "true"
+    if (filterStatus === "inactive") ransackQ["active_eq"] = "false"
+    const { data: all } = await api.students.list(
+      Object.keys(ransackQ).length ? ransackQ : undefined, 1, 2000
+    )
     const rows = [
       ["#", "Nome", "Email", "CPF", "WhatsApp", "Instagram", "Status"],
-      ...filtered.map((s, i) => [
+      ...all.map((s, i) => [
         String(i + 1),
         s.name,
         s.email,
@@ -212,7 +220,7 @@ export default function AlunosPage() {
         s.active ? "Ativo" : "Inativo",
       ]),
     ]
-    const csv = rows.map((r) => r.map((c) => `"${c}"`).join(";")).join("\n")
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n")
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -228,12 +236,12 @@ export default function AlunosPage() {
     window.open(`/api/pdf/alunos?token=${token}${statusParam}`, "_blank")
   }
 
-  function getActiveEnrollment(studentId: number) {
-    return enrollments.find((e) => e.student?.id === studentId && e.status === "active")
+  function getActiveEnrollment(student: ApiStudent) {
+    return student.enrollments?.find((e) => e.status === "active") ?? null
   }
 
-  function getStudentEnrollments(studentId: number) {
-    return enrollments.filter((e) => e.student?.id === studentId)
+  function getStudentEnrollments(student: ApiStudent) {
+    return student.enrollments ?? []
   }
 
   return (
@@ -289,7 +297,7 @@ export default function AlunosPage() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between text-foreground">
             <span>Lista de Alunos</span>
-            <span className="text-sm font-normal text-muted-foreground">{filtered.length} aluno(s)</span>
+            <span className="text-sm font-normal text-muted-foreground">{totalCount} aluno(s)</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -300,25 +308,26 @@ export default function AlunosPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b text-left text-sm text-muted-foreground">
-                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Nome</span></th>
-                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" />Email</span></th>
-                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><CreditCard className="h-3.5 w-3.5" />CPF</span></th>
-                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />WhatsApp</span></th>
-                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><AtSign className="h-3.5 w-3.5" />Instagram</span></th>
-                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Curso</span></th>
-                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" />Status</span></th>
-                    <th className="pb-3 font-medium"><span className="flex items-center gap-1.5"><Settings2 className="h-3.5 w-3.5" />Ações</span></th>
+                    <th className="pb-3 pr-4 font-medium"><span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />Nome</span></th>
+                    <th className="pb-3 pr-4 font-medium"><span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" />Email</span></th>
+                    <th className="pb-3 pr-4 font-medium whitespace-nowrap"><span className="flex items-center gap-1.5"><CreditCard className="h-3.5 w-3.5" />CPF</span></th>
+                    <th className="pb-3 pr-4 font-medium whitespace-nowrap text-center"><span className="flex items-center justify-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Nascimento</span></th>
+                    <th className="pb-3 pr-4 font-medium whitespace-nowrap"><span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />WhatsApp</span></th>
+                    <th className="hidden 2xl:table-cell pb-3 pr-4 font-medium whitespace-nowrap"><span className="flex items-center gap-1.5"><AtSign className="h-3.5 w-3.5" />Instagram</span></th>
+                    <th className="hidden pb-3 pr-4 font-medium"><span className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Curso</span></th>
+                    <th className="pb-3 pr-4 font-medium text-center"><span className="flex items-center justify-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" />Status</span></th>
+                    <th className="pb-3 font-medium text-center"><span className="flex items-center justify-center gap-1.5"><Settings2 className="h-3.5 w-3.5" />Ações</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((student) => {
-                    const enrollment = getActiveEnrollment(student.id)
-                    const hasEnrollmentInTurma = enrollments.some(
-                      (e) => e.student?.id === student.id && e.turma != null
-                    )
+                    const enrollment = getActiveEnrollment(student)
+                    const cpfFormatted = student.cpf
+                      ? student.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
+                      : "—"
                     return (
                       <tr key={student.id} className="border-b last:border-0">
-                        <td className="py-4">
+                        <td className="py-4 pr-4">
                           <div className="flex items-center gap-3">
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
                               {student.name.charAt(0)}
@@ -326,11 +335,24 @@ export default function AlunosPage() {
                             <span className="font-medium text-foreground">{student.name}</span>
                           </div>
                         </td>
-                        <td className="py-4 text-sm text-muted-foreground">{student.email}</td>
-                        <td className="py-4 text-sm text-muted-foreground">{student.cpf || "—"}</td>
-                        <td className="py-4 text-sm text-muted-foreground">{student.whatsapp ?? "—"}</td>
-                        <td className="py-4 text-sm text-muted-foreground">{student.instagram ? `@${student.instagram.replace(/^@/, "")}` : "—"}</td>
-                        <td className="py-4 text-sm text-muted-foreground">
+                        <td className="py-4 pr-4 text-sm text-muted-foreground">{student.email}</td>
+                        <td className="py-4 pr-4 text-sm text-muted-foreground whitespace-nowrap">{cpfFormatted}</td>
+                        <td className="py-4 pr-4 text-sm whitespace-nowrap text-center">
+                          {student.birth_date
+                            ? <span className="text-muted-foreground">{new Date(student.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</span>
+                            : <span className="inline-flex items-center gap-1 text-red-500/70"><span className="h-1.5 w-1.5 rounded-full bg-red-500 inline-block" />—</span>}
+                        </td>
+                        <td className="py-4 pr-4 text-sm whitespace-nowrap">
+                          {student.whatsapp
+                            ? <span className="text-muted-foreground">{student.whatsapp}</span>
+                            : <span className="inline-flex items-center gap-1 text-red-500/70"><span className="h-1.5 w-1.5 rounded-full bg-red-500 inline-block" />—</span>}
+                        </td>
+                        <td className="hidden 2xl:table-cell py-4 pr-4 text-sm whitespace-nowrap">
+                          {student.instagram
+                            ? <span className="text-muted-foreground">@{student.instagram.replace(/^@/, "")}</span>
+                            : <span className="inline-flex items-center gap-1 text-red-500/70"><span className="h-1.5 w-1.5 rounded-full bg-red-500 inline-block" />—</span>}
+                        </td>
+                        <td className="hidden py-4 pr-4 text-sm text-muted-foreground">
                           {enrollment ? (
                             <div>
                               <p className="text-foreground">{enrollment.course?.title?.slice(0, 30)}{(enrollment.course?.title?.length ?? 0) > 30 ? "..." : ""}</p>
@@ -340,7 +362,7 @@ export default function AlunosPage() {
                             <span className="text-muted-foreground/50">Sem matrícula ativa</span>
                           )}
                         </td>
-                        <td className="py-4">
+                        <td className="py-4 pr-4 text-center">
                           <Badge
                             className={student.active ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}
                             variant="secondary"
@@ -348,10 +370,10 @@ export default function AlunosPage() {
                             {student.active ? "Ativo" : "Inativo"}
                           </Badge>
                         </td>
-                        <td className="py-4">
+                        <td className="py-4 text-center">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 mx-auto">
                                 <Settings2 className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -382,17 +404,42 @@ export default function AlunosPage() {
               )}
             </div>
           )}
+
+          {/* Paginação */}
+          {totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-between gap-2">
+              <span className="text-sm text-muted-foreground">
+                Página {page} de {totalPages}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="rounded border px-3 py-1 text-sm disabled:opacity-40 hover:bg-muted transition-colors"
+                >
+                  Anterior
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="rounded border px-3 py-1 text-sm disabled:opacity-40 hover:bg-muted transition-colors"
+                >
+                  Próxima
+                </button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <NewEnrollmentDialog
         open={showNewEnrollment}
         onOpenChange={setShowNewEnrollment}
-        onSuccess={(enrollment) => {
-          setEnrollments((prev) => [enrollment, ...prev])
-          if (enrollment.student && !students.find((s) => s.id === enrollment.student?.id)) {
-            setStudents((prev) => [enrollment.student!, ...prev])
-          }
+        onSuccess={() => {
+          // Recarrega a página atual para refletir nova matrícula
+          fetchStudents(search || undefined, filterStatus, page)
+            .then((res) => { setStudents(res.data); setTotalPages(res.totalPages); setTotalCount(res.total) })
+            .catch(console.error)
         }}
       />
 
@@ -444,9 +491,19 @@ export default function AlunosPage() {
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Instagram</Label>
-              <Input placeholder="@usuario" value={editInstagram} onChange={(e) => setEditInstagram(e.target.value)} />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Instagram</Label>
+                <Input placeholder="@usuario" value={editInstagram} onChange={(e) => setEditInstagram(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Data de Nascimento</Label>
+                <Input
+                  type="date"
+                  value={editBirthDate}
+                  onChange={(e) => setEditBirthDate(e.target.value)}
+                />
+              </div>
             </div>
             {editError && <p className="text-sm text-destructive">{editError}</p>}
             <div className="flex justify-end gap-3 pt-2">
@@ -482,11 +539,11 @@ export default function AlunosPage() {
               </div>
               <div>
                 <p className="mb-3 font-medium text-foreground">Matrículas</p>
-                {getStudentEnrollments(selectedStudent.id).length === 0 ? (
+                {getStudentEnrollments(selectedStudent).length === 0 ? (
                   <p className="text-sm text-muted-foreground">Nenhuma matrícula encontrada.</p>
                 ) : (
                   <div className="space-y-2">
-                    {getStudentEnrollments(selectedStudent.id).map((enr) => (
+                    {getStudentEnrollments(selectedStudent).map((enr) => (
                       <div key={enr.id} className="rounded-lg border p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
