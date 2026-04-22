@@ -104,16 +104,8 @@ export default function CeoUsuariosPage() {
     setProfSubjectIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
   }
 
-  const fetchUsers = useCallback((q?: string, typeId?: string, status?: string, types?: ApiUserType[]) => {
-    const ransackQ: Record<string, string> = {}
-    if (q) ransackQ["name_or_email_cont"] = q
-    if (typeId && typeId !== "todos") {
-      const slug = (types ?? []).find((ut) => String(ut.id) === typeId)?.slug
-      if (slug) ransackQ["role_eq"] = slug
-    }
-    if (status === "ativo") ransackQ["active_eq"] = "true"
-    if (status === "inativo") ransackQ["active_eq"] = "false"
-    return api.users.list(Object.keys(ransackQ).length ? ransackQ : undefined)
+  const fetchUsers = useCallback(() => {
+    return api.users.list()
   }, [])
 
   useEffect(() => {
@@ -132,22 +124,27 @@ export default function CeoUsuariosPage() {
   // Reset page when filters change
   useEffect(() => { setPage(1) }, [searchTerm, filterTypeId, filterStatus])
 
-  // Debounced Ransack re-fetch on search/filter change
-  useEffect(() => {
-    const t = setTimeout(() => {
-      fetchUsers(searchTerm || undefined, filterTypeId, filterStatus, userTypes)
-        .then(setUsers)
-        .catch(console.error)
-    }, 300)
-    return () => clearTimeout(t)
-  }, [searchTerm, filterTypeId, filterStatus, fetchUsers, userTypes])
-
   const selectedUserType = useMemo(
     () => userTypes.find((ut) => ut.id === createUserTypeId) ?? null,
     [userTypes, createUserTypeId]
   )
 
-  const filteredUsers = users
+  const filteredUsers = useMemo(() => {
+    let result = users
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim()
+      result = result.filter((u) =>
+        u.name.toLowerCase().includes(term) || u.email.toLowerCase().includes(term)
+      )
+    }
+    if (filterTypeId !== "todos") {
+      const slug = userTypes.find((ut) => String(ut.id) === filterTypeId)?.slug
+      if (slug) result = result.filter((u) => (u.user_type?.slug ?? u.role) === slug)
+    }
+    if (filterStatus === "ativo") result = result.filter((u) => u.active)
+    if (filterStatus === "inativo") result = result.filter((u) => !u.active)
+    return result
+  }, [users, searchTerm, filterTypeId, filterStatus, userTypes])
 
   const stats = useMemo(() => ({
     total: users.length,
@@ -351,7 +348,7 @@ export default function CeoUsuariosPage() {
               <div className="border-b bg-gray-50/50 px-6 py-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-foreground">
-                    Lista de Usuários ({loading ? "..." : filteredUsers.length})
+                    Lista de Usuários ({loading ? "..." : filteredUsers.length}{filteredUsers.length !== users.length ? ` de ${users.length}` : ""})
                   </h3>
                   <div className="text-sm text-muted-foreground">Ordenado alfabeticamente</div>
                 </div>
@@ -361,9 +358,9 @@ export default function CeoUsuariosPage() {
                 <div className="flex justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-              ) : users.length > 0 ? (
+              ) : filteredUsers.length > 0 ? (
                 <div className="divide-y">
-                  {users.slice((page - 1) * PER_PAGE, page * PER_PAGE).map((user) => {
+                  {filteredUsers.slice((page - 1) * PER_PAGE, page * PER_PAGE).map((user) => {
                     const userSubjects = subjects.filter((s) => s.professor_id === user.id)
                     const utSlug = user.user_type?.slug ?? user.role
                     return (
@@ -452,13 +449,13 @@ export default function CeoUsuariosPage() {
                   )}
                 </div>
               )}
-              {users.length > PER_PAGE && (
+              {filteredUsers.length > PER_PAGE && (
                 <div className="flex items-center justify-between border-t px-6 py-4">
                   <p className="text-sm text-muted-foreground">
-                    {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, users.length)} de {users.length}
+                    {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, filteredUsers.length)} de {filteredUsers.length}
                   </p>
                   <div className="flex gap-1">
-                    {Array.from({ length: Math.ceil(users.length / PER_PAGE) }, (_, i) => i + 1).map((p) => (
+                    {Array.from({ length: Math.ceil(filteredUsers.length / PER_PAGE) }, (_, i) => i + 1).map((p) => (
                       <button
                         key={p}
                         onClick={() => setPage(p)}

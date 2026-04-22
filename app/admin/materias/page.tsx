@@ -36,8 +36,8 @@ export default function MateriasPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
-  const fetchSubjects = useCallback((q?: string) => {
-    return api.subjects.list(undefined, q ? { name_or_professor_name_cont: q } : undefined)
+  const fetchSubjects = useCallback(() => {
+    return api.subjects.list()
   }, [])
 
   useEffect(() => {
@@ -49,13 +49,6 @@ export default function MateriasPage() {
   }, [fetchSubjects])
 
   useEffect(() => { setPage(1) }, [search])
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      fetchSubjects(search || undefined).then(setSubjects).catch(console.error)
-    }, 300)
-    return () => clearTimeout(t)
-  }, [search, fetchSubjects])
 
   function openEditDialog(subject: ApiSubject) {
     setEditSubject(subject)
@@ -107,6 +100,16 @@ export default function MateriasPage() {
     }
   }
 
+  const term = search.toLowerCase().trim()
+  const filteredSubjects = term
+    ? subjects.filter(s =>
+        s.name.toLowerCase().includes(term) ||
+        (s.professor?.name ?? "").toLowerCase().includes(term)
+      )
+    : subjects
+  const totalPages = Math.ceil(filteredSubjects.length / PER_PAGE)
+  const pagedSubjects = filteredSubjects.slice((page - 1) * PER_PAGE, page * PER_PAGE)
+
   return (
     <div>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -150,7 +153,7 @@ export default function MateriasPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {subjects.slice((page - 1) * PER_PAGE, page * PER_PAGE).map((sub) => (
+                  {pagedSubjects.map((sub) => (
                       <tr key={sub.id} className="border-b last:border-0 hover:bg-muted/40 transition-colors">
                         <td className="py-4">
                           <div className="flex items-center gap-3">
@@ -214,13 +217,13 @@ export default function MateriasPage() {
               )}
             </div>
           )}
-          {subjects.length > PER_PAGE && (
+          {totalPages > 1 && (
             <div className="flex items-center justify-between border-t pt-4 mt-2">
               <p className="text-sm text-muted-foreground">
-                {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, subjects.length)} de {subjects.length}
+                {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, filteredSubjects.length)} de {filteredSubjects.length}
               </p>
               <div className="flex gap-1">
-                {Array.from({ length: Math.ceil(subjects.length / PER_PAGE) }, (_, i) => i + 1).map((p) => (
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                   <button
                     key={p}
                     onClick={() => setPage(p)}
