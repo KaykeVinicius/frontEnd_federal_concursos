@@ -62,12 +62,6 @@ function maskCpf(value: string) {
   return d
 }
 
-function maskCep(value: string) {
-  const d = value.replace(/\D/g, "").slice(0, 8)
-  if (d.length > 5) return d.replace(/(\d{5})(\d{1,3})/, "$1-$2")
-  return d
-}
-
 function maskPhone(value: string) {
   const d = value.replace(/\D/g, "").slice(0, 11)
   if (d.length > 10) return d.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3")
@@ -77,8 +71,7 @@ function maskPhone(value: string) {
 }
 
 const emptyForm = {
-  name: "", cpf: "", email: "", whatsapp: "",
-  postal_code: "", street: "", number: "", complement: "", neighborhood: "", city: "", state: ""
+  name: "", cpf: "", email: "", whatsapp: ""
 }
 
 function fieldCls(value: string, valid: boolean | null) {
@@ -113,7 +106,6 @@ export default function LandingPage() {
   const [form, setForm] = useState(emptyForm)
   const [formError, setFormError] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [cepLoading, setCepLoading] = useState(false)
   const [cpfTaken, setCpfTaken] = useState<boolean | null>(null)
   const [emailTaken, setEmailTaken] = useState<boolean | null>(null)
 
@@ -169,26 +161,6 @@ export default function LandingPage() {
     return () => clearInterval(id)
   })
 
-  async function fetchCep(cep: string) {
-    const digits = cep.replace(/\D/g, "")
-    if (digits.length !== 8) return
-    setCepLoading(true)
-    try {
-      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`)
-      const data = await res.json()
-      if (!data.erro) {
-        setForm(f => ({
-          ...f,
-          street:       data.logradouro  || f.street,
-          neighborhood: data.bairro      || f.neighborhood,
-          city:         data.localidade  || f.city,
-          state:        data.uf          || f.state,
-        }))
-      }
-    } catch {}
-    setCepLoading(false)
-  }
-
   async function handleEnrollSubmit(e: { preventDefault(): void }) {
     e.preventDefault()
     setFormError("")
@@ -225,16 +197,9 @@ export default function LandingPage() {
         body: JSON.stringify({
           course_id:    enrollingCourse!.id,
           name:         form.name.trim(),
-          cpf:          cpfDigits,
-          email:        form.email.trim().toLowerCase(),
-          whatsapp:     phone,
-          postal_code:  form.postal_code.replace(/\D/g, ""),
-          street:       form.street.trim(),
-          number:       form.number.trim(),
-          complement:   form.complement.trim(),
-          neighborhood: form.neighborhood.trim(),
-          city:         form.city.trim(),
-          state:        form.state.trim().toUpperCase(),
+          cpf:      cpfDigits,
+          email:    form.email.trim().toLowerCase(),
+          whatsapp: phone,
         }),
       })
       const data = await res.json()
@@ -301,17 +266,10 @@ export default function LandingPage() {
       const data = await res.json()
       if (data.found) {
         setForm({
-          name:         data.name        ?? "",
-          email:        data.email       ?? "",
-          whatsapp:     data.whatsapp    ?? "",
-          cpf:          maskCpf(digits),
-          postal_code:  maskCep(data.postal_code  ?? ""),
-          street:       data.street       ?? "",
-          number:       data.number       ?? "",
-          complement:   data.complement   ?? "",
-          neighborhood: data.neighborhood ?? "",
-          city:         data.city         ?? "",
-          state:        data.state        ?? "",
+          name:     data.name     ?? "",
+          email:    data.email    ?? "",
+          whatsapp: data.whatsapp ?? "",
+          cpf:      maskCpf(digits),
         })
         setIsNewStudent(false)
         setCpfTaken(null)
@@ -331,8 +289,6 @@ export default function LandingPage() {
   const emailValid: boolean | null = form.email.length === 0 ? null : /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)
   const phoneDigitsLive = form.whatsapp.replace(/\D/g, "")
   const phoneValid: boolean | null = phoneDigitsLive.length === 0 ? null : phoneDigitsLive.length < 10 ? null : phoneDigitsLive.length <= 11
-  const cepDigitsLive   = form.postal_code.replace(/\D/g, "")
-  const cepValid: boolean | null   = cepDigitsLive.length === 0 ? null : cepDigitsLive.length === 8 ? true : false
   const nameValid: boolean | null  = form.name.trim().length === 0 ? null : true
 
   const labelCls = "mb-1 block text-xs font-semibold text-[#9ca3af]"
@@ -948,86 +904,6 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              {/* Endereço */}
-              <div>
-                <p className="mb-3 text-xs font-bold uppercase tracking-widest text-[#6b7280]">Endereço</p>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className={labelCls}>CEP *</label>
-                      <div className="relative">
-                        <input required className={fieldCls(form.postal_code, cepLoading ? null : cepValid)} placeholder="00000-000"
-                          inputMode="numeric" maxLength={9}
-                          value={form.postal_code}
-                          onChange={e => {
-                            const v = maskCep(e.target.value)
-                            setForm(f => ({ ...f, postal_code: v }))
-                            if (v.replace(/\D/g, "").length === 8) fetchCep(v)
-                          }} />
-                        {cepLoading
-                          ? <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-[#e84a20]" />
-                          : <FieldIcon valid={cepValid} />
-                        }
-                      </div>
-                      {!cepLoading && cepValid === false && (
-                        <p className="mt-1 text-xs text-red-400">CEP inválido. Digite 8 dígitos.</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className={labelCls}>Estado *</label>
-                      <div className="relative">
-                        <input required className={fieldCls(form.state, form.state.length === 2 ? true : form.state.length > 0 ? false : null)}
-                          placeholder="RO" maxLength={2}
-                          value={form.state}
-                          onChange={e => setForm(f => ({ ...f, state: e.target.value.toUpperCase() }))} />
-                        <FieldIcon valid={form.state.length === 2 ? true : form.state.length > 0 ? false : null} />
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <label className={labelCls}>Cidade *</label>
-                    <div className="relative">
-                      <input required className={fieldCls(form.city, form.city.trim().length > 0 ? true : null)} placeholder="Porto Velho"
-                        value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
-                      <FieldIcon valid={form.city.trim().length > 0 ? true : null} />
-                    </div>
-                  </div>
-                  <div>
-                    <label className={labelCls}>Bairro *</label>
-                    <div className="relative">
-                      <input required className={fieldCls(form.neighborhood, form.neighborhood.trim().length > 0 ? true : null)} placeholder="São Cristóvão"
-                        value={form.neighborhood} onChange={e => setForm(f => ({ ...f, neighborhood: e.target.value }))} />
-                      <FieldIcon valid={form.neighborhood.trim().length > 0 ? true : null} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="col-span-2">
-                      <label className={labelCls}>Rua / Logradouro *</label>
-                      <div className="relative">
-                        <input required className={fieldCls(form.street, form.street.trim().length > 0 ? true : null)} placeholder="R. Getúlio Vargas"
-                          value={form.street} onChange={e => setForm(f => ({ ...f, street: e.target.value }))} />
-                        <FieldIcon valid={form.street.trim().length > 0 ? true : null} />
-                      </div>
-                    </div>
-                    <div>
-                      <label className={labelCls}>Número *</label>
-                      <div className="relative">
-                        <input required className={fieldCls(form.number, form.number.trim().length > 0 ? true : null)} placeholder="2634"
-                          value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value }))} />
-                        <FieldIcon valid={form.number.trim().length > 0 ? true : null} />
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <label className={labelCls}>Complemento</label>
-                    <input
-                      className="w-full rounded-lg border border-[#2a2a2a] bg-[#0d0d0d] px-3 py-2.5 text-sm text-white placeholder-[#4a4a4a] outline-none focus:border-[#e84a20] transition-colors"
-                      placeholder="Apto, sala, bloco..."
-                      value={form.complement} onChange={e => setForm(f => ({ ...f, complement: e.target.value }))} />
-                  </div>
-                </div>
-              </div>
-
               {formError && (
                 <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
                   {formError}
@@ -1036,7 +912,7 @@ export default function LandingPage() {
 
               <div className="flex items-center gap-1.5 text-xs text-[#6b7280]">
                 <ShieldCheck className="h-3.5 w-3.5 text-[#e84a20] shrink-0" />
-                Pagamento processado com segurança via NuPay / Nubank
+                Pagamento processado com segurança via Stripe
               </div>
 
               <button
