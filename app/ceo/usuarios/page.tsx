@@ -603,28 +603,28 @@ export default function CeoUsuariosPage() {
                     <BookOpen className="h-4 w-4 inline mr-2" />Matérias que vai ministrar
                   </Label>
 
-                  <div className="flex gap-2">
-                    <select
-                      className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
-                      defaultValue=""
-                      onChange={(e) => {
-                        const id = parseInt(e.target.value)
-                        if (id && !selectedSubjectIds.includes(id)) {
-                          setSelectedSubjectIds((prev) => [...prev, id])
-                        }
-                        e.target.value = ""
-                      }}
-                    >
-                      <option value="">Selecione uma matéria...</option>
+                  <Select
+                    value=""
+                    onValueChange={(val) => {
+                      const id = parseInt(val)
+                      if (id && !selectedSubjectIds.includes(id)) {
+                        setSelectedSubjectIds((prev) => [...prev, id])
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="border-gray-200">
+                      <SelectValue placeholder="Selecione uma matéria..." />
+                    </SelectTrigger>
+                    <SelectContent>
                       {subjects
                         .filter((s) => !selectedSubjectIds.includes(s.id))
                         .map((s) => (
-                          <option key={s.id} value={s.id}>
+                          <SelectItem key={s.id} value={String(s.id)}>
                             {s.name}{s.professor_id ? " (já tem professor)" : ""}
-                          </option>
+                          </SelectItem>
                         ))}
-                    </select>
-                  </div>
+                    </SelectContent>
+                  </Select>
 
                   {selectedSubjectIds.length > 0 && (
                     <div className="flex flex-wrap gap-2">
