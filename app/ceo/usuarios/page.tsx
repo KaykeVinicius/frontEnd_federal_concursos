@@ -12,8 +12,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { api, type ApiUser, type ApiSubject, type ApiUserType } from "@/lib/api"
 import { isValidCpf } from "@/lib/cpf"
 import {
-  Users, Plus, Search, Settings, UserCheck, UserX, Crown, Briefcase,
-  GraduationCap, BookOpen, User, Filter, BarChart3, Shield,
+  Users, Plus, Search, Settings, UserCheck, UserX, Crown,
+  BookOpen, User, Filter, BarChart3, Shield,
   CheckCircle, XCircle, Percent, Mail, Loader2,
 } from "lucide-react"
 
@@ -46,6 +46,8 @@ export default function CeoUsuariosPage() {
 
   const [searchTerm, setSearchTerm] = useState("")
   const [filterTypeId, setFilterTypeId] = useState<string>("todos")
+  const [page, setPage] = useState(1)
+  const PER_PAGE = 10
   const [filterStatus, setFilterStatus] = useState<"todos" | "ativo" | "inativo">("todos")
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
@@ -102,10 +104,13 @@ export default function CeoUsuariosPage() {
     setProfSubjectIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
   }
 
-  const fetchUsers = useCallback((q?: string, typeId?: string, status?: string) => {
+  const fetchUsers = useCallback((q?: string, typeId?: string, status?: string, types?: ApiUserType[]) => {
     const ransackQ: Record<string, string> = {}
     if (q) ransackQ["name_or_email_cont"] = q
-    if (typeId && typeId !== "todos") ransackQ["user_type_id_eq"] = typeId
+    if (typeId && typeId !== "todos") {
+      const slug = (types ?? []).find((ut) => String(ut.id) === typeId)?.slug
+      if (slug) ransackQ["role_eq"] = slug
+    }
     if (status === "ativo") ransackQ["active_eq"] = "true"
     if (status === "inativo") ransackQ["active_eq"] = "false"
     return api.users.list(Object.keys(ransackQ).length ? ransackQ : undefined)
@@ -124,15 +129,18 @@ export default function CeoUsuariosPage() {
     }).catch(console.error).finally(() => setLoading(false))
   }, [fetchUsers])
 
+  // Reset page when filters change
+  useEffect(() => { setPage(1) }, [searchTerm, filterTypeId, filterStatus])
+
   // Debounced Ransack re-fetch on search/filter change
   useEffect(() => {
     const t = setTimeout(() => {
-      fetchUsers(searchTerm || undefined, filterTypeId, filterStatus)
+      fetchUsers(searchTerm || undefined, filterTypeId, filterStatus, userTypes)
         .then(setUsers)
         .catch(console.error)
     }, 300)
     return () => clearTimeout(t)
-  }, [searchTerm, filterTypeId, filterStatus, fetchUsers])
+  }, [searchTerm, filterTypeId, filterStatus, fetchUsers, userTypes])
 
   const selectedUserType = useMemo(
     () => userTypes.find((ut) => ut.id === createUserTypeId) ?? null,
@@ -353,9 +361,9 @@ export default function CeoUsuariosPage() {
                 <div className="flex justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
-              ) : filteredUsers.length > 0 ? (
+              ) : users.length > 0 ? (
                 <div className="divide-y">
-                  {filteredUsers.map((user) => {
+                  {users.slice((page - 1) * PER_PAGE, page * PER_PAGE).map((user) => {
                     const userSubjects = subjects.filter((s) => s.professor_id === user.id)
                     const utSlug = user.user_type?.slug ?? user.role
                     return (
@@ -442,6 +450,24 @@ export default function CeoUsuariosPage() {
                       <Plus className="h-4 w-4 mr-2" />Criar Primeiro Usuário
                     </Button>
                   )}
+                </div>
+              )}
+              {users.length > PER_PAGE && (
+                <div className="flex items-center justify-between border-t px-6 py-4">
+                  <p className="text-sm text-muted-foreground">
+                    {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, users.length)} de {users.length}
+                  </p>
+                  <div className="flex gap-1">
+                    {Array.from({ length: Math.ceil(users.length / PER_PAGE) }, (_, i) => i + 1).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => setPage(p)}
+                        className={`h-8 w-8 rounded text-sm font-medium transition-colors ${p === page ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </Card>

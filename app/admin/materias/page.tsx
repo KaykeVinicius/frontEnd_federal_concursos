@@ -15,6 +15,8 @@ export default function MateriasPage() {
   const [subjects, setSubjects] = useState<ApiSubject[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [page, setPage] = useState(1)
+  const PER_PAGE = 10
 
   // New subject dialog
   const [showNew, setShowNew] = useState(false)
@@ -35,7 +37,7 @@ export default function MateriasPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const fetchSubjects = useCallback((q?: string) => {
-    return api.subjects.list(undefined, q ? { name_cont: q } : undefined)
+    return api.subjects.list(undefined, q ? { name_or_professor_name_cont: q } : undefined)
   }, [])
 
   useEffect(() => {
@@ -45,6 +47,8 @@ export default function MateriasPage() {
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [fetchSubjects])
+
+  useEffect(() => { setPage(1) }, [search])
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -146,7 +150,7 @@ export default function MateriasPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {subjects.map((sub) => (
+                  {subjects.slice((page - 1) * PER_PAGE, page * PER_PAGE).map((sub) => (
                       <tr key={sub.id} className="border-b last:border-0 hover:bg-muted/40 transition-colors">
                         <td className="py-4">
                           <div className="flex items-center gap-3">
@@ -208,6 +212,24 @@ export default function MateriasPage() {
                   <p className="text-sm text-muted-foreground">Clique em &quot;Nova Matéria&quot; para criar.</p>
                 </div>
               )}
+            </div>
+          )}
+          {subjects.length > PER_PAGE && (
+            <div className="flex items-center justify-between border-t pt-4 mt-2">
+              <p className="text-sm text-muted-foreground">
+                {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, subjects.length)} de {subjects.length}
+              </p>
+              <div className="flex gap-1">
+                {Array.from({ length: Math.ceil(subjects.length / PER_PAGE) }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={`h-8 w-8 rounded text-sm font-medium transition-colors ${p === page ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </CardContent>
