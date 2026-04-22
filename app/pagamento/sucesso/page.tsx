@@ -8,7 +8,7 @@ export default function PagamentoSucesso() {
   const router = useRouter()
 
   useEffect(() => {
-    const t = setTimeout(() => router.push("/"), 8000)
+    const t = setTimeout(() => router.push("/login"), 5000)
     return () => clearTimeout(t)
   }, [router])
 
@@ -21,13 +21,13 @@ export default function PagamentoSucesso() {
           Seu pagamento foi processado com sucesso. Em breve você receberá um e-mail com os dados de acesso ao curso.
         </p>
         <p className="text-sm text-gray-500">
-          Você será redirecionado para a página inicial em alguns segundos...
+          Você será redirecionado para o login em alguns segundos...
         </p>
         <button
-          onClick={() => router.push("/")}
+          onClick={() => router.push("/login")}
           className="mt-2 px-6 py-3 bg-[#e8491d] hover:bg-[#d13a0f] rounded-lg font-semibold transition-colors"
         >
-          Voltar ao início
+          Ir para o login
         </button>
       </div>
     </div>
