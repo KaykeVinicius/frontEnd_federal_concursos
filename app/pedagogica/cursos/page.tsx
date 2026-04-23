@@ -348,11 +348,11 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
 
   const currentProfessors = subject.professors ?? []
 
-  async function saveProf() {
-    if (!newProfId) return
+  async function saveProf(directPid?: number) {
+    const pid = directPid ?? (newProfId ? parseInt(newProfId) : 0)
+    if (!pid) return
     setSavingProf(true)
     try {
-      const pid = parseInt(newProfId)
       const updated = await api.subjects.update(subject.id, { professor_ids: [pid] })
       onUpdate({ ...subject, professors: updated.professors ?? [{ id: pid, name: eligibleProfessors.find(p => p.id === pid)?.name ?? "" }] })
       setEditingProf(false)
@@ -393,6 +393,23 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
             <span className="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[11px] text-blue-700">
               Prof: {currentProfessors.map(p => p.name.split(" ")[0]).join(", ")}
             </span>
+          ) : eligibleProfessors.length === 1 ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); saveProf(eligibleProfessors[0].id) }}
+              disabled={savingProf}
+              className="rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[11px] text-orange-600 hover:bg-green-50 hover:border-green-400 hover:text-green-700 transition-colors disabled:opacity-50"
+            >
+              {savingProf ? "Vinculando..." : `+ ${eligibleProfessors[0].name.split(" ")[0]}`}
+            </button>
+          ) : eligibleProfessors.length > 1 ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setEditingProf((v) => !v); setNewProfId("") }}
+              className="rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[11px] text-orange-600 hover:bg-orange-100 transition-colors"
+            >
+              Selecionar professor ({eligibleProfessors.length})
+            </button>
           ) : (
             <span className="rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[11px] text-orange-600">
               Sem professor
