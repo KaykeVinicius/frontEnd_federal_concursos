@@ -149,7 +149,7 @@ export default function MateriasPage() {
                   <tr className="border-b text-sm text-muted-foreground">
                     <th className="pb-3 font-medium text-left w-1/2"><span className="flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5" />Matéria</span></th>
                     <th className="pb-3 font-medium text-center w-1/3"><span className="flex items-center justify-center gap-1.5"><User className="h-3.5 w-3.5" />Professor</span></th>
-                    <th className="pb-3 font-medium text-right w-1/6"><span className="flex items-center justify-end gap-1.5"><Settings2 className="h-3.5 w-3.5" />Ações</span></th>
+                    <th className="pb-3 font-medium text-center w-1/6"><span className="flex items-center justify-center gap-1.5"><Settings2 className="h-3.5 w-3.5" />Ações</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -173,7 +173,7 @@ export default function MateriasPage() {
                             ? <span className="flex flex-col gap-0.5">{(sub.professors ?? []).map(p => <span key={p.id}>{p.name}</span>)}</span>
                             : <span className="text-muted-foreground/50">—</span>}
                         </td>
-                        <td className="py-4 text-right">
+                        <td className="py-4 text-center">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
