@@ -41,10 +41,7 @@ export default function MateriaisPage() {
     const professorId = stored ? JSON.parse(stored)?.id : undefined
 
     const subjectsPromise = api.professor.subjects().catch(() =>
-      professorId
-        ? api.subjects.list(undefined, { professor_id_eq: String(professorId) })
-            .then((subs) => subs.filter((s) => s.professor_id === professorId))
-        : Promise.resolve<ApiSubject[]>([])
+      Promise.resolve<ApiSubject[]>([])
     )
 
     Promise.all([

@@ -773,11 +773,12 @@ function AssistirInner() {
   async function enviarDuvida() {
     if (!textoDuvida.trim() || !aulaAtiva) return
     const disc = getDisciplinaFromAula(aulaAtiva.id)
-    if (!disc?.professor_id) return
+    const profId = (disc?.professors ?? [])[0]?.id
+    if (!profId) return
     setSendingDuvida(true)
     try {
       await api.aluno.createQuestion({
-        professor_id: disc.professor_id,
+        professor_id: profId,
         lesson_id: aulaAtiva.id,
         subject_id: disc.id,
         text: textoDuvida.trim(),
@@ -1076,7 +1077,7 @@ function AssistirInner() {
                         <div className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2">
                           <p className="text-[10px] uppercase tracking-wider text-zinc-600">Professor</p>
                           <p className="text-xs text-zinc-300 truncate">
-                            {getDisciplinaFromAula(aulaAtiva.id)?.professor?.name ?? "—"}
+                            {(getDisciplinaFromAula(aulaAtiva.id)?.professors ?? [])[0]?.name ?? "—"}
                           </p>
                         </div>
                       </div>

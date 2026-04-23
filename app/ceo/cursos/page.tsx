@@ -351,21 +351,22 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
 
   const eligibleProfessorIds = new Set(
     allGlobalSubjects
-      .filter((s) => s.name.toLowerCase() === subject.name.toLowerCase() && s.professor_id)
-      .map((s) => s.professor_id!)
+      .filter((s) => s.name.toLowerCase() === subject.name.toLowerCase())
+      .flatMap((s) => (s.professors ?? []).map((p) => p.id))
   )
   const eligibleProfessors = eligibleProfessorIds.size > 0
     ? professors.filter((p) => eligibleProfessorIds.has(p.id))
     : professors
 
-  const currentProfessor = professors.find((p) => p.id === subject.professor_id)
+  const currentProfessors = subject.professors ?? []
 
   async function saveProf() {
     if (!newProfId) return
     setSavingProf(true)
     try {
-      await api.subjects.update(subject.id, { professor_id: parseInt(newProfId) })
-      onUpdate({ ...subject, professor_id: parseInt(newProfId) })
+      const pid = parseInt(newProfId)
+      const updated = await api.subjects.update(subject.id, { professor_ids: [pid] })
+      onUpdate({ ...subject, professors: updated.professors ?? [{ id: pid, name: eligibleProfessors.find(p => p.id === pid)?.name ?? "" }] })
       setEditingProf(false)
       setNewProfId("")
     } catch (e) { console.error(e) }
@@ -394,9 +395,9 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
           <GraduationCap className="h-4 w-4 shrink-0 text-blue-500" />
           <span className="text-sm font-medium">{subject.name}</span>
           <Badge variant="secondary" className="text-xs">{subject.topics.length} tópico(s)</Badge>
-          {currentProfessor ? (
+          {currentProfessors.length > 0 ? (
             <span className="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[11px] text-blue-700">
-              Prof: {currentProfessor.name.split(" ")[0]}
+              Prof: {currentProfessors.map(p => p.name.split(" ")[0]).join(", ")}
             </span>
           ) : (
             <span className="rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[11px] text-orange-600">
@@ -551,7 +552,7 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
         course_id:    course.id,
         name:         template.name,
         description:  template.description,
-        professor_id: template.professor_id,
+        professor_ids: (template.professors ?? []).map(p => p.id),
       })
       onUpdate({ ...course, subjects: [...course.subjects, { ...created, topics: [] }] })
       setAddingSubject(false)
@@ -740,9 +741,9 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
                       </select>
                       {selectedSubjectId && (() => {
                         const sel = availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))
-                        const prof = sel?.professor_id ? professors.find((p) => p.id === sel.professor_id) : null
-                        return prof ? (
-                          <p className="text-xs text-muted-foreground">Professor: <span className="font-medium text-foreground">{prof.name}</span></p>
+                        const selProfs = sel?.professors ?? []
+                        return selProfs.length > 0 ? (
+                          <p className="text-xs text-muted-foreground">Professor: <span className="font-medium text-foreground">{selProfs.map(p => p.name).join(", ")}</span></p>
                         ) : (
                           <p className="text-xs text-amber-600">Esta matéria não tem professor vinculado.</p>
                         )
