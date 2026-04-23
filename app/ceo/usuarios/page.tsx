@@ -71,24 +71,41 @@ export default function CeoUsuariosPage() {
 
   function openEditSubjects(user: ApiUser) {
     setEditingProfessor(user)
-    setProfSubjectIds(subjects.filter((s) => s.professor_id === user.id).map((s) => s.id))
+    // Current subjects where this professor is one of the professors
+    setProfSubjectIds(subjects.filter((s) => (s.professors ?? []).some(p => p.id === user.id)).map((s) => s.id))
   }
 
   async function handleSaveProfSubjects() {
     if (!editingProfessor) return
     setSavingProfSubjects(true)
     try {
-      const original = subjects.filter((s) => s.professor_id === editingProfessor.id).map((s) => s.id)
+      const profId = editingProfessor.id
+      // For each subject: add or remove this professor using professor_ids
+      const original = subjects.filter((s) => (s.professors ?? []).some(p => p.id === profId)).map((s) => s.id)
       const toAdd    = profSubjectIds.filter((id) => !original.includes(id))
       const toRemove = original.filter((id) => !profSubjectIds.includes(id))
+
       await Promise.all([
-        ...toAdd.map((id) => api.subjects.update(id, { professor_id: editingProfessor.id })),
-        ...toRemove.map((id) => api.subjects.update(id, { professor_id: null })),
+        ...toAdd.map((id) => {
+          const sub = subjects.find(s => s.id === id)!
+          const newIds = [...(sub.professors ?? []).map(p => p.id), profId]
+          return api.subjects.update(id, { professor_ids: newIds })
+        }),
+        ...toRemove.map((id) => {
+          const sub = subjects.find(s => s.id === id)!
+          const newIds = (sub.professors ?? []).map(p => p.id).filter(pid => pid !== profId)
+          return api.subjects.update(id, { professor_ids: newIds })
+        }),
       ])
+
       setSubjects((prev) =>
         prev.map((s) => {
-          if (toAdd.includes(s.id)) return { ...s, professor_id: editingProfessor.id }
-          if (toRemove.includes(s.id)) return { ...s, professor_id: null }
+          if (toAdd.includes(s.id)) {
+            return { ...s, professors: [...(s.professors ?? []), { id: profId, name: editingProfessor.name }] }
+          }
+          if (toRemove.includes(s.id)) {
+            return { ...s, professors: (s.professors ?? []).filter(p => p.id !== profId) }
+          }
           return s
         })
       )
@@ -200,13 +217,17 @@ export default function CeoUsuariosPage() {
 
       if (selectedUserType?.slug === "professor" && selectedSubjectIds.length > 0) {
         await Promise.all(
-          selectedSubjectIds.map((sid) =>
-            api.subjects.update(sid, { professor_id: newUser.id })
-          )
+          selectedSubjectIds.map((sid) => {
+            const sub = subjects.find(s => s.id === sid)!
+            const newIds = [...(sub.professors ?? []).map(p => p.id), newUser.id]
+            return api.subjects.update(sid, { professor_ids: newIds })
+          })
         )
         setSubjects((prev) =>
           prev.map((s) =>
-            selectedSubjectIds.includes(s.id) ? { ...s, professor_id: newUser.id } : s
+            selectedSubjectIds.includes(s.id)
+              ? { ...s, professors: [...(s.professors ?? []), { id: newUser.id, name: newUser.name }] }
+              : s
           )
         )
       }
@@ -361,7 +382,7 @@ export default function CeoUsuariosPage() {
               ) : filteredUsers.length > 0 ? (
                 <div className="divide-y">
                   {filteredUsers.slice((page - 1) * PER_PAGE, page * PER_PAGE).map((user) => {
-                    const userSubjects = subjects.filter((s) => s.professor_id === user.id)
+                    const userSubjects = subjects.filter((s) => (s.professors ?? []).some(p => p.id === user.id))
                     const utSlug = user.user_type?.slug ?? user.role
                     return (
                       <div key={user.id} className="flex items-center justify-between p-4 hover:bg-gray-50/50 transition-colors">
@@ -603,45 +624,27 @@ export default function CeoUsuariosPage() {
                     <BookOpen className="h-4 w-4 inline mr-2" />Matérias que vai ministrar
                   </Label>
 
-                  <Select
-                    value=""
-                    onValueChange={(val) => {
-                      const id = parseInt(val)
-                      if (id && !selectedSubjectIds.includes(id)) {
-                        setSelectedSubjectIds((prev) => [...prev, id])
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="border-gray-200">
-                      <SelectValue placeholder="Selecione uma matéria..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {subjects
-                        .filter((s) => !selectedSubjectIds.includes(s.id))
-                        .map((s) => (
-                          <SelectItem key={s.id} value={String(s.id)}>
-                            {s.name}{s.professor_id ? " (já tem professor)" : ""}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-
-                  {selectedSubjectIds.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {selectedSubjectIds.map((id) => {
-                        const s = subjects.find((s) => s.id === id)
-                        if (!s) return null
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1 rounded-md border border-input p-2">
+                    {subjects.filter(s => !s.course_id).length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-2">Nenhuma matéria cadastrada.</p>
+                    ) : (
+                      subjects.filter(s => !s.course_id).map((s) => {
+                        const checked = selectedSubjectIds.includes(s.id)
                         return (
-                          <span key={id} className="flex items-center gap-1 rounded-full bg-green-500/10 border border-green-500/30 px-3 py-1 text-sm text-green-500">
-                            {s.name}
-                            <button type="button" onClick={() => toggleSubject(id)} className="ml-1 text-green-600 hover:text-red-500">
-                              <XCircle className="h-3.5 w-3.5" />
-                            </button>
-                          </span>
+                          <label key={s.id} className={`flex items-center gap-3 rounded-lg border p-2.5 cursor-pointer transition-colors ${checked ? "border-green-500 bg-green-500/10" : "border-border hover:bg-muted/50"}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleSubject(s.id)}
+                              className="h-4 w-4 accent-green-600"
+                            />
+                            <span className="flex-1 text-sm font-medium text-foreground">{s.name}</span>
+                            {checked && <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />}
+                          </label>
                         )
-                      })}
-                    </div>
-                  )}
+                      })
+                    )}
+                  </div>
 
                   {addingSubject ? (
                     <div className="flex gap-2">
@@ -716,7 +719,7 @@ export default function CeoUsuariosPage() {
                 ) : (
                   subjects.filter((s) => !s.course_id).map((s) => {
                     const checked = profSubjectIds.includes(s.id)
-                    const otherProf = s.professor_id && s.professor_id !== editingProfessor?.id
+                    const otherProfs = (s.professors ?? []).filter(p => p.id !== editingProfessor?.id)
                     return (
                       <label key={s.id} className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${checked ? "border-green-500 bg-green-500/10" : "border-border hover:bg-muted/50"}`}>
                         <input
@@ -727,8 +730,8 @@ export default function CeoUsuariosPage() {
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-foreground">{s.name}</p>
-                          {otherProf && (
-                            <p className="text-[11px] text-amber-600">Vinculada a outro professor</p>
+                          {otherProfs.length > 0 && (
+                            <p className="text-[11px] text-muted-foreground">Também com: {otherProfs.map(p => p.name).join(", ")}</p>
                           )}
                         </div>
                         {checked && <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />}

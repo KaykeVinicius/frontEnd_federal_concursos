@@ -184,8 +184,7 @@ export interface ApiSubject {
   description?: string
   position?: number
   course_id?: number
-  professor_id?: number | null
-  professor?: ApiUser
+  professors?: { id: number; name: string }[]
   created_at?: string
 }
 
@@ -540,7 +539,7 @@ export const api = {
       body.course_id
         ? req<ApiSubject>("POST", `/courses/${body.course_id}/subjects`, body)
         : req<ApiSubject>("POST", `/subjects`, body),
-    update: (id: number, body: Partial<ApiSubject>) => req<ApiSubject>("PATCH", `/subjects/${id}`, body),
+    update: (id: number, body: Partial<ApiSubject> & { professor_ids?: number[] }) => req<ApiSubject>("PATCH", `/subjects/${id}`, body),
     delete: (id: number) => req<void>("DELETE", `/subjects/${id}`),
   },
 

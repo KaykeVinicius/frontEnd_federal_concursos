@@ -104,7 +104,7 @@ export default function MateriasPage() {
   const filteredSubjects = term
     ? subjects.filter(s =>
         s.name.toLowerCase().includes(term) ||
-        (s.professor?.name ?? "").toLowerCase().includes(term)
+        (s.professors ?? []).some(p => p.name.toLowerCase().includes(term))
       )
     : subjects
   const totalPages = Math.ceil(filteredSubjects.length / PER_PAGE)
@@ -169,7 +169,9 @@ export default function MateriasPage() {
                           </div>
                         </td>
                         <td className="py-4 text-sm text-muted-foreground text-center">
-                          {sub.professor?.name ?? <span className="text-muted-foreground/50">—</span>}
+                          {(sub.professors ?? []).length > 0
+                            ? <span className="flex flex-col gap-0.5">{(sub.professors ?? []).map(p => <span key={p.id}>{p.name}</span>)}</span>
+                            : <span className="text-muted-foreground/50">—</span>}
                         </td>
                         <td className="py-4 text-right">
                           <DropdownMenu>
