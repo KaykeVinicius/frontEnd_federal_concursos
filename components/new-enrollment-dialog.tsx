@@ -90,7 +90,6 @@ type Step =
 
 type PaymentMethodType = "credit" | "debit" | "pix" | "boleto" | "prazo"
 
-const EX_ALUNO_DISCOUNT = 0.15
 
 // Mask functions
 const applyCpfMask = (value: string) => {
@@ -184,6 +183,7 @@ const createNotification = async (studentData: any, enrollmentData: any, payment
 export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
   const [step, setStep] = useState<Step>("choose_type")
   const [studentType, setStudentType] = useState<"novato" | "ex_aluno" | null>(null)
+  const [discountPercent, setDiscountPercent] = useState<string>("")
   const [selectedStudent, setSelectedStudent] = useState<ApiStudent | null>(null)
   const [studentSearch, setStudentSearch] = useState("")
 
@@ -256,7 +256,8 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
   const selectedTurma = selectedTurmaId ? filteredTurmas.find((t) => String(t.id) === selectedTurmaId) ?? null : null
 
   const originalPrice = selectedCourse?.price ?? 0
-  const discount = studentType === "ex_aluno" ? originalPrice * EX_ALUNO_DISCOUNT : 0
+  const discountPct = studentType === "ex_aluno" ? Math.min(100, Math.max(0, parseFloat(discountPercent) || 0)) : 0
+  const discount = originalPrice * (discountPct / 100)
   const finalPrice = originalPrice - discount
 
   const installmentPrice = finalPrice / installments
@@ -324,6 +325,7 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
   function resetAll() {
     setStep("choose_type")
     setStudentType(null)
+    setDiscountPercent("")
     setSelectedStudent(null)
     setStudentSearch("")
     setSelectedCareerId("")
@@ -515,10 +517,7 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                       <UserCheck className="h-8 w-8" />
                     </div>
                     <span className="text-lg font-semibold text-gray-900 dark:text-white">Ex-Aluno</span>
-                    <Badge className="bg-orange-100 text-[#e8491d] border-orange-200">
-                      <Percent className="h-3 w-3 mr-1" />
-                      15% OFF
-                    </Badge>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Desconto negociável</p>
                   </div>
                 </button>
               </div>
@@ -920,11 +919,34 @@ export function NewEnrollmentDialog({ open, onOpenChange, onSuccess }: Props) {
                     {studentType === "ex_aluno" && (
                       <Badge className="bg-orange-200 text-[#e8491d] border-orange-300">
                         <Percent className="h-3 w-3 mr-1" />
-                        15% OFF Ex-Aluno
+                        {discountPct > 0 ? `${discountPct}% OFF` : "Ex-Aluno"}
                       </Badge>
                     )}
                   </div>
                   <div className="space-y-2">
+                    {studentType === "ex_aluno" && (
+                      <div className="flex items-center gap-2 mb-3">
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                          Desconto (%) *
+                        </label>
+                        <div className="flex items-center gap-1 flex-1 max-w-[140px]">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.5"
+                            value={discountPercent}
+                            onChange={(e) => setDiscountPercent(e.target.value)}
+                            placeholder="0"
+                            className="w-full rounded-lg border border-orange-300 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm font-semibold text-center focus:outline-none focus:border-[#e8491d]"
+                          />
+                          <span className="text-sm text-gray-500">%</span>
+                        </div>
+                        {discountPct > 0 && (
+                          <span className="text-sm text-green-600 font-medium">− {formatCurrency(discount)}</span>
+                        )}
+                      </div>
+                    )}
                     <p className="text-3xl font-bold text-gray-900 dark:text-white">
                       {formatCurrency(finalPrice)}
                     </p>
