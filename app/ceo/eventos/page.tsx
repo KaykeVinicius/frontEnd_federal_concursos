@@ -50,6 +50,7 @@ export default function EventosPage() {
   const [showEnrollDialog, setShowEnrollDialog] = useState(false)
   const [isNewStudent, setIsNewStudent] = useState(true)
   const [selectedStudentId, setSelectedStudentId] = useState("")
+  const [studentSearch, setStudentSearch] = useState("")
   const [selectedEventId, setSelectedEventId] = useState("")
   const [newName, setNewName] = useState("")
   const [newEmail, setNewEmail] = useState("")
@@ -64,7 +65,7 @@ export default function EventosPage() {
   }, [])
 
   useEffect(() => {
-    Promise.all([fetchEvents(), api.students.list(), api.subjects.list()])
+    Promise.all([fetchEvents(), api.students.list(undefined, 1, 2000).then(r => r.data), api.subjects.list()])
       .then(([evs, studs, subs]) => { setEvents(evs); setStudents(studs); setSubjects(subs) })
       .catch(console.error)
       .finally(() => setLoading(false))
@@ -182,7 +183,7 @@ export default function EventosPage() {
   function resetEnrollForm() {
     setIsNewStudent(true); setSelectedStudentId(""); setSelectedEventId("")
     setNewName(""); setNewEmail(""); setNewCpf(""); setNewWhatsapp(""); setNewInstagram("")
-    setEnrollError("")
+    setEnrollError(""); setStudentSearch("")
   }
 
   const selectedEvent = events.find((ev) => ev.id === parseInt(selectedEventId))
@@ -565,14 +566,43 @@ export default function EventosPage() {
             ) : (
               <div className="space-y-2">
                 <Label>Aluno *</Label>
-                <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
-                  <SelectTrigger><SelectValue placeholder={students.length === 0 ? "Nenhum aluno cadastrado" : "Selecione o aluno"} /></SelectTrigger>
-                  <SelectContent>
-                    {students.map((s) => (
-                      <SelectItem key={s.id} value={String(s.id)}>{s.name} — {s.cpf}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <Input
+                    placeholder="Buscar por nome, CPF ou email..."
+                    value={studentSearch}
+                    onChange={(e) => { setStudentSearch(e.target.value); setSelectedStudentId("") }}
+                    className="pl-9"
+                  />
+                </div>
+                {studentSearch.trim().length >= 2 && (() => {
+                  const term = studentSearch.toLowerCase().trim()
+                  const filtered = students.filter(s =>
+                    s.name.toLowerCase().includes(term) ||
+                    s.cpf.includes(term) ||
+                    s.email.toLowerCase().includes(term)
+                  ).slice(0, 8)
+                  return filtered.length > 0 ? (
+                    <div className="rounded-md border border-border bg-background max-h-48 overflow-y-auto divide-y divide-border">
+                      {filtered.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => { setSelectedStudentId(String(s.id)); setStudentSearch(s.name) }}
+                          className={`w-full text-left px-3 py-2.5 hover:bg-muted/60 transition-colors ${selectedStudentId === String(s.id) ? "bg-primary/10 text-primary" : ""}`}
+                        >
+                          <p className="text-sm font-medium">{s.name}</p>
+                          <p className="text-xs text-muted-foreground">{s.cpf} · {s.email}</p>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground px-1">Nenhum aluno encontrado.</p>
+                  )
+                })()}
+                {selectedStudentId && (
+                  <p className="text-xs text-primary font-medium px-1">✓ Aluno selecionado</p>
+                )}
               </div>
             )}
 
