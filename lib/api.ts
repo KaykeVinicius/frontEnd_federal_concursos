@@ -535,7 +535,7 @@ export const api = {
       if (courseId) return req<ApiSubject[]>("GET", `/courses/${courseId}/subjects${buildRansackQuery(q)}`)
       return req<ApiSubject[]>("GET", `/subjects${buildRansackQuery(q)}`)
     },
-    create: (body: Partial<ApiSubject>) =>
+    create: (body: Partial<ApiSubject> & { professor_ids?: number[] }) =>
       body.course_id
         ? req<ApiSubject>("POST", `/courses/${body.course_id}/subjects`, body)
         : req<ApiSubject>("POST", `/subjects`, body),

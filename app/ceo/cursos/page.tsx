@@ -450,7 +450,7 @@ function SubjectBlock({ subject, onDelete, onUpdate, professors, allGlobalSubjec
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          <Button size="sm" className="h-7 text-xs px-3" onClick={saveProf} disabled={savingProf || !newProfId}>
+          <Button size="sm" className="h-7 text-xs px-3" onClick={() => saveProf()} disabled={savingProf || !newProfId}>
             {savingProf ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
           </Button>
           <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => { setEditingProf(false); setNewProfId("") }} disabled={savingProf}>
@@ -516,6 +516,7 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
   const [addingSubject, setAddingSubject] = useState(false)
   const [availableSubjects, setAvailableSubjects] = useState<ApiSubject[]>([])
   const [selectedSubjectId, setSelectedSubjectId] = useState("")
+  const [selectedProfId, setSelectedProfId] = useState("")
   const [linkingSubject, setLinkingSubject] = useState(false)
   const [toggling, setToggling] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -565,11 +566,14 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
       const template = availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))
       if (!template) return
       // Cria uma cópia da matéria template para este curso específico
+      const profIds = selectedProfId
+        ? [parseInt(selectedProfId)]
+        : (template.professors ?? []).map(p => p.id)
       const created = await api.subjects.create({
-        course_id:    course.id,
-        name:         template.name,
-        description:  template.description,
-        professor_ids: (template.professors ?? []).map(p => p.id),
+        course_id:     course.id,
+        name:          template.name,
+        description:   template.description,
+        professor_ids: profIds,
       })
       onUpdate({ ...course, subjects: [...course.subjects, { ...created, topics: [] }] })
       setAddingSubject(false)
@@ -747,7 +751,7 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
                     <>
                       <select
                         value={selectedSubjectId}
-                        onChange={(e) => setSelectedSubjectId(e.target.value)}
+                        onChange={(e) => { setSelectedSubjectId(e.target.value); setSelectedProfId("") }}
                         className="w-full h-8 rounded-md border border-input bg-background px-3 text-sm"
                         disabled={linkingSubject}
                       >
@@ -759,10 +763,27 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
                       {selectedSubjectId && (() => {
                         const sel = availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))
                         const selProfs = sel?.professors ?? []
-                        return selProfs.length > 0 ? (
-                          <p className="text-xs text-muted-foreground">Professor: <span className="font-medium text-foreground">{selProfs.map(p => p.name).join(", ")}</span></p>
-                        ) : (
+                        if (selProfs.length === 0) return (
                           <p className="text-xs text-amber-600">Esta matéria não tem professor vinculado.</p>
+                        )
+                        if (selProfs.length === 1) return (
+                          <p className="text-xs text-muted-foreground">Professor: <span className="font-medium text-foreground">{selProfs[0].name}</span></p>
+                        )
+                        return (
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">Selecione o professor para este curso:</p>
+                            <select
+                              value={selectedProfId}
+                              onChange={(e) => setSelectedProfId(e.target.value)}
+                              className="w-full h-8 rounded-md border border-input bg-background px-3 text-sm"
+                              disabled={linkingSubject}
+                            >
+                              <option value="">Selecione o professor...</option>
+                              {selProfs.map((p) => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                              ))}
+                            </select>
+                          </div>
                         )
                       })()}
                     </>
@@ -770,11 +791,14 @@ function CursoCard({ course, onDelete, onUpdate, professors, allGlobalSubjects }
                   <div className="flex gap-2">
                     <Button
                       size="sm" className="h-7 text-xs gap-1" onClick={linkSubject}
-                      disabled={linkingSubject || !selectedSubjectId}
+                      disabled={linkingSubject || !selectedSubjectId || (() => {
+                        const sel = availableSubjects.find((s) => s.id === parseInt(selectedSubjectId))
+                        return (sel?.professors ?? []).length > 1 && !selectedProfId
+                      })()}
                     >
                       {linkingSubject && <Loader2 className="h-3 w-3 animate-spin" />} Vincular
                     </Button>
-                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setAddingSubject(false)} disabled={linkingSubject}>Cancelar</Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAddingSubject(false); setSelectedProfId("") }} disabled={linkingSubject}>Cancelar</Button>
                   </div>
                 </div>
               ) : (
