@@ -312,7 +312,8 @@ export default function LandingPage() {
           />
 
           <nav className="hidden items-center gap-8 md:flex">
-            {[["cursos","Cursos"],["carreiras","Carreiras"],["sobre","Sobre"],["contato","Contato"]].map(([id,label]) => (
+            <Link href="/carreiras" className="text-sm text-white/80 transition-colors hover:text-[#e84a20]">Carreiras</Link>
+            {[["cursos","Cursos"],["sobre","Sobre"],["contato","Contato"]].map(([id,label]) => (
               <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" })}
                 className="text-sm text-white/80 transition-colors hover:text-[#e84a20] cursor-pointer">
                 {label}
