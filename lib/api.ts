@@ -368,6 +368,7 @@ export interface ApiMaterial {
   professor_id: number
   subject_id?: number
   turma_id?: number
+  turma_name?: string
   course_id?: number
   course_title?: string
   notes?: string | null

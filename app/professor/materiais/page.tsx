@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { FileText, Plus, Trash2, Download, FolderOpen, Link as LinkIcon, X, BookOpen, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api, type ApiMaterial, type ApiTurma, type ApiSubject } from "@/lib/api"
@@ -32,14 +32,12 @@ export default function MateriaisPage() {
   const [loading,   setLoading  ] = useState(true)
   const [modalAberto, setModalAberto] = useState(false)
   const [saving,    setSaving   ] = useState(false)
+  const submittingRef = useRef(false)
   const [form,      setForm     ] = useState(FORM_EMPTY)
   const [selectedFile,  setSelectedFile ] = useState<File | null>(null)
   const [selectedTurmas, setSelectedTurmas] = useState<number[]>([])
 
   useEffect(() => {
-    const stored = localStorage.getItem("currentUser")
-    const professorId = stored ? JSON.parse(stored)?.id : undefined
-
     const subjectsPromise = api.professor.subjects().catch(() =>
       Promise.resolve<ApiSubject[]>([])
     )
@@ -88,9 +86,11 @@ export default function MateriaisPage() {
   }
 
   async function adicionarMaterial() {
+    if (submittingRef.current) return
     if (!form.title.trim()) return
     if (form.material_type !== "link" && !selectedFile) return
     if (form.material_type === "link" && !form.file_url.trim()) return
+    submittingRef.current = true
     setSaving(true)
     try {
       const base = {
@@ -118,8 +118,9 @@ export default function MateriaisPage() {
       }
       resetModal()
     } catch (err) {
-      console.error("Erro ao adicionar material:", err)
+      alert(err instanceof Error ? err.message : "Erro ao adicionar material")
     } finally {
+      submittingRef.current = false
       setSaving(false)
     }
   }
@@ -179,72 +180,93 @@ export default function MateriaisPage() {
           <p className="text-sm text-muted-foreground">Nenhum material adicionado ainda.</p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {(() => {
-            // Agrupa por curso (course_id), sem curso = grupo "Sem curso"
-            const groups = new Map<string, { label: string; items: typeof materiais }>()
+            // Agrupa: curso → turma → materiais
+            type TurmaGroup = { turmaLabel: string; items: typeof materiais }
+            type CourseGroup = { courseLabel: string; turmas: Map<string, TurmaGroup> }
+            const courses = new Map<string, CourseGroup>()
+
             for (const m of materiais) {
-              const key   = m.course_id ? String(m.course_id) : "sem_curso"
-              const label = m.course_title ?? "Sem curso vinculado"
-              if (!groups.has(key)) groups.set(key, { label, items: [] })
-              groups.get(key)!.items.push(m)
+              const courseKey   = m.course_id ? String(m.course_id) : "sem_curso"
+              const courseLabel = m.course_title ?? "Sem curso vinculado"
+              const turmaKey    = m.turma_id ? String(m.turma_id) : "sem_turma"
+              const turmaLabel  = m.turma_name ?? "Geral"
+
+              if (!courses.has(courseKey)) courses.set(courseKey, { courseLabel, turmas: new Map() })
+              const cg = courses.get(courseKey)!
+              if (!cg.turmas.has(turmaKey)) cg.turmas.set(turmaKey, { turmaLabel, items: [] })
+              cg.turmas.get(turmaKey)!.items.push(m)
             }
-            return Array.from(groups.entries()).map(([key, group]) => (
-              <div key={key}>
+
+            return Array.from(courses.entries()).map(([courseKey, cg]) => (
+              <div key={courseKey}>
                 {/* Cabeçalho do curso */}
-                <div className="mb-3 flex items-center gap-2">
+                <div className="mb-4 flex items-center gap-2 border-b border-border pb-2">
                   <BookOpen className="h-4 w-4 text-primary" />
-                  <h2 className="text-sm font-bold text-foreground">{group.label}</h2>
-                  <span className="text-xs text-muted-foreground">· {group.items.length} material(is)</span>
+                  <h2 className="text-sm font-bold text-foreground">{cg.courseLabel}</h2>
                 </div>
 
-                <div className="space-y-2">
-                  {group.items.map((m) => {
-                    const tipo = m.material_type as TipoMaterial
-                    const cfg  = tipoConfig[tipo] ?? tipoConfig.pdf
-                    return (
-                      <div key={m.id} className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/20">
-                        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}>
-                          {tipo === "link"
-                            ? <LinkIcon className={`h-5 w-5 ${cfg.color}`} />
-                            : <FileText className={`h-5 w-5 ${cfg.color}`} />
-                          }
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <p className="truncate text-sm font-semibold text-foreground">{m.title}</p>
-                            <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", cfg.bg, cfg.color)}>{cfg.label}</span>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                            {m.subject && (
-                              <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {m.subject.name}</span>
-                            )}
-                            {m.file_size && <span>{m.file_size}</span>}
-                            <span>{formatDate(m.created_at)}</span>
-                          </div>
-                          {m.notes && (
-                            <p className="mt-1 text-xs text-muted-foreground/80 italic line-clamp-2">{m.notes}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {m.file_url && (
-                            <a href={m.file_url} target="_blank" rel="noopener noreferrer"
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-primary/40 hover:text-primary"
-                              title="Baixar"
-                            >
-                              <Download className="h-4 w-4" />
-                            </a>
-                          )}
-                          <button onClick={() => remover(m.id)}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-red-500/40 hover:text-red-500"
-                            title="Remover"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
+                <div className="space-y-5 pl-2">
+                  {Array.from(cg.turmas.entries()).map(([turmaKey, tg]) => (
+                    <div key={turmaKey}>
+                      {/* Cabeçalho da turma */}
+                      <div className="mb-2 flex items-center gap-2">
+                        <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{tg.turmaLabel}</span>
+                        <span className="text-xs text-muted-foreground">· {tg.items.length} material(is)</span>
                       </div>
-                    )
-                  })}
+
+                      <div className="space-y-2">
+                        {tg.items.map((m) => {
+                          const tipo = m.material_type as TipoMaterial
+                          const cfg  = tipoConfig[tipo] ?? tipoConfig.pdf
+                          return (
+                            <div key={m.id} className="flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/20">
+                              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}>
+                                {tipo === "link"
+                                  ? <LinkIcon className={`h-5 w-5 ${cfg.color}`} />
+                                  : <FileText className={`h-5 w-5 ${cfg.color}`} />
+                                }
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <p className="truncate text-sm font-semibold text-foreground">{m.title}</p>
+                                  <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", cfg.bg, cfg.color)}>{cfg.label}</span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                                  {m.subject && (
+                                    <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" />{m.subject.name}</span>
+                                  )}
+                                  {m.file_size && <span>{m.file_size}</span>}
+                                  <span>{formatDate(m.created_at)}</span>
+                                </div>
+                                {m.notes && (
+                                  <p className="mt-1 text-xs text-muted-foreground/80 italic line-clamp-2">{m.notes}</p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {m.file_url && (
+                                  <a href={m.file_url} target="_blank" rel="noopener noreferrer"
+                                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-primary/40 hover:text-primary"
+                                    title="Baixar"
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </a>
+                                )}
+                                <button onClick={() => remover(m.id)}
+                                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-red-500/40 hover:text-red-500"
+                                  title="Remover"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))
