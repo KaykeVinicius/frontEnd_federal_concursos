@@ -29,6 +29,8 @@ import {
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"
 
 interface ApiCareer { id: number; name: string; description: string }
+interface ApiProfessor { id: number; name: string }
+interface ApiSubjectPublic { id: number; name: string; professors?: ApiProfessor[] }
 interface ApiCourse {
   id: number; title: string; description: string
   price: number; duration_in_days: number
@@ -96,6 +98,8 @@ export default function LandingPage() {
   const [careers, setCareers] = useState<ApiCareer[]>([])
   const [coursesByCareer, setCoursesByCareer] = useState<Record<number, ApiCourse[]>>({})
   const [selectedCareer, setSelectedCareer] = useState<number | null>(null)
+  const [professors, setProfessors] = useState<Array<{ id: number; name: string; subjects: string[] }>>([])
+  const profScrollRef = useRef<HTMLDivElement>(null)
 
   const [enrollingCourse, setEnrollingCourse] = useState<ApiCourse | null>(null)
   const [enrollStep, setEnrollStep] = useState<"choose" | "lookup" | "form">("choose")
@@ -112,12 +116,24 @@ export default function LandingPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [cRes, coRes] = await Promise.all([
+        const [cRes, coRes, subRes] = await Promise.all([
           fetch(`${BASE_URL}/careers`),
           fetch(`${BASE_URL}/courses?q[access_type_eq]=1&q[status_eq]=1`),
+          fetch(`${BASE_URL}/subjects`),
         ])
         const cData: ApiCareer[] = cRes.ok ? await cRes.json() : []
         const coData: ApiCourse[] = coRes.ok ? await coRes.json() : []
+        const subData: ApiSubjectPublic[] = subRes.ok ? await subRes.json() : []
+
+        // Monta mapa professor → matérias que leciona
+        const profMap = new Map<number, { id: number; name: string; subjects: string[] }>()
+        for (const sub of subData) {
+          for (const prof of sub.professors ?? []) {
+            if (!profMap.has(prof.id)) profMap.set(prof.id, { id: prof.id, name: prof.name, subjects: [] })
+            profMap.get(prof.id)!.subjects.push(sub.name)
+          }
+        }
+        setProfessors(Array.from(profMap.values()))
 
         const grouped: Record<number, ApiCourse[]> = {}
         for (const course of coData) {
@@ -560,6 +576,88 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ── Nossos Professores ─────────────────────────────── */}
+      {professors.length > 0 && (
+        <section className="border-t border-[#1e1e1e] px-4 py-20 sm:px-6 lg:px-8 overflow-hidden">
+          <div className="mx-auto max-w-7xl">
+            <div className="mb-10 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+              <div>
+                <span className="mb-2 block text-xs font-bold uppercase tracking-widest text-[#e84a20]">Corpo Docente</span>
+                <h2 className="text-3xl font-black text-white">Conheça nossos professores</h2>
+                <p className="mt-2 text-[#6b7280]">Especialistas com experiência em concursos públicos</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => profScrollRef.current?.scrollBy({ left: -300, behavior: "smooth" })}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[#2a2a2a] text-[#6b7280] transition hover:border-[#e84a20] hover:text-[#e84a20]"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => profScrollRef.current?.scrollBy({ left: 300, behavior: "smooth" })}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[#2a2a2a] text-[#6b7280] transition hover:border-[#e84a20] hover:text-[#e84a20]"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Carrossel horizontal */}
+            <div
+              ref={profScrollRef}
+              className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide"
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+            >
+              {professors.map((prof) => {
+                const initials = prof.name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase()
+                const colors = ["#e84a20", "#16a34a", "#2563eb", "#7c3aed", "#0891b2", "#ca8a04", "#be185d"]
+                const color = colors[prof.id % colors.length]
+                return (
+                  <div
+                    key={prof.id}
+                    className="snap-start shrink-0 w-56 rounded-2xl border border-[#1e1e1e] bg-[#141414] overflow-hidden group transition-all hover:border-[#333] hover:-translate-y-1"
+                  >
+                    {/* Avatar */}
+                    <div
+                      className="relative flex h-48 items-center justify-center"
+                      style={{ background: `linear-gradient(135deg, ${color}22 0%, #141414 100%)` }}
+                    >
+                      <div
+                        className="flex h-24 w-24 items-center justify-center rounded-full text-3xl font-black text-white border-4 border-white/10 shadow-xl"
+                        style={{ background: `linear-gradient(135deg, ${color}, ${color}99)` }}
+                      >
+                        {initials}
+                      </div>
+                      {/* Glow */}
+                      <div className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{ background: `radial-gradient(circle at center, ${color}15, transparent 70%)` }} />
+                    </div>
+                    {/* Info */}
+                    <div className="p-4">
+                      <h3 className="font-bold text-white text-sm leading-tight">Prof. {prof.name.split(" ")[0]}</h3>
+                      <p className="text-[11px] text-[#6b7280] mt-0.5 font-medium">{prof.name}</p>
+                      <div className="mt-3 flex flex-wrap gap-1">
+                        {prof.subjects.slice(0, 3).map((s, i) => (
+                          <span key={i} className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                            style={{ background: `${color}20`, color }}>
+                            {s.length > 20 ? s.slice(0, 18) + "…" : s}
+                          </span>
+                        ))}
+                        {prof.subjects.length > 3 && (
+                          <span className="rounded-full bg-[#1e1e1e] px-2 py-0.5 text-[10px] text-[#6b7280]">
+                            +{prof.subjects.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Carreiras + Cursos filtráveis */}
       <section id="carreiras" className="border-t border-[#1e1e1e] px-4 py-20 sm:px-6 lg:px-8">
