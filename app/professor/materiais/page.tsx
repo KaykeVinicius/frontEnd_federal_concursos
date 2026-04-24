@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { FileText, Plus, Trash2, Download, FolderOpen, Link as LinkIcon, X, BookOpen, Loader2 } from "lucide-react"
+import { FileText, Plus, Trash2, Download, FolderOpen, Link as LinkIcon, X, BookOpen, Loader2, ChevronDown, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { api, type ApiMaterial, type ApiTurma, type ApiSubject } from "@/lib/api"
 
@@ -33,6 +33,7 @@ export default function MateriaisPage() {
   const [modalAberto, setModalAberto] = useState(false)
   const [saving,    setSaving   ] = useState(false)
   const submittingRef = useRef(false)
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
   const [form,      setForm     ] = useState(FORM_EMPTY)
   const [selectedFile,  setSelectedFile ] = useState<File | null>(null)
   const [selectedTurmas, setSelectedTurmas] = useState<number[]>([])
@@ -180,9 +181,8 @@ export default function MateriaisPage() {
           <p className="text-sm text-muted-foreground">Nenhum material adicionado ainda.</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {(() => {
-            // Agrupa por: curso + turma (chave combinada) → materiais
             type Section = { courseLabel: string; turmaLabel: string; items: typeof materiais }
             const sections = new Map<string, Section>()
 
@@ -194,69 +194,89 @@ export default function MateriaisPage() {
               sections.get(key)!.items.push(m)
             }
 
-            return Array.from(sections.entries()).map(([key, sec]) => (
-              <div key={key} className="rounded-2xl border border-border bg-card/50 overflow-hidden">
-                {/* Cabeçalho: Curso — Turma */}
-                <div className="flex items-center gap-3 px-4 py-3 bg-muted/40 border-b border-border">
-                  <FolderOpen className="h-4 w-4 text-primary shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-muted-foreground truncate">{sec.courseLabel}</p>
-                    <p className="text-sm font-semibold text-foreground">Turma {sec.turmaLabel}</p>
-                  </div>
-                  <span className="text-xs text-muted-foreground shrink-0">{sec.items.length} material(is)</span>
-                </div>
+            function toggleSection(key: string) {
+              setExpandedSections((prev) => {
+                const next = new Set(prev)
+                next.has(key) ? next.delete(key) : next.add(key)
+                return next
+              })
+            }
 
-                {/* Materiais da seção */}
-                <div className="divide-y divide-border">
-                  {sec.items.map((m) => {
-                    const tipo = m.material_type as TipoMaterial
-                    const cfg  = tipoConfig[tipo] ?? tipoConfig.pdf
-                    return (
-                      <div key={m.id} className="flex items-center gap-4 p-4 transition-all hover:bg-muted/30">
-                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}>
-                          {tipo === "link"
-                            ? <LinkIcon className={`h-5 w-5 ${cfg.color}`} />
-                            : <FileText className={`h-5 w-5 ${cfg.color}`} />
-                          }
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <p className="truncate text-sm font-semibold text-foreground">{m.title}</p>
-                            <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", cfg.bg, cfg.color)}>{cfg.label}</span>
+            return Array.from(sections.entries()).map(([key, sec]) => {
+              const isOpen = expandedSections.has(key)
+              return (
+                <div key={key} className="rounded-2xl border border-border bg-card overflow-hidden">
+                  {/* Cabeçalho clicável */}
+                  <button
+                    className="w-full flex items-center gap-3 px-4 py-4 hover:bg-muted/40 transition-colors text-left"
+                    onClick={() => toggleSection(key)}
+                  >
+                    <FolderOpen className="h-5 w-5 text-primary shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] text-muted-foreground truncate">{sec.courseLabel}</p>
+                      <p className="text-sm font-semibold text-foreground">Turma {sec.turmaLabel}</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0 mr-2">{sec.items.length} material(is)</span>
+                    {isOpen
+                      ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                      : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    }
+                  </button>
+
+                  {/* Materiais — só aparecem quando expandido */}
+                  {isOpen && (
+                    <div className="border-t border-border divide-y divide-border">
+                      {sec.items.map((m) => {
+                        const tipo = m.material_type as TipoMaterial
+                        const cfg  = tipoConfig[tipo] ?? tipoConfig.pdf
+                        return (
+                          <div key={m.id} className="flex items-center gap-4 px-4 py-3 hover:bg-muted/20 transition-colors">
+                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}>
+                              {tipo === "link"
+                                ? <LinkIcon className={`h-5 w-5 ${cfg.color}`} />
+                                : <FileText className={`h-5 w-5 ${cfg.color}`} />
+                              }
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <p className="truncate text-sm font-semibold text-foreground">{m.title}</p>
+                                <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", cfg.bg, cfg.color)}>{cfg.label}</span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                                {m.subject && (
+                                  <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" />{m.subject.name}</span>
+                                )}
+                                {m.file_size && <span>{m.file_size}</span>}
+                                <span>{formatDate(m.created_at)}</span>
+                              </div>
+                              {m.notes && (
+                                <p className="mt-0.5 text-xs text-muted-foreground/80 italic line-clamp-1">{m.notes}</p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {m.file_url && (
+                                <a href={m.file_url} target="_blank" rel="noopener noreferrer"
+                                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-primary/40 hover:text-primary"
+                                  title="Baixar"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </a>
+                              )}
+                              <button onClick={() => remover(m.id)}
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-red-500/40 hover:text-red-500"
+                                title="Remover"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                            {m.subject && (
-                              <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" />{m.subject.name}</span>
-                            )}
-                            {m.file_size && <span>{m.file_size}</span>}
-                            <span>{formatDate(m.created_at)}</span>
-                          </div>
-                          {m.notes && (
-                            <p className="mt-1 text-xs text-muted-foreground/80 italic line-clamp-1">{m.notes}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {m.file_url && (
-                            <a href={m.file_url} target="_blank" rel="noopener noreferrer"
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-primary/40 hover:text-primary"
-                              title="Baixar"
-                            >
-                              <Download className="h-4 w-4" />
-                            </a>
-                          )}
-                          <button onClick={() => remover(m.id)}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition hover:border-red-500/40 hover:text-red-500"
-                            title="Remover"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))
+              )
+            })
           })()}
         </div>
       )}
