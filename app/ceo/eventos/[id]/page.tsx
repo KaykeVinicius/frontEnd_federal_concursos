@@ -53,7 +53,7 @@ export default function EventoDetailPage() {
 
   useEffect(() => {
     if (!eventId) return
-    Promise.all([api.events.get(eventId), api.events.registrations.list(eventId), api.students.list()])
+    Promise.all([api.events.get(eventId), api.events.registrations.list(eventId), api.students.list(undefined, 1, 2000).then(r => r.data)])
       .then(([ev, regs, studs]) => { setEvent(ev); setRegistrations(regs); setStudents(studs) })
       .catch((err) => setError(err?.message ?? "Erro ao carregar dados."))
       .finally(() => { setLoading(false); setTimeout(() => checkinInputRef.current?.focus(), 200) })

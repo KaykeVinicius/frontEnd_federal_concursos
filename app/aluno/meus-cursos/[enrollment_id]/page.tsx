@@ -11,20 +11,22 @@ import {
 import { api, type ApiEnrollment, type ApiSubject, type ApiMaterial } from "@/lib/api"
 
 async function openProtectedMaterial(materialId: number) {
-  const token = localStorage.getItem("auth_token")
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/aluno/materials/${materialId}/download`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  )
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    alert(err?.error ?? "Erro ao abrir o material.")
-    return
+  // Abre janela ANTES do await para não ser bloqueado pelo iOS Safari
+  const win = window.open("", "_blank")
+  try {
+    const { token } = await api.aluno.materials.requestDownload(materialId)
+    const url = `${process.env.NEXT_PUBLIC_API_URL}/aluno/materials/${materialId}/download?token=${token}`
+    if (win) {
+      win.location.href = url
+    } else {
+      // fallback: navega na mesma aba (mobile que bloqueou popup)
+      window.location.href = url
+    }
+  } catch (err: unknown) {
+    win?.close()
+    const msg = (err as { error?: string })?.error ?? "Erro ao abrir o material."
+    alert(msg)
   }
-  const blob = await res.blob()
-  const url = URL.createObjectURL(blob)
-  window.open(url, "_blank")
-  setTimeout(() => URL.revokeObjectURL(url), 10000)
 }
 
 function modalityMeta(type: string | number) {
@@ -62,15 +64,15 @@ function SubjectAccordion({ subject, idx }: { subject: SubjectWithMaterials; idx
             <h3 className="text-base font-bold text-foreground truncate">{subject.name}</h3>
             <p className="text-xs text-muted-foreground">
               {total} material{total !== 1 ? "is" : ""}
-              {subject.professor && ` · Prof. ${subject.professor.name?.split(" ")[0]}`}
+              {(subject.professors ?? [])[0] && ` · Prof. ${(subject.professors ?? [])[0].name?.split(" ")[0]}`}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {subject.professor && (
+          {(subject.professors ?? [])[0] && (
             <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground">
               <Users className="h-3.5 w-3.5 text-primary" />
-              {subject.professor.name?.split(" ")[0]}
+              {(subject.professors ?? [])[0].name?.split(" ")[0]}
             </span>
           )}
           {open ? <ChevronDown className="h-5 w-5 text-muted-foreground" /> : <ChevronRight className="h-5 w-5 text-muted-foreground" />}

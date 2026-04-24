@@ -756,6 +756,7 @@ export const api = {
     },
     materials: {
       list: (courseId: number) => req<ApiMaterial[]>("GET", `/aluno/materials?course_id=${courseId}`),
+      requestDownload: (id: number) => req<{ token: string; expires_in: number }>("POST", `/aluno/materials/${id}/request_download`),
     },
     completions: {
       list: () => req<{ id: number; lesson_id: number }[]>("GET", "/aluno/lesson_completions"),

@@ -65,7 +65,7 @@ export default function AssistenteEventosPage() {
   const [studentSearch, setStudentSearch] = useState("")
 
   useEffect(() => {
-    Promise.all([api.events.list(), api.students.list()])
+    Promise.all([api.events.list(), api.students.list(undefined, 1, 2000).then(r => r.data)])
       .then(([evs, studs]) => {
         // Apenas aulões não cancelados e não esgotados
         setEvents(evs.filter((e) => e.event_type === "aulao" && e.status !== "cancelado" && !e.is_full))

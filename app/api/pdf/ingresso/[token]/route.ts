@@ -3,6 +3,7 @@ import { renderToBuffer } from "@react-pdf/renderer"
 import { createElement } from "react"
 import path from "path"
 import fs from "fs"
+import QRCode from "qrcode"
 import IngressoPDF from "@/components/ingresso-evento-pdf"
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api/v1"
@@ -29,7 +30,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     const { token: ticketToken } = await params
     const authToken = req.nextUrl.searchParams.get("token")
 
-    // Busca todos os eventos e suas inscrições para achar o ticket_token
     const events = await fetchWithToken("/events", authToken)
 
     let registration = null
@@ -47,29 +47,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
 
     const tigerBase64 = imageToBase64("tigre_sem_fundo.png")
 
-    // Gera QR code como data URL PNG usando rqrcode via spawn
-    const { execSync } = require("child_process")
-    const checkinUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/ceo/eventos/checkin/${ticketToken}`
-    const qrScript = `
-require 'rqrcode'
-qr = RQRCode::QRCode.new('${checkinUrl}')
-png = qr.as_png(module_px_size: 8, border_modules: 4)
-print "data:image/png;base64,#{[png.to_s].pack('m0')}"
-`
-    const rubyBin = "/home/kayke/.local/share/mise/installs/ruby/3.4.1/bin/ruby"
-    const gemPath = execSync(`${rubyBin} -e "puts Gem.paths.home"`, {
-      env: { ...process.env, BUNDLE_GEMFILE: path.join(process.cwd(), "..", "backEndFederalConcursos", "Gemfile") }
-    }).toString().trim()
-
+    const checkinUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://federalcursos.com.br"}/ceo/eventos/checkin/${ticketToken}`
     let qrBase64 = ""
     try {
-      qrBase64 = execSync(`${rubyBin} -I${gemPath}/gems/rqrcode_core-2.1.0/lib -I${gemPath}/gems/rqrcode-3.2.0/lib -I${gemPath}/gems/chunky_png-1.4.0/lib -e "${qrScript.replace(/\n/g, ";")}"`).toString().trim()
+      qrBase64 = await QRCode.toDataURL(checkinUrl, { width: 256, margin: 2 })
     } catch {
       qrBase64 = ""
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const element = createElement(IngressoPDF, { registration, event, tigerBase64, qrBase64 }) as any
+    const element = createElement(IngressoPDF, { registration, event, tigerBase64, qrCodeUrl: qrBase64 }) as any
     const buffer = await renderToBuffer(element)
 
     return new NextResponse(new Uint8Array(buffer), {

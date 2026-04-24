@@ -19,7 +19,7 @@ export default function AlunosPage() {
   const [contractEnrollmentId, setContractEnrollmentId] = useState<number | null>(null)
 
   function loadData() {
-    Promise.all([api.students.list(), api.enrollments.list()])
+    Promise.all([api.students.list(undefined, 1, 2000).then(r => r.data), api.enrollments.list()])
       .then(([s, e]) => { setStudents(s); setEnrollments(e) })
       .catch(console.error)
       .finally(() => setLoading(false))
